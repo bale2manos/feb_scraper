@@ -7,7 +7,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from utils import init_driver, accept_cookies
+from utils.web_scraping import init_driver, accept_cookies
 
 BASE_PLAY_URL = "https://baloncestoenvivo.feb.es/partido/{}"
 

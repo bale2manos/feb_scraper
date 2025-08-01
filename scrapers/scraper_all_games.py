@@ -13,7 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from utils import (
+from utils.web_scraping import (
     init_driver,
     accept_cookies,
     SELECT_ID_TEMPORADA,

@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from scraper_all_games import scrape_all         # your all-games scraper
 from scraper_pbp import scrape_play_by_play, compute_synergies  
-from utils import init_driver
+from utils.web_scraping import init_driver
 
 MAX_RETRIES     = 5
 INITIAL_BACKOFF = 1  # seconds

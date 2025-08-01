@@ -3,6 +3,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.service import Service as ChromeService
+
 
 # -------- CONFIGURACIÓN GLOBAL --------
 # -------------- CONFIG --------------
@@ -25,17 +27,31 @@ COOKIE_BTN_XPATH = (
 )
 
 # -------- UTILIDADES WEB DRIVER --------
-def init_driver():
+def init_driver(minimized: bool = True):
     opts = webdriver.ChromeOptions()
-    opts.add_argument("--start-maximized")
-    # opts.add_argument("--headless=new")  # descomentar para headless
-    if DRIVER_PATH:
-        return webdriver.Chrome(
-            service=webdriver.ChromeService(executable_path=Path(DRIVER_PATH)),
-            options=opts
-        )
+    # set a fixed size so elements land where you expect
+    opts.add_argument("--window-size=1200,800")
+    # start minimized instead of maximized
+    if minimized:
+        opts.add_argument("--start-minimized")
     else:
-        return webdriver.Chrome(options=opts)
+        opts.add_argument("--start-maximized")
+    # opts.add_argument("--headless=new")  # uncomment for headless
+
+    if DRIVER_PATH:
+        service = ChromeService(executable_path=Path(DRIVER_PATH))
+        driver = webdriver.Chrome(service=service, options=opts)
+    else:
+        driver = webdriver.Chrome(options=opts)
+
+    # as a fallback, immediately minimize via WebDriver API
+    if minimized:
+        try:
+            driver.minimize_window()
+        except Exception:
+            pass
+
+    return driver
 
 # en utils.py
 

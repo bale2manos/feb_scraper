@@ -84,7 +84,7 @@ def plot_media_pct(stats: dict,
     ))
 
     # ── ajustar rango X ───────────────────────────────────────────────────
-    x_min = -(r_units + PAD_UNITS * max_val)
+    x_min = -(r_units + PAD_UNITS * max_val*2)
     x_max = max_val + (2 * r_units) + (PAD_UNITS * max_val)
     fig.update_layout(
         showlegend=False,

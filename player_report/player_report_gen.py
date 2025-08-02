@@ -12,20 +12,53 @@ Requisitos:
       pip install pandas pillow matplotlib ipywidgets
 
 Uso:
-    - Notebook: %run report_generator.py -> ui()
+    - Notebook: %run report_    # 7) Al pulsar "Generar", feedback y ejecución
+    def on_click(b):
+        # Disable button to prevent double clicks
+        b.disabled = True
+        b.description = 'Generando...'
+        
+        out.clear_output()
+        with out:
+            print("🔄 Generando informe…")
+            nombre = search.value
+            if nombre not in players:
+                print("⚠️ Jugador no encontrado")
+                # Re-enable button
+                b.disabled = False
+                b.description = 'Generar informe'
+                return
+            try:
+                path = generate_report(nombre)
+                clear_output()
+                print(f"✅ Generado: {path}")
+                display(Image.open(path))
+            except Exception as e:
+                clear_output()
+                print(f"❌ Error generando informe: {e}")
+            finally:
+                # Re-enable button
+                b.disabled = False
+                b.description = 'Generar informe'
+    
+    # Clear any existing event handlers and add new one
+    button.on_click(on_click, remove=True)
+    button.on_click(on_click)ui()
     - CLI: python report_generator.py -p "Nombre Jugador"
 
 """
 import argparse
+import io
 from pathlib import Path
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
-import io
+from rembg import remove
 
 # Para Notebook UI
 import ipywidgets as widgets
 from IPython.display import display, clear_output
+import requests
 
 from tools.finalizacion_plays_plot import plot_finalizacion_plays
 from tools.media_lanzamientos_plot import plot_media_pct
@@ -33,6 +66,7 @@ from tools.distribucion_puntos_plot import plot_distribucion_puntos
 from tools.ppt_plays import plot_ppt_indicators
 from tools.stats_line_1 import plot_stats_table_simple
 from tools.stats_line_2 import plot_generic_stats_table
+from tools.nacionalidad import load_countries_data, get_country_flag_image
 
 # === RUTAS ===
 DATA_PATH      = Path("data/jugadores_aggregated.xlsx")
@@ -40,7 +74,7 @@ TEAMS_DATA_PATH = Path("data/teams_aggregated.xlsx")
 TEMPLATE_PATH  = Path("images/templates/player_template.png")
 DEFAULT_PHOTO   = Path("images/templates/generic_player.png")
 CLUB_LOGO_PATH = Path("images/clubs/")
-REPORT_DIR     = Path("output")
+REPORT_DIR     = Path("output/reports/")
 
 # === CONFIG COLUMNAS ===
 # Ajusta si tu Excel usa otros nombres de col.
@@ -51,23 +85,26 @@ COL_BARS       = {'T1 %':'T1 %','T2 %':'T2 %','T3 %':'T3 %','EFG %':'EFG %','TS 
 
 # === COORDS (ajusta según plantilla) ===
 COORDS = {
-    'photo':      (60, 180),
-    'photo_size': (200, 280),
+    'photo':      (60, 175),
+    'photo_size': (225, 315),
     'club_logo':  (1640, 40),  # esquina sup-dcha
     'logo_size':  (190, 190),  # tamaño del logo del club
-    'name':       (60, 480),
+    'name':       (60, 500),
+    'flag':       (60, 560),  # posición de la bandera
     'table_start':(600, 155),  # punto inicial tabla stats
-    'ppt':        (1000, 400),  # posición de PPT trio
-    'bars_start': (-80, 570),   # eje Y donde comienzan barras
-    'finalizacion': (820, 610),  # posición de la sección de finalización
-    'distribucion': (820, 950),  # posición de la distribución de puntos
+    'ppt':        (930, 400),  # posición de PPT trio
+    'bars_start': (-80, 620),   # eje Y donde comienzan barras
+    'finalizacion': (820, 640),  # posición de la sección de finalización
+    'distribucion': (820, 980),  # posición de la distribución de puntos
 }
 
 # Ajusta esta ruta al .ttf de Montserrat que tengas instalado
 FONT_PATH      = Path("fonts/Montserrat-Regular.ttf")
 FONT_LARGE     = 48
+FONT_BIG       = 36
 FONT_MED       = 28
 FONT_SMALL     = 20
+MAX_NAME_WIDTH = 880
 
 def compute_usg(team_name, minutes, t1_attempts, t2_attempts, t3_attempts, turnovers):
     df_teams = pd.read_excel(TEAMS_DATA_PATH)
@@ -101,8 +138,6 @@ def compute_usg(team_name, minutes, t1_attempts, t2_attempts, t3_attempts, turno
     
     return round(usg * 100, 2)  # Devuelve en porcentaje
     
-    
-
 
 def compute_advanced_stats(stats_base):
     """
@@ -154,8 +189,18 @@ def compute_advanced_stats(stats_base):
     
     # Copy original data first
     result['JUGADOR'] = stats.get('JUGADOR', 'Unknown Player')
-    result['DORSAL'] = stats.get('DORSALES', '')
+    result['DORSAL'] = stats.get('DORSAL', '')
     result['Fase'] = stats.get('Fase', '')
+    result['IMAGEN'] = stats.get('IMAGEN', '')
+    result['NACIONALIDAD'] = stats.get('NACIONALIDAD', '')
+    bdate_raw = stats.get('FECHA NACIMIENTO', '')
+    # Handle NaN values properly (both float NaN and string 'nan')
+    if pd.isna(bdate_raw) or bdate_raw == 'nan' or bdate_raw == '':
+        bdate_year = ""
+    else:
+        # Get the year (last part after the last /)
+        bdate_year = str(bdate_raw).split("/")[-1]
+    result['FECHA NACIMIENTO'] = bdate_year
     result['EQUIPO'] = stats.get('EQUIPO', '')
     result['PUNTOS_TOTALES'] = Puntos
     result['ASISTENCIAS'] = AS
@@ -267,9 +312,37 @@ def compute_advanced_stats(stats_base):
     return result
 
 
+def fit_font_size(text, font_path, base_size, max_width):
+    # measure at base size
+    font = ImageFont.truetype(font_path, base_size)
+    bbox = font.getbbox(text)
+    text_width = bbox[2] - bbox[0]
+    # if it already fits, return it
+    if text_width <= max_width:
+        return font
+
+    # compute new size by proportional scaling
+    new_size = int(base_size * max_width / text_width)
+    # guard against zero or negative
+    new_size = max(new_size, 1)
+
+    # load and then fine-tune (in case of rounding issues)
+    font = ImageFont.truetype(font_path, new_size)
+    while True:
+        bbox = font.getbbox(text)
+        if bbox[2] - bbox[0] <= max_width or new_size <= 1:
+            break
+        new_size -= 1
+        font = ImageFont.truetype(font_path, new_size)
+
+    return font
+
 def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
     # cargar datos
     df = pd.read_excel(DATA_PATH)
+    
+    print(f"🔍 Generando informe para {player_name}...")
+        
     stats_base = df[df[COL_NAME] == player_name].iloc[0]
     
     stats = compute_advanced_stats(stats_base)
@@ -286,19 +359,30 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
 
     # --- FUENTES Montserrat ---
     font_large = ImageFont.truetype(str(FONT_PATH), FONT_LARGE)
+    font_big   = ImageFont.truetype(str(FONT_PATH), FONT_BIG)
     font_med   = ImageFont.truetype(str(FONT_PATH), FONT_MED)
     font_small = ImageFont.truetype(str(FONT_PATH), FONT_SMALL)
 
     # --- FOTO DEL JUGADOR ---
-    # Se busca un archivo con su nombre, si no existe usamos la genérica
-    photo_path = Path("photos") / f"{player_name.replace(' ', '_')}.png"
-    if photo_path.exists():
-        photo = Image.open(photo_path).convert('RGBA')
+    photo_url = stats.get('IMAGEN', '')
+    if photo_url:
+        # Check if the photo URL is a valid path or URL
+        if photo_url.startswith('http'):
+            # Download the image from the URL
+            try:
+                response = requests.get(photo_url, timeout=10)
+                response.raise_for_status()
+                photo = Image.open(io.BytesIO(response.content)).convert('RGBA')
+            except Exception as e:
+                print(f"⚠️ Error downloading photo from {photo_url}: {e}")
+                photo = Image.open(DEFAULT_PHOTO).convert('RGBA')
     else:
         photo = Image.open(DEFAULT_PHOTO).convert('RGBA')
+        
+    photo_no_bg = remove(photo)  # Remove background using rembg
 
-    photo = photo.resize(COORDS['photo_size'], Image.LANCZOS)
-    base.paste(photo, COORDS['photo'], photo)
+    photo_no_bg = photo_no_bg.resize(COORDS['photo_size'], Image.LANCZOS)
+    base.paste(photo_no_bg, COORDS['photo'], photo_no_bg)
 
     # --- ESCUDO DEL CLUB ---
     equipo_raw = stats.get('EQUIPO', '')
@@ -317,7 +401,11 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
         logo_path = CLUB_LOGO_PATH / "generic_club.png"
         logo = Image.open(logo_path).convert('RGBA')
 
-    logo = logo.resize(COORDS['logo_size'], Image.LANCZOS)
+    # Resize logo preserving aspect ratio, max height 200
+    ratio = logo.width / logo.height
+    height = COORDS['logo_size'][1]
+    width = int(height * ratio)
+    logo = logo.resize((width, height), Image.LANCZOS)
     base.paste(logo, COORDS['club_logo'], logo)
 
     # --- NOMBRE DEL JUGADOR ---
@@ -327,7 +415,31 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
         name_and_dorsal = f"{dorsal} - {player_name} "
     else:
         name_and_dorsal = player_name
-    draw.text((x_name, y_name), name_and_dorsal, font=font_large, fill="black")
+    font = fit_font_size(name_and_dorsal, FONT_PATH, FONT_LARGE, MAX_NAME_WIDTH)
+
+    draw.text((x_name, y_name), name_and_dorsal, font=font, fill="black")
+
+    # --- FECHA DE NACIMIENTO ---
+    fecha_nacimiento = stats.get('FECHA NACIMIENTO', '')
+    if fecha_nacimiento:
+        # Draw the birth date below the name
+        draw.text((x_name + 75, y_name + 63), f"{fecha_nacimiento}", font=font_med, fill="black")
+    
+    # --- NACIONALIDAD ---
+    nacionalidad = stats.get('NACIONALIDAD')
+    if nacionalidad:
+        # Load countries data once
+        countries_data = load_countries_data()
+        
+        # Get flag as PIL Image
+        flag_image = get_country_flag_image(nacionalidad, countries_data, flag_size=(60, 40))
+
+        if flag_image:          
+            # Paste the flag image
+            base.paste(flag_image, COORDS['flag'], flag_image)
+            print(f"🏁 Added SVG flag for {nacionalidad}")
+        else:
+            print(f"⚠️ No flag found for {nacionalidad}")
 
     # --- TABLA ESTADÍSTICA (líneas 1 y 2) ---
     # Generate the stats tables as PIL Images directly
@@ -402,6 +514,7 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
 
 
 def ui():
+    print("🔧 Iniciando UI para generación de informes de jugadores…")
     # 1) Cargo datos y lista de jugadores
     df      = pd.read_excel(DATA_PATH)
     players = sorted(df[COL_NAME].dropna().unique().tolist())
@@ -421,8 +534,11 @@ def ui():
     )
 
     # 4) Botón y área de salida
+    print("🔘 Preparando controles de UI…")
     button = widgets.Button(description='Generar informe', button_style='primary')
     out    = widgets.Output()
+
+
 
     # 5) Al escribir en el text, filtrar la lista
     def on_type(change):
@@ -442,6 +558,7 @@ def ui():
 
     # 7) Al pulsar “Generar”, feedback y ejecución
     def on_click(b):
+        print("HE CLICADO")
         out.clear_output()
         with out:
             print("🔄 Generando informe…")
@@ -455,6 +572,7 @@ def ui():
             clear_output()
             print(f"✅ Generado: {path}")
             display(Image.open(path))
+    button.on_click(on_click, remove=True)
     button.on_click(on_click)
 
     # 8) Compongo la UI
@@ -473,7 +591,7 @@ if __name__ == '__main__':
     out_dir = Path(args.output_dir)
 
     if args.all:
-        df = pd.read_excel(DATA_PATH)
+        df = pd.read_excel(DATA_PATH)        
         for nm in df[COL_NAME].dropna().unique():
             generate_report(nm, output_dir=out_dir, overwrite=args.overwrite)
     elif args.player:

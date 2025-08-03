@@ -12,38 +12,7 @@ Requisitos:
       pip install pandas pillow matplotlib ipywidgets
 
 Uso:
-    - Notebook: %run report_    # 7) Al pulsar "Generar", feedback y ejecución
-    def on_click(b):
-        # Disable button to prevent double clicks
-        b.disabled = True
-        b.description = 'Generando...'
-        
-        out.clear_output()
-        with out:
-            print("🔄 Generando informe…")
-            nombre = search.value
-            if nombre not in players:
-                print("⚠️ Jugador no encontrado")
-                # Re-enable button
-                b.disabled = False
-                b.description = 'Generar informe'
-                return
-            try:
-                path = generate_report(nombre)
-                clear_output()
-                print(f"✅ Generado: {path}")
-                display(Image.open(path))
-            except Exception as e:
-                clear_output()
-                print(f"❌ Error generando informe: {e}")
-            finally:
-                # Re-enable button
-                b.disabled = False
-                b.description = 'Generar informe'
-    
-    # Clear any existing event handlers and add new one
-    button.on_click(on_click, remove=True)
-    button.on_click(on_click)ui()
+    - Notebook: %run report_generator.ipynb
     - CLI: python report_generator.py -p "Nombre Jugador"
 
 """
@@ -59,14 +28,17 @@ from rembg import remove
 import ipywidgets as widgets
 from IPython.display import display, clear_output
 import requests
+from ipywidgets.widgets.widget import CallbackDispatcher
 
-from tools.finalizacion_plays_plot import plot_finalizacion_plays
-from tools.media_lanzamientos_plot import plot_media_pct
-from tools.distribucion_puntos_plot import plot_distribucion_puntos
-from tools.ppt_plays import plot_ppt_indicators
-from tools.stats_line_1 import plot_stats_table_simple
-from tools.stats_line_2 import plot_generic_stats_table
-from tools.nacionalidad import load_countries_data, get_country_flag_image
+
+from player_report.tools.finalizacion_plays_plot     import plot_finalizacion_plays
+from player_report.tools.media_lanzamientos_plot     import plot_media_pct
+from player_report.tools.distribucion_puntos_plot    import plot_distribucion_puntos
+from player_report.tools.ppt_plays                   import plot_ppt_indicators
+from player_report.tools.stats_line_1                import plot_stats_table_simple
+from player_report.tools.stats_line_2                import plot_generic_stats_table
+from player_report.tools.nacionalidad                import load_countries_data, get_country_flag_image
+
 
 # === RUTAS ===
 DATA_PATH      = Path("data/jugadores_aggregated.xlsx")
@@ -348,7 +320,26 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
     stats = compute_advanced_stats(stats_base)
     
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    out_file = output_dir / f"{player_name.replace(' ', '_')}_report.png"
+    
+    # Standardize filename format: always "SURNAMES NAME"
+    if ',' in player_name:
+        # Format: "SURNAMES, NAME" -> "SURNAMES NAME" (remove comma, keep order)
+        formatted_name = player_name.replace(',', '')
+    else:
+        # Format: "NAME SURNAMES" -> "SURNAMES NAME" (reverse order)
+        parts = player_name.strip().split()
+        if len(parts) >= 2:
+            # Take first part as name, rest as surnames
+            name = parts[0]
+            surnames = ' '.join(parts[1:])
+            formatted_name = f"{surnames} {name}"
+        else:
+            # Single name, keep as is
+            formatted_name = player_name
+    
+    # Clean the filename: replace spaces with underscores, remove dots and special characters
+    clean_filename = formatted_name.replace(' ', '_').replace('.', '_').replace(',', '').strip('_')
+    out_file = output_dir / f"{clean_filename}.png"
     """
     if out_file.exists() and not overwrite:
         return out_file
@@ -386,7 +377,7 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
 
     # --- ESCUDO DEL CLUB ---
     equipo_raw = stats.get('EQUIPO', '')
-    equipo = equipo_raw.strip().replace(' ', '_').lower()
+    equipo = equipo_raw.strip().replace(' ', '_').replace('.', '').lower()
     # Also substitute special characters if needed, á, etc --> a and ñ --> n
     equipo = equipo.replace('ñ', 'n').replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
     try:
@@ -538,8 +529,6 @@ def ui():
     button = widgets.Button(description='Generar informe', button_style='primary')
     out    = widgets.Output()
 
-
-
     # 5) Al escribir en el text, filtrar la lista
     def on_type(change):
         txt = change['new'].lower()
@@ -556,9 +545,8 @@ def ui():
             search.value = change['new']
     suggest.observe(on_select, names='value')
 
-    # 7) Al pulsar “Generar”, feedback y ejecución
-    def on_click(b):
-        print("HE CLICADO")
+    # 7) Callback de “Generar informe”
+    def on_click_fun(b):
         out.clear_output()
         with out:
             print("🔄 Generando informe…")
@@ -572,15 +560,19 @@ def ui():
             clear_output()
             print(f"✅ Generado: {path}")
             display(Image.open(path))
-    button.on_click(on_click, remove=True)
-    button.on_click(on_click)
+
+    # ——————— Evitamos callbacks duplicados ———————
+    # Reemplazamos el dispatcher interno por uno nuevo y vacío
+    button._click_handlers = CallbackDispatcher()
+    # Ahora registramos solo UNA vez nuestro handler
+    button.on_click(on_click_fun)
 
     # 8) Compongo la UI
     controls = widgets.HBox([search, button], layout=widgets.Layout(gap='10px'))
     display(widgets.VBox([controls, suggest, out]))
+
+
     
-    
-        
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generar informe jugador')
     parser.add_argument('-p', '--player', help='Nombre completo del jugador')

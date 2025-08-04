@@ -104,7 +104,8 @@ def draw_ppp_quadrant(
                 extent=[x-logo_w/2, x+logo_w/2,
                         y-logo_h/2, y+logo_h/2],
                 aspect='equal',
-                interpolation='bilinear'  # Better quality
+                interpolation='bilinear',  # Better quality
+                origin='lower'  # Correct origin for matplotlib
             )
 
         ax.text( x, y + logo_h/2 + text_offset, f"{x:.2f}",
@@ -167,7 +168,7 @@ if __name__ == '__main__':
     FILE = './data/teams_aggregated.xlsx'
     MIS_EQUIPOS = ['BALONCESTO TALAVERA', 'C.B. TRES CANTOS', 'CB ARIDANE',
                    'CB LA MATANZA', 'EB FELIPE ANTÓN', 'LUJISA GUADALAJARA BASKET',
-                   'REAL CANOE N.C.', 'UROS DE RIVAS'
+                   'REAL CANOE N.C.', 'UROS DE RIVAS', 'ZENTRO BASKET MADRID'
     ]
 
     FASE = "Liga Regular \"B-A\""

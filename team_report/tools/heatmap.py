@@ -260,7 +260,7 @@ if __name__ == '__main__':
     FILE = './data/teams_aggregated.xlsx'
     MIS_EQUIPOS = ['BALONCESTO TALAVERA', 'C.B. TRES CANTOS', 'CB ARIDANE',
                    'CB LA MATANZA', 'EB FELIPE ANTÓN', 'LUJISA GUADALAJARA BASKET',
-                   'REAL CANOE N.C.', 'UROS DE RIVAS'
+                   'REAL CANOE N.C.', 'UROS DE RIVAS', 'ZENTRO BASKET MADRID'
     ]
 
     FASE = "Liga Regular \"B-A\""

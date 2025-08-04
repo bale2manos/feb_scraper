@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 from team_report.tools.heatmap import generate_team_heatmap
 
@@ -66,11 +67,11 @@ def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: 
     df['TCI'] = T2I + T3I  # Total field goals
 
 
-    # Play distribution percentages
-    df['F1 Plays%'] = (T1I * 0.44 / Plays * 100) if Plays > 0 else 0
-    df['F2 Plays%'] = (T2I / Plays * 100) if Plays > 0 else 0
-    df['F3 Plays%'] = (T3I / Plays * 100) if Plays > 0 else 0
-    df['TO Plays%'] = (TOV / Plays * 100) if Plays > 0 else 0
+    # Play distribution percentages - Using vectorized operations
+    df['F1 Plays%'] = np.where(Plays > 0, (T1I * 0.44 / Plays * 100), 0)
+    df['F2 Plays%'] = np.where(Plays > 0, (T2I / Plays * 100), 0)
+    df['F3 Plays%'] = np.where(Plays > 0, (T3I / Plays * 100), 0)
+    df['TO Plays%'] = np.where(Plays > 0, (TOV / Plays * 100), 0)
     
     # Points per shot type
     df['PT1'] = T1C

@@ -18,8 +18,9 @@ from utils import (
     format_player_name
 )
 
-def plot_offensive_efficiency(
+def plot_top_shooters(
     df: pd.DataFrame,
+    MIN_SHOTS: int = 150,
     teams: list[str] | None = None,
     phase: str | None = None
 ):
@@ -34,20 +35,20 @@ def plot_offensive_efficiency(
     # 1) optional filters
     df = apply_phase_filter(df, phase)
     df = apply_teams_filter(df, teams)
-
-    # 2) apply PJ and minutes filters
-    df = apply_basic_filters(df, min_games=5, min_minutes_avg=10, min_total_minutes=150)
-
-    # 3) compute plays and PPP
-    df['PLAYS'] = compute_plays(df)
-    df['PPP'] = compute_ppp(df)
     
-    # 3) take top-20 by PPP
-    df = df.nlargest(20, 'PPP').reset_index(drop=True)
+    # 3) Filter those with less than 50 shots attempted
+    df = df[(df['T2 INTENTADO'] + df['T3 INTENTADO']) >= MIN_SHOTS]
+
+    # 3) compute TS % and EFG %
+    TCI = df['T2 INTENTADO'] + df['T3 INTENTADO']  # Total attempted shots (2s + 3s)
+    TCC = df['T2 CONVERTIDO'] + df['T3 CONVERTIDO']  # Total converted shots (2s + 3s)
+    df['EFG %'] = np.where(TCI > 0, (TCC + 0.5 * df['T3 CONVERTIDO']) / TCI * 100, 0)
+    TSA = TCI + 0.44 * df['TL INTENTADOS']  # Total shots attempted (including free throws)
+    df['TS %'] = np.where(TSA > 0, df['PUNTOS'] / (2*TSA) * 100, 0)
 
     # 4) prepare data arrays
-    x = df['PLAYS'].to_numpy()
-    y = df['PPP'].to_numpy()
+    x = df['TS %'].to_numpy()
+    y = df['EFG %'].to_numpy()
     mins = df['MINUTOS JUGADOS'].to_numpy()
     names = df['JUGADOR'].to_numpy()
     dorsals = df['DORSAL'].to_numpy()
@@ -75,11 +76,11 @@ def plot_offensive_efficiency(
         colors.append(color_map[team])
         
 
-    # 6) bubble size based on PPP (70%) and plays volume (30%)
-    # Higher PPP = bigger bubbles (70% weight), more plays = bigger bubbles (30% weight)
-    ppp_factor = (y / y.max()) ** 4.0  # Very strong PPP influence for dramatic differences (70% weight)
-    plays_factor = (x / x.max()) ** 0.5  # Moderate plays influence (30% weight)
-    s = (0.7 * ppp_factor + 0.3 * plays_factor) * 1500  # Slightly larger max size for bigger top bubbles
+    # 6) bubble size based on EFG% (50%) and TS% (50%)
+    # Higher EFG% = bigger bubbles (50% weight), higher TS% = bigger bubbles (50% weight)
+    efg_factor = (y / y.max()) ** 4.0  # Very strong EFG% influence for dramatic differences (50% weight)
+    ts_factor = (x / x.max()) ** 4.0  # Same strong TS% influence for dramatic differences (50% weight)
+    s = (0.5 * efg_factor + 0.5 * ts_factor) * 1500  # Equal weighting between EFG% and TS%
 
     # 7) compute medians
     xm, ym = np.median(x), np.median(y)
@@ -89,7 +90,7 @@ def plot_offensive_efficiency(
     # Draw circles with original team colors (no lightening)
     ax.scatter(x, y, s=s, c=colors, alpha=0.7, edgecolor='k', linewidth=0.5, zorder=2)
     
-    # 8.1) Add team logos inside bubbles
+    # 8.1) Add team logos inside bubbles (using the working logic from top20_off_eff.py)
     fig.canvas.draw()  # Draw figure to get correct bbox
     x_data_range = ax.get_xlim()[1] - ax.get_xlim()[0]
     y_data_range = ax.get_ylim()[1] - ax.get_ylim()[0]
@@ -111,8 +112,8 @@ def plot_offensive_efficiency(
         logo_width, logo_height = logo.size
         logo_aspect_ratio = logo_width / logo_height
         
-        # Calculate target size based on bubble diameter (use 70% of bubble diameter for padding)
-        target_diameter_data = bubble_radius_data * 2 * 0.25
+        # Calculate target size based on bubble diameter (use 25% of bubble diameter, same as top20_off_eff)
+        target_diameter_data = bubble_radius_data * 2 * 0.01
         
         # Determine which dimension (width or height) is the limiting factor
         if logo_aspect_ratio > 1:  # Logo is wider than tall
@@ -180,9 +181,9 @@ def plot_offensive_efficiency(
     for i, (xi, yi, formatted_name, team) in enumerate(zip(x, y, formatted_names, teams)):
         bubble_radius_data = bubble_radii_data[i]
         
-        # Default position: below the bubble with very minimal distance
+        # Default position: below the bubble with more distance
         text_x = xi
-        text_y = yi - bubble_radius_data - 0.001  # Almost touching the bubble
+        text_y = yi - bubble_radius_data - 0.025  # Increased distance from 0.01 to 0.025
         
         # Get team color from the color_map we already built
         team_color = color_map.get(team, (0, 0, 0))  # Default to black if not found
@@ -199,13 +200,13 @@ def plot_offensive_efficiency(
     adjust_text(
         texts,
         x=x, y=y,  # Bubble positions to avoid
-        expand_points=(1.05, 1.05),  # Minimal expansion around bubbles for very close positioning
-        expand_text=(1.05, 1.05),   # Minimal expansion around text
-        expand_objects=(1.05, 1.05), # Minimal expansion around other objects
+        expand_points=(1.5, 1.5),  # How much to expand around bubbles
+        expand_text=(1.2, 1.2),   # How much to expand around text
+        expand_objects=(1.3, 1.3), # How much to expand around other objects
         arrowprops=dict(arrowstyle='->', color='gray', alpha=0.7, lw=0.8, shrinkA=5, shrinkB=5),
-        force_points=(0.1, 0.1),  # Very low force to allow extremely close positioning to bubbles
-        force_text=(0.4, 0.4),    # Reduced force between texts
-        force_objects=(0.2, 0.2), # Very low force for other objects
+        force_points=(0.3, 0.3),  # Force to avoid bubbles
+        force_text=(0.8, 0.8),    # Force to avoid other text
+        force_objects=(0.5, 0.5), # Force to avoid other objects
         lim=1000,  # Maximum iterations
         precision=0.01,
         only_move={'points': 'y', 'text': 'xy', 'objects': 'xy'}  # Allow text to move in all directions
@@ -225,11 +226,11 @@ def plot_offensive_efficiency(
     ax.axhline(ym, color='gray', ls='--', lw=1)
 
     # 12) labels & title
-    ax.set_xlabel('Plays', fontsize=14)
-    ax.set_ylabel('PPP', fontsize=14)
-    # 11) Main title and subtitle, both centered
+    ax.set_xlabel('TS %', fontsize=14)
+    ax.set_ylabel('EFG %', fontsize=14)
+    # Main title and subtitle, both centered
     fig.suptitle(
-        'TOP 20 - Eficiencia Ofensiva',
+        'TOP SHOOTERS - Eficiencia de Tiro',
         fontsize=20,
         weight='bold',
         x=0.5,      # center horizontally
@@ -238,7 +239,7 @@ def plot_offensive_efficiency(
     fig.text(
         0.5,        # center horizontally
         0.99,       # just below the suptitle
-        'Mínimo 5 partidos jugados y 10 minutos de media',
+        f'Mínimo {MIN_SHOTS} tiros intentados (T2 + T3)',
         ha='center',
         va='top',
         fontsize=12,
@@ -263,9 +264,18 @@ if __name__ == '__main__':
     
     print(f"Los equipos en el dataset son: {df['EQUIPO'].unique()}")
 
-    board = plot_offensive_efficiency(df, teams=MIS_EQUIPOS, phase=None)
+    board = plot_top_shooters(df, teams=MIS_EQUIPOS,  MIN_SHOTS=150, phase=None)
     # save the figure
-    board.savefig('top20_offensive_efficiency.png', 
+    board.savefig('top_150_shots.png', 
+              bbox_inches='tight', 
+              dpi=300,                    # High resolution
+              facecolor='white',          # White background
+              edgecolor='none',           # No edge color
+              format='png')               # PNG format
+    
+    board = plot_top_shooters(df, teams=MIS_EQUIPOS,  MIN_SHOTS=200, phase=None)
+    # save the figure
+    board.savefig('top_200_shots.png', 
               bbox_inches='tight', 
               dpi=300,                    # High resolution
               facecolor='white',          # White background

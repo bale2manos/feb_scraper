@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+E# -*- coding: utf-8 -*-
 """
 Generador automático de informes individuales – modo Notebook y CLI
 =====================================================================

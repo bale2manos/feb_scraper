@@ -3,10 +3,10 @@ import textwrap
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib import font_manager as fm
 from matplotlib.patches import Patch
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from PIL import Image
+
+from utils import get_team_logo, setup_montserrat_font
 
 
 def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: str | None = None) -> pd.DataFrame:
@@ -87,26 +87,7 @@ def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: 
 
 
 
-def get_team_logo(team_name: str):
-    """Carga logo desde images/clubs/, igual que en draw_team_board."""
-    fn = (team_name.lower()
-                   .replace(' ', '_')
-                   .replace('.', '')
-                   .replace(',', '')
-                   .replace('á', 'a')
-                   .replace('é', 'e')
-                   .replace('í', 'i')
-                   .replace('ó', 'o')
-                   .replace('ú', 'u'))
-    path = os.path.join(
-        os.path.dirname(__file__),
-        '..','..','images','clubs',
-        f'{fn}.png'
-    )
-    if os.path.exists(path):
-        return Image.open(path).convert('RGBA')
-    else:
-        return None
+
 def generate_team_points_distribution(
     df: pd.DataFrame,
     teams: list[str] | None = None,
@@ -119,10 +100,7 @@ def generate_team_points_distribution(
      3) Barras apiladas de PT1, PT2, PT3 con anotaciones y total al final
     """
     # Montserrat
-    font_path = os.path.join(os.path.dirname(__file__),'..','..','fonts','Montserrat-Regular.ttf')
-    if os.path.exists(font_path):
-        prop = fm.FontProperties(fname=font_path)
-        plt.rcParams['font.family'] = prop.get_name()
+    setup_montserrat_font()
 
     # Filtrar
     if phase is not None:

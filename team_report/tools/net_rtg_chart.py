@@ -2,20 +2,9 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib import font_manager as fm
-from PIL import Image
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
-def get_team_logo(team_name: str):
-    """Carga logo desde images/clubs/, igual que en draw_team_board."""
-    fn = team_name.lower().replace(' ', '_').replace('.', '').replace(',', '').replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
-    path = os.path.join(os.path.dirname(__file__), '..', '..',
-                        'images', 'clubs', f'{fn}.png')
-    if os.path.exists(path):
-        return Image.open(path).convert('RGBA')
-    else:
-        print(f"❌ Logo no encontrado: {path}")
-        return None
+from utils import get_team_logo, setup_montserrat_font
 
 
 def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: str | None = None) -> pd.DataFrame:
@@ -102,10 +91,7 @@ def plot_net_rating_vertical_with_stickers(df, value_col: str = 'NETRTG'):
     and preserve their aspect ratio.
     """
     # Set up Montserrat font
-    montserrat_path = os.path.join(os.path.dirname(__file__), '..', '..', 'fonts', 'Montserrat-Regular.ttf')
-    if os.path.exists(montserrat_path):
-        montserrat_prop = fm.FontProperties(fname=montserrat_path)
-        plt.rcParams['font.family'] = montserrat_prop.get_name()
+    setup_montserrat_font()
     
     # 1) Prepare data & colors
     plot_df = (df[['EQUIPO', value_col]]
@@ -206,6 +192,7 @@ def plot_net_rating_vertical_with_stickers(df, value_col: str = 'NETRTG'):
     # 4) Clean axes
     ax.axis('off')
     return fig
+
 if __name__ == '__main__':
     # Ejemplo de uso:
     FILE = './data/teams_aggregated.xlsx'

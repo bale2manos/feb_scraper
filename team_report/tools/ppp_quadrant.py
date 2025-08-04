@@ -1,20 +1,9 @@
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
 import numpy as np
-from PIL import Image
 
-def get_team_logo(team_name: str):
-    """Carga logo desde images/clubs/, igual que en draw_team_board."""
-    fn = team_name.lower().replace(' ', '_').replace('.', '').replace(',', '').replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
-    path = os.path.join(os.path.dirname(__file__), '..', '..',
-                        'images', 'clubs', f'{fn}.png')
-    if os.path.exists(path):
-        return Image.open(path).convert('RGBA')
-    else:
-        print(f"❌ Logo no encontrado: {path}")
-        return None
+from utils import get_team_logo, setup_montserrat_font
 
 def draw_ppp_quadrant(
     df: pd.DataFrame,
@@ -30,10 +19,7 @@ def draw_ppp_quadrant(
     Añade líneas de media y etiquetas en las 4 esquinas.
     """
     # Configure Montserrat font
-    font_path = os.path.join(os.path.dirname(__file__), '..', '..', 'fonts', 'Montserrat-Regular.ttf')
-    if os.path.exists(font_path):
-        montserrat_prop = fm.FontProperties(fname=font_path)
-        plt.rcParams['font.family'] = montserrat_prop.get_name()
+    setup_montserrat_font()
     
     # 1) Filtrado opcional
     if phase is not None:

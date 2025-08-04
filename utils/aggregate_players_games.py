@@ -172,7 +172,7 @@ def aggregate_players_stats(file_path='./data/jugadores_per_game.xlsx'):
     # Si alguna fila tiene NOMBRE vacio, copiar el de JUGADOR
     aggregated_df['NOMBRE'] = aggregated_df['NOMBRE'].fillna(aggregated_df['JUGADOR'])
     
-    column_order = ['NOMBRE'] + first_columns + ['PJ'] + sum_columns + bio_columns[1:]
+    column_order = ['NOMBRE'] + first_columns + ['PJ'] + sum_columns + bio_columns[1:] + ['URL JUGADOR']
     final_columns = [col for col in column_order if col in aggregated_df.columns]
     aggregated_df = aggregated_df[final_columns]
     

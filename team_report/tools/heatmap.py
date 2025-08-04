@@ -3,10 +3,11 @@ from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColor
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import matplotlib.font_manager as fm
 import os
-from PIL import Image
 import numpy as np
+from PIL import Image
+
+from utils import get_team_logo, setup_montserrat_font
 
 
 STATS_NAME_MAPPING = {
@@ -57,10 +58,7 @@ def generate_team_heatmap(
     Incluye logos de equipos a la izquierda.
     """
     # Configurar fuente Montserrat
-    font_path = os.path.join(os.path.dirname(__file__), '..', '..', 'fonts', 'Montserrat-Regular.ttf')
-    if os.path.exists(font_path):
-        montserrat_prop = fm.FontProperties(fname=font_path)
-        plt.rcParams['font.family'] = montserrat_prop.get_name()
+    setup_montserrat_font()
     
     metrics = [
         'PUNTOS +', 'PPP', 'PUNTOS -', 'PPP OPP',
@@ -111,23 +109,7 @@ def generate_team_heatmap(
     sort_col = 'PUNTOS +' if 'PUNTOS +' in ranks.columns else ranks.columns[0]
     ranks = ranks.sort_values(by=sort_col, ascending=True)
 
-    # 6) Función para cargar logo del equipo
-    def get_team_logo(team_name):
-        """Carga el logo del equipo desde images/clubs/"""
-        # Normalizar nombre: lowercase, espacios por _, quitar puntos
-        logo_name = team_name.lower().replace(' ', '_').replace('.', '').replace(',', '').replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u') 
-        logo_path = os.path.join(os.path.dirname(__file__), '..', '..', 'images', 'clubs', f'{logo_name}.png')
-        
-        if os.path.exists(logo_path):
-            try:
-                logo = Image.open(logo_path).convert('RGBA')
-                return logo
-            except Exception as e:
-                print(f"⚠️ Error al cargar logo para '{team_name}' desde '{logo_path}': {e}")
-                return None
-        else:
-            print(f"❌ Archivo no encontrado: {logo_path}")
-            return None
+    # 6) Use the imported get_team_logo function
         
     
 
@@ -270,7 +252,7 @@ if __name__ == '__main__':
 
     board = generate_team_heatmap(df, teams=MIS_EQUIPOS, phase=None)
     # save the figure
-    board.savefig('team_board.png', 
+    board.savefig('heatmap.png', 
               bbox_inches='tight', 
               dpi=300,                    # High resolution
               facecolor='white',          # White background

@@ -224,6 +224,64 @@ def plot_top_shooters(
     # 11) median lines
     ax.axvline(xm, color='gray', ls='--', lw=1)
     ax.axhline(ym, color='gray', ls='--', lw=1)
+    
+    # 11.0) Add labels for median lines
+    # Get current axis limits after margins are set
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+    
+    # Label for vertical line (TS% median) - positioned near x-axis
+    ax.text(xm, y_min + (y_max - y_min) * 0.02, 
+            f'Mediana TS%\n{xm:.1f}%',
+            fontsize=9, fontweight='bold',
+            ha='center', va='bottom',
+            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='gray'),
+            color='gray')
+    
+    # Label for horizontal line (eFG% median) - positioned on y-axis
+    ax.text(x_min + (x_max - x_min) * 0.02, ym,
+            f'Mediana eFG% {ym:.1f}%',
+            fontsize=9, fontweight='bold',
+            ha='left', va='center',
+            bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8, edgecolor='gray'),
+            color='gray')
+
+    # 11.1) Add quadrant labels for interpretation
+    # Calculate positions for quadrant labels (with some padding from edges)
+    padding_x = (x_max - x_min) * 0.02
+    padding_y = (y_max - y_min) * 0.02
+    
+    # Bottom-left quadrant (Low TS%, Low eFG%)
+    ax.text(x_min + padding_x, y_min + padding_y, 
+            'Ambos bajos →\nbaja eficiencia neta',
+            fontsize=10, fontweight='bold', 
+            ha='left', va='bottom',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7),
+            color='darkred')
+    
+    # Bottom-right quadrant (High TS%, Low eFG%)
+    ax.text(x_max - padding_x, y_min + padding_y,
+            'TS% – eFG% positivo →\njuega vía FT',
+            fontsize=10, fontweight='bold',
+            ha='right', va='bottom',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', alpha=0.7),
+            color='darkorange')
+    
+    # Top-left quadrant (Low TS%, High eFG%)
+    ax.text(x_min + padding_x, y_max - padding_y,
+            'eFG% alto – TS% bajo →\nnumerosos triples, pocos FT',
+            fontsize=10, fontweight='bold',
+            ha='left', va='top',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.7),
+            color='darkblue')
+    
+    # Top-right quadrant (High TS%, High eFG%)
+    ax.text(x_max - padding_x, y_max - padding_y,
+            'Ambos altos →\nnivel récord de\nanotación por tiro',
+            fontsize=10, fontweight='bold',
+            ha='right', va='top',
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7),
+            color='darkgreen')
 
     # 12) labels & title
     ax.set_xlabel('TS %', fontsize=14)

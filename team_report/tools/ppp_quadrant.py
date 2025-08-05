@@ -102,43 +102,56 @@ def draw_ppp_quadrant(
                  fontsize=12, fontweight='bold')  # Increased font size
 
 
-    # 6) Etiquetas en las 4 esquinas
+    # 6) Etiquetas en las 4 esquinas - IMPROVED STYLING
     x_min, x_max = ax.get_xlim()
     y_min, y_max = ax.get_ylim()
     pad_x = (x_max - x_min) * 0.02
     pad_y = (y_max - y_min) * 0.02
     
-    tag_font_size = 9
+    tag_font_size = 10
 
+    # Top-left: Poor offense, Good defense (Mixed - Light Blue)
     ax.text(
         x_min + pad_x, y_max - pad_y,
         "Peor ataque\n– Mejor defensa",
         va='top', ha='left',
-        fontsize= tag_font_size,
+        fontsize=tag_font_size,
         fontweight='bold',
-        backgroundcolor='white',
-        alpha=0.7
+        bbox=dict(boxstyle='round,pad=0.4', facecolor='lightblue', alpha=0.8, edgecolor='darkblue'),
+        color='darkblue'
     )
+    
+    # Top-right: Good offense, Good defense (Excellent - Light Green)
     ax.text(
         x_max - pad_x, y_max - pad_y,
         "Mejor ataque\n– Mejor defensa",
         va='top', ha='right',
-        fontsize=tag_font_size, fontweight='bold',
-        backgroundcolor='white', alpha=0.7
+        fontsize=tag_font_size, 
+        fontweight='bold',
+        bbox=dict(boxstyle='round,pad=0.4', facecolor='lightgreen', alpha=0.8, edgecolor='darkgreen'),
+        color='darkgreen'
     )
+    
+    # Bottom-left: Poor offense, Poor defense (Bad - Light Red)
     ax.text(
         x_min + pad_x, y_min + pad_y,
         "Peor ataque\n– Peor defensa",
         va='bottom', ha='left',
-        fontsize=tag_font_size, fontweight='bold',
-        backgroundcolor='white', alpha=0.7
+        fontsize=tag_font_size, 
+        fontweight='bold',
+        bbox=dict(boxstyle='round,pad=0.4', facecolor='lightcoral', alpha=0.8, edgecolor='darkred'),
+        color='darkred'
     )
+    
+    # Bottom-right: Good offense, Poor defense (Mixed - Light Yellow)
     ax.text(
         x_max - pad_x, y_min + pad_y,
         "Mejor ataque\n– Peor defensa",
         va='bottom', ha='right',
-        fontsize=tag_font_size, fontweight='bold',
-        backgroundcolor='white', alpha=0.7
+        fontsize=tag_font_size, 
+        fontweight='bold',
+        bbox=dict(boxstyle='round,pad=0.4', facecolor='lightyellow', alpha=0.8, edgecolor='darkorange'),
+        color='darkorange'
     )
 
     # 7) Etiquetas de ejes

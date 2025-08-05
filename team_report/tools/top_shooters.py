@@ -269,7 +269,7 @@ def plot_top_shooters(
     
     # Top-left quadrant (Low TS%, High eFG%)
     ax.text(x_min + padding_x, y_max - padding_y,
-            'eFG% alto – TS% bajo →\nnumerosos triples, pocos FT',
+            'eFG% alto – TS% bajo →\nnumerosos TC, pocos FT',
             fontsize=10, fontweight='bold',
             ha='left', va='top',
             bbox=dict(boxstyle='round,pad=0.3', facecolor='lightblue', alpha=0.7),
@@ -277,7 +277,7 @@ def plot_top_shooters(
     
     # Top-right quadrant (High TS%, High eFG%)
     ax.text(x_max - padding_x, y_max - padding_y,
-            'Ambos altos →\nnivel récord de\nanotación por tiro',
+            'Ambos altos →\nnivel alto de\nanotación por tiro',
             fontsize=10, fontweight='bold',
             ha='right', va='top',
             bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7),

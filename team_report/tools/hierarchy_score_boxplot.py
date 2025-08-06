@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
-from utils import (
+from .utils import (
     format_player_name,
     lighten_color,
     darken_color,
@@ -30,7 +30,6 @@ def plot_annotation_hierarchy(
     df = apply_phase_filter(df, phase)
     df = apply_teams_filter(df, teams)
         
-    print(f"Filtrando por equipos: {teams} y fase: {phase}")
     
     # 2) Agrupar puntos por equipo en orden alfabético
     df = df[['EQUIPO', 'JUGADOR', 'PUNTOS', 'DORSAL']].dropna()

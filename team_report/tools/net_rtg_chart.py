@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
-from utils import get_team_logo, setup_montserrat_font
+from .utils import get_team_logo, setup_montserrat_font, apply_phase_filter, apply_teams_filter
 
 
 def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: str | None = None) -> pd.DataFrame:
@@ -83,7 +83,7 @@ def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: 
 
     return df
 
-def plot_net_rating_vertical_with_stickers(df, value_col: str = 'NETRTG'):
+def plot_net_rating_vertical_with_stickers(df, teams, phase, value_col: str = 'NETRTG'):
     """
     Minimalist vertical Net Rating bar chart + logo "stickers" at each bar tip.
     Canvas, bars, text, title, etc. remain exactly as the clean version.
@@ -92,6 +92,10 @@ def plot_net_rating_vertical_with_stickers(df, value_col: str = 'NETRTG'):
     """
     # Set up Montserrat font
     setup_montserrat_font()
+    
+    # 1) Filtrado opcional
+    df = apply_phase_filter(df, phase)
+    df = apply_teams_filter(df, teams)
     
     # 1) Prepare data & colors
     plot_df = (df[['EQUIPO', value_col]]
@@ -169,13 +173,10 @@ def plot_net_rating_vertical_with_stickers(df, value_col: str = 'NETRTG'):
         bar_height_ratio = abs(ty) / max(abs(max_val), abs(min_val))
         # If bar is small (less than 30% of max), increase offset slightly
         if bar_height_ratio < 0.15:
-            print("Team with small bar:", team, "Value:", bar_height_ratio)
             offset_multiplier = 3  # 1.3x larger offset for small bars
         elif bar_height_ratio < 0.4:
-            print("Team with medium bar:", team, "Value:", bar_height_ratio)
             offset_multiplier = 1  # 1.15x larger offset for medium bars
         else:
-            print("Team with large bar:", team, "Value:", bar_height_ratio)
             offset_multiplier = -0.75  # Normal offset for large bars
             
         y_offset = base_offset * offset_multiplier if v >= 0 else -base_offset * offset_multiplier

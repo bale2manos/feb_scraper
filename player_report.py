@@ -69,7 +69,7 @@ if st.button('Generar informe'):
                 team_players = players_df[players_df[team_col] == entity][player_col].tolist()
                 total = len(team_players)
                 if total > 0:
-                    out_dir = Path("output/reports") / entity
+                    out_dir = Path("output/player_reports") / entity
                     out_dir.mkdir(parents=True, exist_ok=True)
 
                     # Preparar contenedores para progreso y texto dinámico

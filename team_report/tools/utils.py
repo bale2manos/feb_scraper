@@ -7,6 +7,7 @@ logo handling, and player name formatting.
 import os
 import numpy as np
 from PIL import Image
+import pandas as pd
 
 
 def format_player_name(jugador: str, dorsal: int) -> str:
@@ -105,6 +106,83 @@ def get_team_logo(team_name: str):
         return Image.open(path).convert('RGBA')
     return None
 
+
+
+def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: str | None = None) -> pd.DataFrame:
+    """
+    Compute aggregated statistics for teams from the provided DataFrame.
+    
+    Parameters:
+    - df: DataFrame containing player statistics.
+    - teams: Optional list of teams to filter. If None, all teams are included.
+    - phase: Optional phase to filter by (e.g., 'Liga Regular').
+    
+    Returns:
+    - DataFrame with aggregated team statistics.
+    """
+    # 1) Filter by phase if provided
+    if phase is not None:
+        df = df[df['FASE'] == phase]
+    
+    # 2) Filter by teams if provided
+    if teams is not None:
+        df = df[df['EQUIPO'].isin(teams)]
+        
+    T1C = df.get('TL CONVERTIDOS', 0)        # Free throws made
+    T1I = df.get('TL INTENTADOS', 0)         # Free throws attempted
+    T2C = df.get('T2 CONVERTIDO', 0)         # 2-point field goals made
+    T2I = df.get('T2 INTENTADO', 0)          # 2-point field goals attempted
+    T3C = df.get('T3 CONVERTIDO', 0)         # 3-point field goals made
+    T3I = df.get('T3 INTENTADO', 0)          # 3-point field goals attempted
+
+    RO = df.get('REB OFFENSIVO', 0)          # Offensive rebounds
+    RD = df.get('REB DEFENSIVO', 0)          # Defensive rebounds
+    AS = df.get('ASISTENCIAS', 0)            # Assists
+    ROB = df.get('RECUPEROS', 0)             # Steals
+    TOV = df.get('PERDIDAS', 0)               # Turnovers
+    FC = df.get('FaltasCOMETIDAS', 0)        # Fouls committed
+    FR = df.get('FaltasRECIBIDAS', 0)        # Fouls received
+    Plays = df.get('PLAYS', 0)
+        
+    # 3) Rename columns for clarity
+    df.rename(columns={
+        'T2 CONVERTIDO': 'T2C',
+        'T2 INTENTADO': 'T2I',
+        'T3 CONVERTIDO': 'T3C',
+        'T3 INTENTADO': 'T3I',
+        'TL CONVERTIDOS': 'T1C',
+        'TL INTENTADOS': 'T1I',
+        'PTS_RIVAL': 'PUNTOS -',
+        'REB OFFENSIVO': 'OREB',
+        'REB DEFENSIVO': 'DREB',
+        'ASISTENCIAS': 'AST',
+        'RECUPEROS': 'ROB',
+        'PERDIDAS': 'TOV',
+        'FaltasCOMETIDAS': 'FC',
+        'FaltasRECIBIDAS': 'FR'
+    }, inplace=True)
+    
+    # Además de esas, el dataset contiene:
+    # 'EQUIPO', 'FASE', 'MINUTOS JUGADOS', 'PUNTOS +', 'PPP', 'PPP OPP', 'PJ', 'PLAYS'
+    # 'OFFRTG', 'DEFRTG', 'NETRTG', '%OREB', '%DREB', '%REB'
+
+    # Tiros de campo
+    df['TCC'] = T2C + T3C  # Total field goals made
+    df['TCI'] = T2I + T3I  # Total field goals
+
+
+    # Play distribution percentages - Using vectorized operations
+    df['F1 Plays%'] = np.where(Plays > 0, (T1I * 0.44 / Plays * 100), 0)
+    df['F2 Plays%'] = np.where(Plays > 0, (T2I / Plays * 100), 0)
+    df['F3 Plays%'] = np.where(Plays > 0, (T3I / Plays * 100), 0)
+    df['TO Plays%'] = np.where(Plays > 0, (TOV / Plays * 100), 0)
+    
+    # Points per shot type
+    df['PT1'] = T1C
+    df['PT2'] = T2C *2
+    df['PT3'] = T3C *3
+
+    return df
 
 def get_team_main_color(team_name: str):
     """Get the main color from team logo by finding the most common non-transparent color."""

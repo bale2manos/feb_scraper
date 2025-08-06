@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from PIL import Image
 
-from utils import get_team_logo, setup_montserrat_font
+from .utils import get_team_logo, setup_montserrat_font
 
 def generate_team_rebound_analysis(
     df: pd.DataFrame,

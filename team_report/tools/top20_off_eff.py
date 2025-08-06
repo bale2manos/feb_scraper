@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from adjustText import adjust_text
 
-from utils import (
+from .utils import (
     lighten_color_rgb,
     get_team_logo,
     extract_logo_color,

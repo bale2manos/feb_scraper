@@ -7,7 +7,7 @@ import os
 import numpy as np
 from PIL import Image
 
-from utils import get_team_logo, setup_montserrat_font
+from .utils import get_team_logo, setup_montserrat_font
 
 
 STATS_NAME_MAPPING = {
@@ -72,13 +72,8 @@ def generate_team_heatmap(
     # 2) Filtros opcionales
     if phase is not None:
         df = df[df['FASE'] == phase]
-        print(f"Filtrando por fase: {phase}")
     if teams is not None:
-        df = df[df['EQUIPO'].isin(teams)]
-        print(f"Los equipos en el dataset son: {df['EQUIPO'].unique()}")
-        print(f"Teams not found in dataset: {set(teams) - set(df['EQUIPO'].unique())}")
-        
-    
+        df = df[df['EQUIPO'].isin(teams)]  
         
     
     # 3) Si las métricas no están en los datos, usar el mapping para renombrar

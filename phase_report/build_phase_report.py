@@ -50,7 +50,7 @@ def setup_montserrat_pdf_fonts():
 # === Configuration ===
 TEAM_FILE     = Path("data/teams_aggregated.xlsx")
 PLAYERS_FILE  = Path("data/jugadores_aggregated.xlsx")
-BASE_OUTPUT_DIR = Path("output/team_reports/")
+BASE_OUTPUT_DIR = Path("output/phase_reports/")
 
 # Create output directory if it doesn't exist
 BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -89,7 +89,7 @@ def optimize_png_buffer(buf, max_width=1400):
     optimized_buf.seek(0)
     return optimized_buf
 
-def build_team_report(teams=None, phase=None):
+def build_phase_report(teams=None, phase=None):
     # Setup fonts
     setup_montserrat_pdf_fonts()
     
@@ -180,7 +180,7 @@ def build_team_report(teams=None, phase=None):
     print(f"📊 {total} gráficos procesados con optimización PNG")
 
 if __name__ == '__main__':
-    build_team_report(
+    build_phase_report(
         teams=[
             'BALONCESTO TALAVERA','C.B. TRES CANTOS','CB ARIDANE',
             'CB LA MATANZA','EB FELIPE ANTÓN','LUJISA GUADALAJARA BASKET',

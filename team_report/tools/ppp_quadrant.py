@@ -23,8 +23,8 @@ def draw_ppp_quadrant(
     
     # 1) Filtrado opcional
     if phase is not None:
-        df = df[df['FASE'] == phase]
-    if teams is not None:
+        df = df[df['FASE'].isin(phase)]
+    if teams is not None and len(teams) > 0:
         df = df[df['EQUIPO'].isin(teams)]
 
     # 2) Agregamos PPP y PPP OPP por equipo (promedio)
@@ -113,7 +113,7 @@ def draw_ppp_quadrant(
     # Top-left: Poor offense, Good defense (Mixed - Light Blue)
     ax.text(
         x_min + pad_x, y_max - pad_y,
-        "Peor ataque\n– Mejor defensa",
+        "Mejor defensa\n– Peor ataque",
         va='top', ha='left',
         fontsize=tag_font_size,
         fontweight='bold',
@@ -124,7 +124,7 @@ def draw_ppp_quadrant(
     # Top-right: Good offense, Good defense (Excellent - Light Green)
     ax.text(
         x_max - pad_x, y_max - pad_y,
-        "Mejor ataque\n– Mejor defensa",
+        "Mejor defensa\n– Mejor ataque",
         va='top', ha='right',
         fontsize=tag_font_size, 
         fontweight='bold',
@@ -135,7 +135,7 @@ def draw_ppp_quadrant(
     # Bottom-left: Poor offense, Poor defense (Bad - Light Red)
     ax.text(
         x_min + pad_x, y_min + pad_y,
-        "Peor ataque\n– Peor defensa",
+        "Peor defensa\n– Peor ataque",
         va='bottom', ha='left',
         fontsize=tag_font_size, 
         fontweight='bold',
@@ -146,7 +146,7 @@ def draw_ppp_quadrant(
     # Bottom-right: Good offense, Poor defense (Mixed - Light Yellow)
     ax.text(
         x_max - pad_x, y_min + pad_y,
-        "Mejor ataque\n– Peor defensa",
+        "Peor defensa\n– Mejor ataque",
         va='bottom', ha='right',
         fontsize=tag_font_size, 
         fontweight='bold',

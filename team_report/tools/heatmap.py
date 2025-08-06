@@ -30,14 +30,20 @@ def make_discrete_cmap(n: int, anchor_hexes: list[str]):
       - cmap: a ListedColormap with n colors sampled from the anchors
       - norm: a BoundaryNorm mapping integers 1..n → those colors
     """
+    # Handle edge case: only one team
+    if n <= 1:
+        # Use the middle color for single team
+        cont_cmap = LinearSegmentedColormap.from_list("custom_cont", anchor_hexes, N=256)
+        palette = [cont_cmap(0.5)]
+        cmap = ListedColormap(palette)
+        # For single value, create boundaries [0.5, 1.5] to map value 1 to the color
+        norm = BoundaryNorm([0.5, 1.5], ncolors=1)
+        return cmap, norm
+    
     # 1) build a continuous colormap from your 8 anchors:
     cont_cmap = LinearSegmentedColormap.from_list("custom_cont", anchor_hexes, N=256)
     # 2) sample exactly n colors, evenly spaced from it:
-    if n == 1:
-        # degenerate case: just take the middle color
-        palette = [cont_cmap(0.5)]
-    else:
-        palette = [cont_cmap(i/(n-1)) for i in range(n)]
+    palette = [cont_cmap(i/(n-1)) for i in range(n)]
     # 3) turn that into a discrete ListedColormap
     cmap = ListedColormap(palette)
     # 4) build a norm so that 1→palette[0], 2→palette[1], …, n→palette[n-1]
@@ -71,10 +77,21 @@ def generate_team_heatmap(
     
     # 2) Filtros opcionales
     if phase is not None:
-        df = df[df['FASE'] == phase]
-    if teams is not None:
+        df = df[df['FASE'].isin(phase)]
+    if teams is not None and len(teams) > 0:
         df = df[df['EQUIPO'].isin(teams)]  
+    
+    # Validar que hay datos después de los filtros
+    if df.empty:
+        raise ValueError("No hay datos disponibles después de aplicar los filtros de equipos y fases.")
+    
+    # Verificar que hay equipos después del filtro
+    available_teams = df['EQUIPO'].unique()
+    if len(available_teams) == 0:
+        raise ValueError("No se encontraron equipos con los filtros aplicados.")
         
+    print(f"Equipos encontrados después del filtro: {available_teams}")
+    print(f"Número de registros: {len(df)}")
     
     # 3) Si las métricas no están en los datos, usar el mapping para renombrar
     for metric in metrics:
@@ -85,6 +102,10 @@ def generate_team_heatmap(
                 raise ValueError(f"Métrica '{metric}' no encontrada en los datos y no tiene un mapeo definido.")
 
     team_stats = df.groupby('EQUIPO')[metrics].sum()
+    
+    # Validar que team_stats no está vacío
+    if team_stats.empty:
+        raise ValueError("No se pudieron calcular estadísticas para ningún equipo.")
 
     team_stats['TCC'] = team_stats['T2C'] + team_stats['T3C']
     team_stats['TCI'] = team_stats['T2I'] + team_stats['T3I']
@@ -99,6 +120,13 @@ def generate_team_heatmap(
 
     # 4) Calcular ranking: el valor más alto recibe el puesto 1
     ranks = team_stats.rank(ascending=False, method='min').astype(int)
+    
+    # Validar que ranks no está vacío
+    if ranks.empty:
+        raise ValueError("No se pudieron calcular rankings. Los datos están vacíos.")
+    
+    print(f"Rankings calculados para {len(ranks)} equipos")
+    print(f"Columnas en rankings: {ranks.columns.tolist()}")
     
     # 5) Ordenar por 'PUNTOS +' si está en las métricas
     sort_col = 'PUNTOS +' if 'PUNTOS +' in ranks.columns else ranks.columns[0]

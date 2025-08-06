@@ -23,8 +23,8 @@ def generate_team_rebound_analysis(
 
     # Filtrar
     if phase is not None:
-        df = df[df['FASE'] == phase]
-    if teams is not None:
+        df = df[df['FASE'].isin(phase)]
+    if teams is not None and len(teams) > 0:
         df = df[df['EQUIPO'].isin(teams)]
 
     # Agregar medias por equipo

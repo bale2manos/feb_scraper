@@ -96,7 +96,9 @@ def get_team_logo(team_name: str):
                .replace('é', 'e')
                .replace('í', 'i')
                .replace('ó', 'o')
-               .replace('ú', 'u'))
+               .replace('ú', 'u')
+               .replace('ñ', 'n')
+               .replace('ü', 'u'))
     path = os.path.join(
         os.path.dirname(__file__),
         '..', '..', 'images', 'clubs',
@@ -104,6 +106,8 @@ def get_team_logo(team_name: str):
     )
     if os.path.exists(path):
         return Image.open(path).convert('RGBA')
+    else:
+        print(f"⚠️ Logo not found for team: {team_name} (looking for {path})")
     return None
 
 
@@ -122,10 +126,10 @@ def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: 
     """
     # 1) Filter by phase if provided
     if phase is not None:
-        df = df[df['FASE'] == phase]
+        df = df[df['FASE'].isin(phase)]
     
     # 2) Filter by teams if provided
-    if teams is not None:
+    if teams is not None and len(teams) > 0:
         df = df[df['EQUIPO'].isin(teams)]
         
     T1C = df.get('TL CONVERTIDOS', 0)        # Free throws made
@@ -271,13 +275,13 @@ def apply_basic_filters(df, min_games=5, min_minutes_avg=10, min_total_minutes=1
 def apply_phase_filter(df, phase):
     """Filter by game phase if specified."""
     if phase is not None:
-        return df[df['FASE'] == phase]
+        return df[df['FASE'].isin(phase)]
     return df
 
 
 def apply_teams_filter(df, teams):
     """Filter by teams if specified."""
-    if teams is not None:
+    if teams is not None and len(teams) > 0:
         return df[df['EQUIPO'].isin(teams)]
     return df
 

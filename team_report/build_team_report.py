@@ -10,17 +10,17 @@ from reportlab.pdfbase.ttfonts import TTFont
 import os
 
 # Plotting functions
-from tools.heatmap                   import generate_team_heatmap
-from tools.hierarchy_score_boxplot   import plot_annotation_hierarchy
-from tools.net_rtg_chart             import plot_net_rating_vertical_with_stickers
-from tools.plays_vs_poss             import plot_plays_vs_poss
-from tools.play_distribution         import generate_team_play_distribution
-from tools.points_distribution       import generate_team_points_distribution
-from tools.ppp_quadrant              import draw_ppp_quadrant
-from tools.rebound_analysis          import generate_team_rebound_analysis
-from tools.top20_off_eff             import plot_offensive_efficiency
-from tools.top_shooters              import plot_top_shooters
-from tools.utils                  import compute_team_stats, setup_montserrat_font
+from .tools.heatmap                   import generate_team_heatmap
+from .tools.hierarchy_score_boxplot   import plot_annotation_hierarchy
+from .tools.net_rtg_chart             import plot_net_rating_vertical_with_stickers
+from .tools.plays_vs_poss             import plot_plays_vs_poss
+from .tools.play_distribution         import generate_team_play_distribution
+from .tools.points_distribution       import generate_team_points_distribution
+from .tools.ppp_quadrant              import draw_ppp_quadrant
+from .tools.rebound_analysis          import generate_team_rebound_analysis
+from .tools.top20_off_eff             import plot_offensive_efficiency
+from .tools.top_shooters              import plot_top_shooters
+from .tools.utils                  import compute_team_stats, setup_montserrat_font
 import pandas as pd
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
@@ -50,9 +50,13 @@ def setup_montserrat_pdf_fonts():
 # === Configuration ===
 TEAM_FILE     = Path("data/teams_aggregated.xlsx")
 PLAYERS_FILE  = Path("data/jugadores_aggregated.xlsx")
-BASE_OUTPUT_PDF    = Path("output/team_reports/")
+BASE_OUTPUT_DIR = Path("output/team_reports/")
+
+# Create output directory if it doesn't exist
+BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
 # Add a timestamp to the output PDF to avoid overwriting
-OUTPUT_PDF    = BASE_OUTPUT_PDF + f"{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+OUTPUT_PDF = BASE_OUTPUT_DIR / f"team_report_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf"
 
 # Convert matplotlib Figure to PNG buffer with optimization
 def fig_to_png_buffer(fig, dpi=180):
@@ -110,7 +114,7 @@ def build_team_report(teams=None, phase=None):
         draw_ppp_quadrant(df_teams, teams=teams, phase=phase),
         generate_team_rebound_analysis(df_teams, teams=teams, phase=phase),
         plot_offensive_efficiency(df_players, teams=teams, phase=phase),
-        plot_top_shooters(df_players, teams=teams, phase=phase, MIN_SHOTS=150)
+        plot_top_shooters(df_players, teams=teams, phase=phase, MIN_SHOTS=200)
     ]
 
     # 3) Prepare PDF canvas (A4 landscape) with compression

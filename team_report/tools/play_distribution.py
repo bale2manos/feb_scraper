@@ -20,10 +20,10 @@ def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: 
     """
     # 1) Filter by phase if provided
     if phase is not None:
-        df = df[df['FASE'] == phase]
+        df = df[df['FASE'].isin(phase)]
     
     # 2) Filter by teams if provided
-    if teams is not None:
+    if teams is not None and len(teams) > 0:
         df = df[df['EQUIPO'].isin(teams)]
         
     T1C = df.get('TL CONVERTIDOS', 0)        # Free throws made
@@ -101,8 +101,8 @@ def generate_team_play_distribution(
 
     # Filter
     if phase is not None:
-        df = df[df['FASE'] == phase]
-    if teams is not None:
+        df = df[df['FASE'].isin(phase)]
+    if teams is not None and len(teams) > 0:
         df = df[df['EQUIPO'].isin(teams)]
 
     # Columns to plot

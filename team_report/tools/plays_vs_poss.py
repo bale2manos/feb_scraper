@@ -20,8 +20,8 @@ def plot_plays_vs_poss(
     """
     setup_montserrat_font()
     if phase:
-        df = df[df['FASE']==phase]
-    if teams:
+        df = df[df['FASE'].isin(phase)]
+    if teams and len(teams) > 0:
         df = df[df['EQUIPO'].isin(teams)]
 
     agg   = df.groupby('EQUIPO')[['PLAYS','POSS']].mean()

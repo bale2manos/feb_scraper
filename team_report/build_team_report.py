@@ -9,18 +9,14 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import os
 
-# Plotting functions
-from .tools.heatmap                   import generate_team_heatmap
-from .tools.hierarchy_score_boxplot   import plot_annotation_hierarchy
-from .tools.net_rtg_chart             import plot_net_rating_vertical_with_stickers
-from .tools.plays_vs_poss             import plot_plays_vs_poss
-from .tools.play_distribution         import generate_team_play_distribution
-from .tools.points_distribution       import generate_team_points_distribution
-from .tools.ppp_quadrant              import draw_ppp_quadrant
-from .tools.rebound_analysis          import generate_team_rebound_analysis
-from .tools.top20_off_eff             import plot_offensive_efficiency
+# Plotting functions from team_report tools
 from .tools.top_shooters              import plot_top_shooters
-from .tools.utils                  import compute_team_stats, setup_montserrat_font
+from .tools.top_turnovers             import plot_top_turnovers
+from .tools.top_ppp                   import plot_top_ppp
+from .tools.finalizacion_plays        import plot_player_finalizacion_plays
+from .tools.oe                        import plot_player_OE_bar
+from .tools.eps                       import plot_player_EPS_bar
+from .tools.utils                     import setup_montserrat_font, compute_advanced_stats, compute_team_stats
 import pandas as pd
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
@@ -50,13 +46,13 @@ def setup_montserrat_pdf_fonts():
 # === Configuration ===
 TEAM_FILE     = Path("data/teams_aggregated.xlsx")
 PLAYERS_FILE  = Path("data/jugadores_aggregated.xlsx")
-BASE_OUTPUT_DIR = Path("output/reports/phase_reports/")
+BASE_OUTPUT_DIR = Path("output/reports/team_reports/")
 
 # Create output directory if it doesn't exist
 BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Add a timestamp to the output PDF to avoid overwriting
-OUTPUT_PDF = BASE_OUTPUT_DIR / f"phase_report_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+OUTPUT_PDF = BASE_OUTPUT_DIR / f"team_report_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf"
 
 # Convert matplotlib Figure to PNG buffer with optimization
 def fig_to_png_buffer(fig, dpi=180):
@@ -89,35 +85,44 @@ def optimize_png_buffer(buf, max_width=1400):
     optimized_buf.seek(0)
     return optimized_buf
 
-def build_phase_report(teams=None, phase=None):
+def build_team_report(team_filter=None, player_filter:list=None):
     # Setup fonts
     setup_montserrat_pdf_fonts()
     
     # 1) Load data
-    df_teams   = pd.read_excel(TEAM_FILE)
     df_players = pd.read_excel(PLAYERS_FILE)
 
-    # 2) Generate all figures
-    stats = None
-    try:
-        stats = compute_team_stats(df_teams, teams=teams, phase=phase)
-    except:
-        stats = df_teams
+    # 2) Prepare player stats for individual analysis
+    # Filter players data
+    if team_filter is not None:
+        df_players_filtered = df_players[df_players['EQUIPO'] == team_filter]
+    elif player_filter is not None:
+        df_players_filtered = df_players[df_players['JUGADOR'].isin(player_filter)]
+    else:
+        raise ValueError("Must provide either team_filter or player_filter")
 
+    # Compute advanced stats for players
+    stats_list = []
+    for _, row in df_players_filtered.iterrows():
+        player_stats = compute_advanced_stats(row)
+        stats_list.append(player_stats)
+    
+    df_players_stats = pd.DataFrame(stats_list)
+    # Add team info back
+    df_players_stats['EQUIPO'] = df_players_filtered['EQUIPO'].values
+
+    # 4) Generate all figures
     figs = [
-        generate_team_heatmap(df_teams, teams=teams, phase=phase),
-        plot_annotation_hierarchy(df_players, teams=teams, phase=phase),
-        plot_net_rating_vertical_with_stickers(stats, teams=teams, phase=phase),
-        plot_plays_vs_poss(df_teams, teams=teams, phase=phase),
-        generate_team_play_distribution(stats, teams=teams, phase=phase),
-        generate_team_points_distribution(stats, teams=teams, phase=phase),
-        draw_ppp_quadrant(df_teams, teams=teams, phase=phase),
-        generate_team_rebound_analysis(df_teams, teams=teams, phase=phase),
-        plot_offensive_efficiency(df_players, teams=teams, phase=phase),
-        plot_top_shooters(df_players, teams=teams, phase=phase, MIN_SHOTS=200)
+        # Player analysis charts - using available team_report tools
+        plot_player_OE_bar(df_players_stats),
+        plot_player_EPS_bar(df_players_stats),
+        plot_top_shooters(df_players_stats),
+        plot_top_turnovers(df_players_stats),
+        plot_top_ppp(df_players_stats),
+        plot_player_finalizacion_plays(df_players_stats)
     ]
 
-    # 3) Prepare PDF canvas (A4 landscape) with compression
+    # 5) Prepare PDF canvas (A4 landscape) with compression
     page_w, page_h = landscape(A4)
     c = canvas.Canvas(str(OUTPUT_PDF), pagesize=(page_w, page_h), pageCompression=1)
     total = len(figs)
@@ -147,7 +152,7 @@ def build_phase_report(teams=None, phase=None):
             c.setFont('Montserrat-Bold', 18)
         except:
             c.setFont('Helvetica-Bold', 18)  # Fallback
-        c.drawString(margin, page_h-35, f"Informe de grupo ({idx}/{total})")
+        c.drawString(margin, page_h-35, f"Informe de equipo ({idx}/{total})")
 
         # d) border around chart area
         chart_y0 = footer_h + margin
@@ -175,16 +180,28 @@ def build_phase_report(teams=None, phase=None):
     
     # Check file size
     file_size_mb = OUTPUT_PDF.stat().st_size / (1024 * 1024)
-    print(f"✅ Informe generado en {OUTPUT_PDF}")
+    print(f"✅ Informe de equipo generado en {OUTPUT_PDF}")
     print(f"📄 Tamaño del archivo: {file_size_mb:.2f} MB")
     print(f"📊 {total} gráficos procesados con optimización PNG")
+    
+    return OUTPUT_PDF
 
 if __name__ == '__main__':
-    build_phase_report(
-        teams=[
-            'BALONCESTO TALAVERA','C.B. TRES CANTOS','CB ARIDANE',
-            'CB LA MATANZA','EB FELIPE ANTÓN','LUJISA GUADALAJARA BASKET',
-            'REAL CANOE N.C.','UROS DE RIVAS','ZENTRO BASKET MADRID'
-        ],
-        phase=None
+    
+    team = 'UROS DE RIVAS'  # Example team
+    players = [
+        'A. APARICIO IZQUIERDO',
+        'A. ARREDONDO ROBLES',
+        'BIERSACK LOPEZ, ALVARO',
+        'I. MATAMOROS BUCH',
+        'I. PÉREZ HERNÁNDEZ',
+        'PEREZ GALVAN, ADRIAN',
+        'PEREZ RINCON, MARIO',
+        'VORONIN, MAKAR',
+        'WRIGHT, KEDAR SALAM NKOSI'
+    ]
+
+    build_team_report(
+        team_filter=None,
+        player_filter=players
     )

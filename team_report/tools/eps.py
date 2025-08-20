@@ -112,7 +112,7 @@ def plot_player_EPS_bar(df: pd.DataFrame) -> plt.Figure:
         max_eps = df['EPS'].max()
         text_color = 'black' if val < (max_eps * 0.2) else 'white'
         
-        ax_bar.text(val/2, 0, f"{val:.2f}", va='center', ha='center',
+        ax_bar.text(val/2, 0, f"{val/100:.2f}", va='center', ha='center',
                     color=text_color, fontsize=12, fontweight='bold')
         ax_bar.set_xlim(0, df['EPS'].max()*1.05)  # Usar el máximo EPS como límite
         ax_bar.axis('off')

@@ -453,7 +453,6 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
         "RO": str(stats.get('RO', 0)),
         "AST": str(stats.get('AS', 0)),
         "TOV": str(stats.get('TOV', 0)),
-        "TOV %": f"{stats.get('TOV %', 0):.1f}%",
         "TCC": str(stats.get('TCC', 0)),
         "TCI": str(stats.get('TCI', 0)),
         "P. Anot. %": f"{stats.get('P. Anot. %', 0):.1f}%"

@@ -34,11 +34,11 @@ def add_big_numbers_to_axes(
     # Definir las métricas a mostrar con sus nombres, formateo y colores
     metrics = [
         ("PUNTOS + / PJ", team_data.get('PUNTOS +', 0) / team_data.get('PJ', 1), "{:.1f}", "#2E8B57"),  # Verde océano
-        ("TS %", team_data.get('TS%', 0), "{:.1f}%", "#4169E1"),     # Azul real
-        ("EFG %", team_data.get('EFG%', 0), "{:.1f}%", "#FF6347"),   # Tomate
-        ("RTL", team_data.get('RTL', 0), "{:.2f}", "#9932CC"),       # Violeta oscuro
-        ("NETRTG", team_data.get('NETRTG', 0), "{:.1f}", "#FF8C00"),  # Naranja oscuro
-        ("PUNTOS - / PJ", team_data.get('PUNTOS -', 0) / team_data.get('PJ', 1), "{:.1f}", "#DC143C")  # Rojo carmesí
+        ("PUNTOS - / PJ", team_data.get('PUNTOS -', 0) / team_data.get('PJ', 1), "{:.1f}", "#DC143C"),  # Rojo carmesí
+        ("TS %", team_data.get('TS %', 0), "{:.1f}%", "#4169E1"),     # Azul real
+        ("EFG %", team_data.get('EFG %', 0), "{:.1f}%", "#FF6347"),   # Tomate
+        ("RTL %", team_data.get('RTL %', 0), "{:.1f}%", "#9932CC"),  # Violeta oscuro
+        ("TOV", team_data.get('PERDIDAS', 0) / team_data.get('PJ', 1), "{:.1f}", "#FF8C00"),  # Naranja oscuro
     ]
     
     # Calcular posición inicial (centrada verticalmente para todas las métricas)

@@ -35,7 +35,7 @@ def plot_player_EPS_bar(df: pd.DataFrame) -> plt.Figure:
     wr = [1, max_chars/10, 1, 6]
 
     # 3) figura y gridspec
-    fig = plt.figure(figsize=(19, n*0.6 + 1))
+    fig = plt.figure(figsize=(19, n*0.6 + 4))  # Más altura para separar título, subtítulo y gráfico
     gs = fig.add_gridspec(n, 4, width_ratios=wr, wspace=0.05, hspace=0.3)
 
     # 4) preparar escala de colores verde a rojo
@@ -117,9 +117,16 @@ def plot_player_EPS_bar(df: pd.DataFrame) -> plt.Figure:
         ax_bar.set_xlim(0, df['EPS'].max()*1.05)  # Usar el máximo EPS como límite
         ax_bar.axis('off')
 
-    # 4) título
-    fig.suptitle("EPS", fontsize=36, weight='bold', y=0.95)
-    plt.tight_layout(rect=[0,0,1,0.93])
+    # 4) título y subtítulo explicativo
+    fig.suptitle("EPS", fontsize=36, weight='bold', y=1)
+    # Subtítulo explicativo para jugadores
+    subtitle = (
+        "¿Qué mide EPS? EPS combina cuántos puntos anota y qué tan eficientemente aprovecha sus oportunidades ofensivas.\n"
+        "Un EPS alto significa que convierte sus puntos con pocas oportunidades perdidas: es efectivo y decisivo.\n"
+        "Un EPS bajo significa que, aunque anote puntos, lo hace con muchas pérdidas/fallos; su impacto global es menor que el simple conteo de puntos sugiere.\n"
+    )
+    fig.text(0.5, 0.94, subtitle, ha='center', va='top', fontsize=15, color='#222', wrap=True)
+    plt.tight_layout(rect=[0,0.03,1,0.96])  # Menos margen abajo, más altura total
     return fig
 
 # === EJEMPLO DE USO ===

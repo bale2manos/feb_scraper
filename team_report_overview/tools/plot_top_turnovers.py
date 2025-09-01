@@ -40,7 +40,7 @@ def get_image_from_url(url, size=(80, 80)):
         # Imagen de fallback si no se puede cargar
         return Image.new('RGBA', size, (220,220,220,0))
 
-def plot_top_assists(
+def plot_top_turnovers(
 df: pd.DataFrame,
 equipo: str,
 figsize: tuple = (4, 3.5)
@@ -52,33 +52,43 @@ figsize: tuple = (4, 3.5)
     setup_montserrat_font()
     # Filtrar jugadores del equipo con al menos 5 partidos
     df_team = df[(df['EQUIPO'] == equipo) & (df['PJ'] >= MIN_PARTIDOS)].copy()
-    df_team['ASISTENCIAS_PJ'] = df_team['ASISTENCIAS'] / df_team['PJ']
-    top = df_team.sort_values('ASISTENCIAS_PJ', ascending=False).head(4)
+    df_team['TOV_PJ'] = df_team['PERDIDAS'] / df_team['PJ'] 
+    top = df_team.sort_values('TOV_PJ', ascending=False).head(4)
 
+    # Calcular el ancho necesario para el nombre más largo
+    max_name = top['JUGADOR'].astype(str).map(len).max()
+    # Estimar ancho: base + ancho por caracter
+    base_width = 5
+    extra_width = max(0, (max_name-15)*0.25)
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
     ax.axis('off')
 
-    # Layout vertical igual que top_shooter
+    # Layout vertical
     card_height = 1.0 / (len(top) + 0.3)
     y_start = 1.0 - card_height / 2
+    # Espacio fijo entre dorsal y nombre
     space_x = 0.10  # Más margen entre dorsal y nombre
     for i, row in enumerate(top.itertuples()):
         y = y_start - i * card_height
+        # Imagen (sin fondo), tamaño fijo en alto, respetando proporción original
         img = get_image_from_url(getattr(row, 'IMAGEN', ''))
         img_w, img_h = img.size
-        img_h_axes = card_height * 0.7
+        img_h_axes = card_height * 0.7  # Más pequeño para dejar espacio a texto
         img_w_axes = img_h_axes * (img_w / img_h)
         x0 = 0.02
         x1 = x0 + img_w_axes
         y0 = y - img_h_axes/2
         y1 = y + img_h_axes/2
         ax.imshow(img, extent=(x0, x1, y0, y1), aspect='auto', zorder=2)
+        # Dorsal y nombre en la misma línea, a la derecha de la imagen
         dorsal_x = x1 + 0.01
         name_x = dorsal_x + space_x
         ax.text(dorsal_x, y+0.01, f"{getattr(row, 'DORSAL', '')}", fontsize=13, weight='bold', color='#4169E1', va='center', ha='left', fontfamily='Montserrat')
         ax.text(name_x, y+0.01, getattr(row, 'JUGADOR', ''), fontsize=11, weight='bold', color='#222', va='center', ha='left', fontfamily='Montserrat')
-        ax.text(dorsal_x, y-0.04, f"{getattr(row, 'ASISTENCIAS_PJ', 0):.1f} asistencias", fontsize=10, weight='bold', color='#2E8B57', va='top', ha='left', fontfamily='Montserrat')
+        # T3% en letra pequeña debajo
+        ax.text(dorsal_x, y-0.04, f"{getattr(row, 'TOV_PJ', 0):.1f} pérdidas", fontsize=10, weight='bold', color='#2E8B57', va='top', ha='left', fontfamily='Montserrat')
+        # Línea separadora
         if i < 3:
             ax.plot([0.12,0.88],[y-card_height/2, y-card_height/2], color='#eee', lw=2, zorder=1)
     ax.set_xlim(0,1)
@@ -90,6 +100,6 @@ if __name__ == "__main__":
     FILE = './data/jugadores_aggregated.xlsx'
     EQUIPO = "UROS DE RIVAS"
     df = pd.read_excel(FILE)
-    fig = plot_top_assists(df, EQUIPO)
-    fig.savefig('top_assists_test.png', dpi=180, bbox_inches='tight')
-    print("Gráfico de máximos asistencias guardado como 'top_assists_test.png'")
+    fig = plot_top_turnovers(df, EQUIPO)
+    fig.savefig('top_turnovers_test.png', dpi=180, bbox_inches='tight')
+    print("Gráfico de máximos perdedores guardado como 'top_turnovers_test.png'")

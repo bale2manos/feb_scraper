@@ -35,7 +35,7 @@ def plot_player_OE_bar(df: pd.DataFrame) -> plt.Figure:
     wr = [1, max_chars/10, 1, 6]
 
     # 3) figura y gridspec
-    fig = plt.figure(figsize=(19, n*0.6 + 1))
+    fig = plt.figure(figsize=(19, n*0.6 + 4))  # Más altura para separar título, subtítulo y gráfico
     gs = fig.add_gridspec(n, 4, width_ratios=wr, wspace=0.05, hspace=0.3)
 
     # 4) preparar escala de colores verde a rojo
@@ -117,9 +117,16 @@ def plot_player_OE_bar(df: pd.DataFrame) -> plt.Figure:
         ax_bar.set_xlim(0, df['OE'].max()*1.05)
         ax_bar.axis('off')
 
-    # 4) título
-    fig.suptitle("OE", fontsize=36, weight='bold', y=0.95)
-    plt.tight_layout(rect=[0,0,1,0.93])
+    # 4) título y subtítulo explicativo
+    fig.suptitle("OE", fontsize=36, weight='bold', y=1)
+    # Subtítulo explicativo para jugadores
+    subtitle = (
+        "Cuántas acciones ofensivas valiosas (anotar + asistencia) logra de cada play.\n"
+        "Un OE alto significa que es muy eficiente ofensivamente: convierte sus oportunidades en puntos o pases decisivos con pocas pérdidas o posesiones extendidas.\n"
+        "Un OE bajo significa que depende de segundas oportunidades (rebotes ofensivos) o comete muchas pérdidas, lo cual reduce su eficiencia."
+    )
+    fig.text(0.5, 0.94, subtitle, ha='center', va='top', fontsize=15, color='#222', wrap=True)
+    plt.tight_layout(rect=[0,0.03,1,0.96])  # Menos margen abajo, más altura total
     return fig
 
 # === EJEMPLO DE USO ===

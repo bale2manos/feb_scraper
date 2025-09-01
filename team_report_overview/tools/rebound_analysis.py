@@ -78,13 +78,17 @@ def generate_team_rebound_analysis(
     # Montserrat
     setup_montserrat_font()
 
+
     # Agregar medias por equipo
-    stats = df.groupby('EQUIPO')[['%OREB','%REB','%DREB']].mean()
+    stats = df.groupby('EQUIPO')[['%OREB','%REB','%DREB','REB OFFENSIVO','REB DEFENSIVO','PJ']].mean()
     stats = stats.sort_values('EQUIPO', ascending=True)
+    stats['REB'] = stats[['REB OFFENSIVO', 'REB DEFENSIVO']].sum(axis=1)
 
     # Colors & metric labels
     metrics = ['%DREB','%REB','%OREB']
     colors  = ['#3498DB','#E74C3C','#F39C12']  # azul, rojo, naranja
+    # Corresponding mean columns for each metric
+    mean_cols = ['REB DEFENSIVO','REB','REB OFFENSIVO']
 
     n = len(stats)
     # Crear figura más estrecha y alta para el análisis de rebotes
@@ -111,20 +115,27 @@ def generate_team_rebound_analysis(
         x_center = i  # Posición X del centro del grupo de barras
 
         # Three vertical bars with labels at the bottom
-        for off, m, c in zip(offsets, metrics, colors):
+        for idx, (off, m, c) in enumerate(zip(offsets, metrics, colors)):
             x = x_center + off
             val = row[m]
-            
+            # Media por partido de la estadística correspondiente
+            mean_val = row[mean_cols[idx]]
+            pj = row['PJ'] if 'PJ' in row else 1
+            mean_per_game = mean_val / pj if pj > 0 else 0
+
             # Label at the bottom of the bar (below, outside)
             ax.text(x, -0.02, m, va='top', ha='center', 
                    fontsize=10, weight='bold', color='black', rotation=0)
-            
+
             # Vertical bar starting at y=0
             ax.bar(x, val, width=bar_width, color=c, edgecolor='white', bottom=0)
-            
+
             # Percentage text inside the bar (rotated for better readability)
             ax.text(x, val/2, f"{row[m]*100:.1f}%",  # Reducido a 1 decimal
                     va='center', ha='center', color='white', fontsize=20, weight='bold', rotation=90)
+
+            # Media por partido sobre la barra, en negro
+            ax.text(x, val + 0.01, f"{mean_per_game:.2f}", va='bottom', ha='center', color='black', fontsize=13, weight='bold')
 
     # Ajustar espaciado para eliminar margen blanco innecesario
     plt.tight_layout(pad=0.1)  # Padding mínimo

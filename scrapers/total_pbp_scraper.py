@@ -15,7 +15,7 @@ MAX_RETRIES     = 5
 INITIAL_BACKOFF = 1  # seconds
 LOG_FILE        = "scraper.log"
 OUT_CSV         = "assists.csv"
-OUT_XLSX        = "assists.xlsx"
+OUT_XLSX        = "./data/assists.xlsx"
 WORKERS         = 4  # tune to your CPU / memory
 
 def setup_logging() -> None:
@@ -93,7 +93,7 @@ def main():
     df = pd.DataFrame(all_records, columns=[
         "FASE","JORNADA","GAME","EQUIPO","PASADOR","ANOTADOR","N_ASISTENCIAS"
     ])
-    df.to_csv(OUT_CSV, index=False, encoding="utf-8")
+    #df.to_csv(OUT_CSV, index=False, encoding="utf-8")
     df.to_excel(OUT_XLSX, index=False)
     logging.info(f"Saved {len(df)} rows to {OUT_CSV} and {OUT_XLSX}")
 

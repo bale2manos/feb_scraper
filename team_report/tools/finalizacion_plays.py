@@ -154,7 +154,7 @@ def plot_player_finalizacion_plays(df: pd.DataFrame) -> plt.Figure:
         ncol=4, frameon=False, fontsize=12
     )
 
-    plt.tight_layout(rect=[0,0,1,0.95])
+    plt.tight_layout(rect=[0.02,0.03,0.98,0.96])  # Menos margen en todos los lados
     return fig
 
 # === EJEMPLO DE USO ===

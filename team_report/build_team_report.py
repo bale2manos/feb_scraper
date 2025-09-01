@@ -62,7 +62,7 @@ def fig_to_png_buffer(fig, dpi=180):
     buf = io.BytesIO()
     
     # Slightly higher DPI for better quality
-    fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', 
+    fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight',
                 transparent=False, facecolor='white', edgecolor='none')
     plt.close(fig)
     buf.seek(0)
@@ -88,73 +88,155 @@ def optimize_png_buffer(buf, max_width=1400):
 def build_team_report(team_filter=None, player_filter:list=None):
     # Setup fonts
     setup_montserrat_pdf_fonts()
-    
+
     # 1) Load data
     df_players = pd.read_excel(PLAYERS_FILE)
+    df_team = pd.read_excel(TEAM_FILE)
 
     # 2) Prepare player stats for individual analysis
     # Filter players data
-    if team_filter is not None:
+    print(f"[DEBUG] team_filter: {team_filter}, player_filter: {player_filter}")
+    if team_filter is not None and str(team_filter).strip() != "":
+        print("[DEBUG] Filtering by team_filter")
         df_players_filtered = df_players[df_players['EQUIPO'] == team_filter]
-    elif player_filter is not None:
+        print(f"[DEBUG] df_players_filtered shape: {df_players_filtered.shape}")
+        team_name = team_filter
+        df_team_filtered = df_team[df_team['EQUIPO'] == team_name]
+    elif player_filter is not None and len(player_filter) > 0:
+        print("[DEBUG] Filtering by player_filter")
         df_players_filtered = df_players[df_players['JUGADOR'].isin(player_filter)]
+        print(f"[DEBUG] df_players_filtered shape: {df_players_filtered.shape}")
+        team_name = df_players_filtered['EQUIPO'].iloc[0] if not df_players_filtered.empty else ""
     else:
-        raise ValueError("Must provide either team_filter or player_filter")
+        print("[DEBUG] No valid filter provided")
+        raise ValueError("Must provide either a non-empty team_filter or a non-empty player_filter")
 
     # Compute advanced stats for players
+    print("[DEBUG] Computing advanced stats for filtered players...")
     stats_list = []
-    for _, row in df_players_filtered.iterrows():
+    for idx, row in df_players_filtered.iterrows():
+        print(f"[DEBUG] Computing stats for player row {idx}")
         player_stats = compute_advanced_stats(row)
         stats_list.append(player_stats)
-    
+    print(f"[DEBUG] stats_list length: {len(stats_list)}")
+
     df_players_stats = pd.DataFrame(stats_list)
+    print(f"[DEBUG] df_players_stats shape: {df_players_stats.shape}")
     # Add team info back
     df_players_stats['EQUIPO'] = df_players_filtered['EQUIPO'].values
+    print(f"[DEBUG] Added EQUIPO column to df_players_stats")
 
-    # 4) Generate all figures
-    figs = [
-        # Player analysis charts - using available team_report tools
-        plot_player_OE_bar(df_players_stats),
-        plot_player_EPS_bar(df_players_stats),
-        plot_top_shooters(df_players_stats),
-        plot_top_turnovers(df_players_stats),
-        plot_top_ppp(df_players_stats),
-        plot_player_finalizacion_plays(df_players_stats)
-    ]
+    # --- Generate report pages depending on filter ---
+    figs = []
+    add_overview_and_bars = team_filter is not None and str(team_filter).strip() != "" and (player_filter is None or len(player_filter) == 0)
+    print(f"[DEBUG] add_overview_and_bars: {add_overview_and_bars}")
 
-    # 5) Prepare PDF canvas (A4 landscape) with compression
+    overview_fig = None
+    bars_fig = None
+    if add_overview_and_bars:
+        print("[DEBUG] Generating single overview page...")
+        from team_report_overview.build_team_report_overview import build_team_report_overview, compute_advanced_stats_overview
+        df_advanced = compute_advanced_stats_overview(df_team_filtered)
+        print(f"[DEBUG] df_advanced shape: {df_advanced.shape}")
+        print(f"[DEBUG] team name: {team_name}")
+        overview_fig = build_team_report_overview(team_name, df_advanced, dpi=180)
+        print("[DEBUG] Saving image to ./team_overview_test.png")
+        overview_fig.savefig("./team_overview_test.png", dpi=180, bbox_inches='tight')
+        
+        
+
+        print("[DEBUG] Generating single bars page...")
+        from team_report_bars.build_team_report_bars import build_team_report_bars,compute_advanced_stats_bars
+        stats_advanced = df_team_filtered.apply(compute_advanced_stats_bars, axis=1)
+        df_advanced_bars = pd.DataFrame(stats_advanced.tolist())
+
+        print(f"[DEBUG] df_advanced_bars shape: {df_advanced_bars.shape}")
+        stats_puntos = {
+            "T1C": int(df_advanced_bars['T1C'].sum()),
+            "T2C": int(df_advanced_bars['T2C'].sum()),
+            "T3C": int(df_advanced_bars['T3C'].sum())
+        }
+        print(f"[DEBUG] stats_puntos: {stats_puntos}")
+        stats_finalizacion = {
+            "T1 %": float(df_advanced_bars['F1 Plays%'].mean()),
+            "T2 %": float(df_advanced_bars['F2 Plays%'].mean()),
+            "T3 %": float(df_advanced_bars['F3 Plays%'].mean()),
+            "PP %": float(df_advanced_bars['TO Plays%'].mean())
+        }
+        print(f"[DEBUG] stats_finalizacion: {stats_finalizacion}")
+        bars_fig = build_team_report_bars(stats_puntos, stats_finalizacion, dpi=180)
+        print(f"[DEBUG] bars_fig created")
+
+    # --- Generate main report pages (always) ---
+    print("[DEBUG] Generating main report pages...")
+    figs = []
+    try:
+        figs.append(plot_player_OE_bar(df_players_stats))
+        print("[DEBUG] plot_player_OE_bar done")
+        figs.append(plot_player_EPS_bar(df_players_stats))
+        print("[DEBUG] plot_player_EPS_bar done")
+        figs.append(plot_top_shooters(df_players_stats))
+        print("[DEBUG] plot_top_shooters done")
+        figs.append(plot_top_turnovers(df_players_stats))
+        print("[DEBUG] plot_top_turnovers done")
+        figs.append(plot_top_ppp(df_players_stats))
+        print("[DEBUG] plot_top_ppp done")
+        figs.append(plot_player_finalizacion_plays(df_players_stats))
+        print("[DEBUG] plot_player_finalizacion_plays done")
+    except Exception as e:
+        print(f"[DEBUG] Error generating main report pages: {e}")
+
+    # --- Prepare PDF canvas (A4 landscape) ---
+    print("[DEBUG] Preparing PDF canvas...")
     page_w, page_h = landscape(A4)
     c = canvas.Canvas(str(OUTPUT_PDF), pagesize=(page_w, page_h), pageCompression=1)
-    total = len(figs)
-    margin = 30  # wider margin
-
-    # Design colors
+    margin = 30
     color_black  = '#222222'
     color_orange = '#ff6600'
 
+    if add_overview_and_bars:
+        print("[DEBUG] Adding overview and bars pages to PDF...")
+        # OVERVIEW: Save as PNG and embed directly, scaled by 0.9 (or 0.37 as before if you prefer)
+        overview_png_path = "./team_overview_pdf_direct.png"
+        overview_fig.savefig(overview_png_path, dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
+        img = Image.open(overview_png_path)
+        img_w, img_h = img.size
+        # Reduce size by 10%
+        scale = 0.37
+        draw_w = img_w * scale
+        draw_h = img_h * scale
+        img_reader = ImageReader(overview_png_path)
+        c.drawImage(img_reader, 0, page_h-draw_h, width=draw_w, height=draw_h, preserveAspectRatio=False, mask='auto')
+        c.showPage()
+
+        # BARS: Save as PNG and embed directly, scaled by 0.9 and placed at top-left
+        bars_png_path = "./team_bars_pdf_direct.png"
+        bars_fig.savefig(bars_png_path, dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
+        img_bars = Image.open(bars_png_path)
+        bars_w, bars_h = img_bars.size
+        bars_scale = 0.4  # 60% reduction
+        bars_draw_w = bars_w * bars_scale
+        bars_draw_h = bars_h * bars_scale
+        bars_reader = ImageReader(bars_png_path)
+        c.drawImage(bars_reader, 0, page_h-bars_draw_h, width=bars_draw_w, height=bars_draw_h, preserveAspectRatio=False, mask='auto')
+        c.showPage()
+
+    # Add main report pages
+    print("[DEBUG] Adding main report pages to PDF...")
     for idx, fig in enumerate(figs, start=1):
-        # a) white background
         c.setFillColor('white')
         c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
-
-        # b) top bar (black)
         bar_h = 50
         c.setFillColor(color_black)
         c.rect(0, page_h-bar_h, page_w, bar_h, fill=1, stroke=0)
-        # bottom bar (orange)
         footer_h = 30
         c.setFillColor(color_orange)
         c.rect(0, 0, page_w, footer_h, fill=1, stroke=0)
-
-        # c) header text
         c.setFillColor('white')
         try:
             c.setFont('Montserrat-Bold', 18)
         except:
-            c.setFont('Helvetica-Bold', 18)  # Fallback
-        c.drawString(margin, page_h-35, f"Informe de equipo ({idx}/{total})")
-
-        # d) border around chart area
+            c.setFont('Helvetica-Bold', 18)
         chart_y0 = footer_h + margin
         chart_h  = page_h - bar_h - footer_h - 2*margin
         chart_x0 = margin
@@ -162,28 +244,21 @@ def build_team_report(team_filter=None, player_filter:list=None):
         c.setLineWidth(3)
         c.setStrokeColor(color_black)
         c.rect(chart_x0-3, chart_y0-3, chart_w+6, chart_h+6, stroke=1, fill=0)
-
-        # e) draw chart with optimized PNG
-        buf = fig_to_png_buffer(fig, dpi=180)  # Balanced DPI for quality/size
+        buf = fig_to_png_buffer(fig, dpi=180)
         optimized_buf = optimize_png_buffer(buf, max_width=1400)
         img = ImageReader(optimized_buf)
-        c.drawImage(
-            img,
-            chart_x0, chart_y0,
-            width=chart_w, height=chart_h,
-            preserveAspectRatio=True, mask='auto'
-        )
-
+        c.drawImage(img, chart_x0, chart_y0, width=chart_w, height=chart_h, preserveAspectRatio=True, mask='auto')
         c.showPage()
 
     c.save()
-    
-    # Check file size
     file_size_mb = OUTPUT_PDF.stat().st_size / (1024 * 1024)
     print(f"✅ Informe de equipo generado en {OUTPUT_PDF}")
     print(f"📄 Tamaño del archivo: {file_size_mb:.2f} MB")
-    print(f"📊 {total} gráficos procesados con optimización PNG")
-    
+    if add_overview_and_bars:
+        print(f"📊 PDF con overview, bars y main report")
+    else:
+        print(f"📊 PDF solo con main report (filtrado por jugadores)")
+    print("[DEBUG] build_team_report finished.")
     return OUTPUT_PDF
 
 if __name__ == '__main__':

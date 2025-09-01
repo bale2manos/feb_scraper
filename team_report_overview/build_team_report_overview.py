@@ -16,8 +16,34 @@ from rebound_analysis import add_rebound_analysis_to_axes
 from plot_big_numbers import add_big_numbers_to_axes
 from plot_top_scorers import plot_top_scorers
 from plot_top_minutes import plot_top_minutes
-from plot_top_assists import plot_top_assists
-from plot_top_shooter import plot_top_shooter
+from plot_top_rebounders import plot_top_rebounders
+from plot_top_turnovers import plot_top_turnovers
+
+import numpy as np
+
+def compute_advanced_stats_overview(df):
+
+    Plays = df['TL INTENTADOS'].sum() * 0.44 + df['T2 INTENTADO'].sum() + df['T3 INTENTADO'].sum() + df['PERDIDAS'].sum()
+    # Total field goals
+    TCC = df['T2 CONVERTIDO'].sum() + df['T3 CONVERTIDO'].sum()  # Total field goals made
+    TCI = df['T2 INTENTADO'].sum() + df['T3 INTENTADO'].sum()  # Total field goals attempted
+
+    # --- ADVANCED METRICS ---
+
+    # Evitar SettingWithCopyWarning
+    df = df.copy()
+
+    # Effective Field Goal percentage
+    df['EFG %'] = np.where(TCI > 0, ((TCC + 0.5 * df['T3 CONVERTIDO']) / TCI * 100), 0)
+
+    # True Shooting percentage
+    TSA = TCI + 0.44 * df['TL INTENTADOS']  # True shooting attempts
+    df['TS %'] = np.where(TSA > 0, (df['PUNTOS +'] / (2 * TSA) * 100), 0)
+
+    # Free throw rate
+    df['RTL %'] = np.where(Plays > 0, (df['TL INTENTADOS'] / Plays) * 100, 0)
+
+    return df
 
 def build_team_report_overview(
     team_name: str,
@@ -42,9 +68,11 @@ def build_team_report_overview(
     fig = plt.figure(figsize=(11.69, 8.27), dpi=dpi)  # A4 landscape proportions
     ax = fig.add_subplot(111)
     ax.axis('off')
+    # Add invisible scatter points to force bbox_inches='tight' to include margins
+    ax.scatter([-0.1, 1.1], [-0.1, 1.1], alpha=0)
     
     # 1. Añadir encabezado del equipo (logo + nombre)
-    text_y, text_bottom_y = create_team_header(ax, team_name, dpi=dpi)
+    create_team_header(ax, team_name, dpi=dpi)
     
     # 2. Ajustar layout con márgenes consistentes con PDF ANTES de añadir más elementos
     fig.subplots_adjust(left=0.025, right=0.975, top=0.975, bottom=0.025)
@@ -77,6 +105,32 @@ def build_team_report_overview(
     # Posición y tamaño en la esquina superior derecha
     offset_img = OffsetImage(img_top, zoom=0.4)
     ab = AnnotationBbox(offset_img, (1.02, 0.99), xycoords='axes fraction', box_alignment=(1,1), frameon=False)
+    ax.add_artist(ab)
+    
+    # Fijar tamaño constante para las figuras de los módulos de jugadores
+    fixed_figsize = (4, 3.5)
+    top_scorers_fig = plot_top_rebounders(df_jugadores, team_name, figsize=fixed_figsize)
+    buf = io.BytesIO()
+    top_scorers_fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.0)
+    plt.close(top_scorers_fig)
+    buf.seek(0)
+    img_top = Image.open(buf)
+    # Posición y tamaño en la esquina superior derecha
+    offset_img = OffsetImage(img_top, zoom=0.4)
+    ab = AnnotationBbox(offset_img, (0.7, 0.5), xycoords='axes fraction', box_alignment=(1,1), frameon=False)
+    ax.add_artist(ab)
+    
+        # Fijar tamaño constante para las figuras de los módulos de jugadores
+    fixed_figsize = (4, 3.5)
+    top_scorers_fig = plot_top_turnovers(df_jugadores, team_name, figsize=fixed_figsize)
+    buf = io.BytesIO()
+    top_scorers_fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.0)
+    plt.close(top_scorers_fig)
+    buf.seek(0)
+    img_top = Image.open(buf)
+    # Posición y tamaño en la esquina superior derecha
+    offset_img = OffsetImage(img_top, zoom=0.4)
+    ab = AnnotationBbox(offset_img, (1.04, 0.5), xycoords='axes fraction', box_alignment=(1,1), frameon=False)
     ax.add_artist(ab)
     
     # 4. Añadir análisis de rebotes en el extremo inferior derecho
@@ -140,11 +194,13 @@ def main():
         if df_filtrado.empty:
             print(f"No se encontraron datos para el equipo: {EQUIPO}")
             return
-        
+
+        df_advanced = compute_advanced_stats_overview(df_filtrado)
+
         # Generar reporte
         fig = build_team_report_overview(
             team_name=EQUIPO,
-            df_rebound_data=df_filtrado,
+            df_rebound_data=df_advanced,
             output_path="team_report_overview.png",
             dpi=180  # Usar mismo DPI para consistencia
         )

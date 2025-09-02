@@ -1,3 +1,9 @@
+import sys
+import os
+
+import pandas as pd
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import re
 import time
 from collections import deque
@@ -119,7 +125,7 @@ if __name__ == "__main__":
     from pprint import pprint
 
     driver = init_driver()
-    pairs = scrape_play_by_play(driver, "2413603")
+    pairs = scrape_play_by_play(driver, "2413697")
     driver.quit()
 
     table = compute_synergies(pairs)
@@ -133,3 +139,7 @@ if __name__ == "__main__":
         team_assists[team] = team_assists.get(team, 0) + assists
 
     pprint(team_assists)
+    
+    # Save it at ./game_assists.xlsx
+    df = pd.DataFrame(table)
+    df.to_excel("./game_assists.xlsx", index=False)

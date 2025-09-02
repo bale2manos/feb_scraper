@@ -20,6 +20,9 @@ from .tools.utils                     import setup_montserrat_font, compute_adva
 import pandas as pd
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
+# === NUEVO: import del informe de asistencias ===
+from team_report_assists.build_team_report_assists import build_team_report_assists
+
 # Setup Montserrat font for matplotlib
 setup_montserrat_font()
 
@@ -44,8 +47,9 @@ def setup_montserrat_pdf_fonts():
                 print(f"Warning: Could not register font {font_name}: {e}")
 
 # === Configuration ===
-TEAM_FILE     = Path("data/teams_aggregated.xlsx")
-PLAYERS_FILE  = Path("data/jugadores_aggregated.xlsx")
+TEAM_FILE       = Path("data/teams_aggregated.xlsx")
+PLAYERS_FILE    = Path("data/jugadores_aggregated.xlsx")
+ASSISTS_FILE    = Path("data/assists.xlsx")  # <<< NUEVO
 BASE_OUTPUT_DIR = Path("output/reports/team_reports/")
 
 # Create output directory if it doesn't exist
@@ -60,8 +64,6 @@ def fig_to_png_buffer(fig, dpi=180):
     fig.set_tight_layout(True)
     FigureCanvas(fig).draw()
     buf = io.BytesIO()
-    
-    # Slightly higher DPI for better quality
     fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight',
                 transparent=False, facecolor='white', edgecolor='none')
     plt.close(fig)
@@ -72,14 +74,10 @@ def optimize_png_buffer(buf, max_width=1400):
     """Optimize PNG image buffer while maintaining quality."""
     buf.seek(0)
     img = Image.open(buf)
-    
-    # Only resize if significantly too large (maintain aspect ratio)
     if img.width > max_width:
         ratio = max_width / img.width
         new_height = int(img.height * ratio)
         img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-    
-    # Keep as PNG but optimize compression
     optimized_buf = io.BytesIO()
     img.save(optimized_buf, format='PNG', optimize=True, compress_level=6)
     optimized_buf.seek(0)
@@ -91,7 +89,13 @@ def build_team_report(team_filter=None, player_filter:list=None):
 
     # 1) Load data
     df_players = pd.read_excel(PLAYERS_FILE)
-    df_team = pd.read_excel(TEAM_FILE)
+    df_team    = pd.read_excel(TEAM_FILE)
+    # === NUEVO: cargar asistencias ===
+    try:
+        df_assists = pd.read_excel(ASSISTS_FILE)
+    except Exception as e:
+        print(f"[DEBUG] No se pudo leer {ASSISTS_FILE}: {e}")
+        df_assists = pd.DataFrame()
 
     # 2) Prepare player stats for individual analysis
     # Filter players data
@@ -102,11 +106,24 @@ def build_team_report(team_filter=None, player_filter:list=None):
         print(f"[DEBUG] df_players_filtered shape: {df_players_filtered.shape}")
         team_name = team_filter
         df_team_filtered = df_team[df_team['EQUIPO'] == team_name]
+        # === NUEVO: asistencias del equipo ===
+        df_assists_filtered = (
+            df_assists[df_assists['EQUIPO'].astype(str).str.strip() == team_name]
+            if not df_assists.empty and 'EQUIPO' in df_assists.columns else pd.DataFrame()
+        )
+        print(f"[DEBUG] df_assists_filtered shape: {df_assists_filtered.shape if not df_assists_filtered.empty else (0,0)}")
     elif player_filter is not None and len(player_filter) > 0:
         print("[DEBUG] Filtering by player_filter")
         df_players_filtered = df_players[df_players['JUGADOR'].isin(player_filter)]
         print(f"[DEBUG] df_players_filtered shape: {df_players_filtered.shape}")
         team_name = df_players_filtered['EQUIPO'].iloc[0] if not df_players_filtered.empty else ""
+        df_team_filtered = df_team[df_team['EQUIPO'] == team_name]
+        # === NUEVO: asistencias (si podemos inferir equipo) ===
+        df_assists_filtered = (
+            df_assists[df_assists['EQUIPO'].astype(str).str.strip() == team_name]
+            if team_name and not df_assists.empty and 'EQUIPO' in df_assists.columns else pd.DataFrame()
+        )
+        print(f"[DEBUG] df_assists_filtered shape: {df_assists_filtered.shape if not df_assists_filtered.empty else (0,0)}")
     else:
         print("[DEBUG] No valid filter provided")
         raise ValueError("Must provide either a non-empty team_filter or a non-empty player_filter")
@@ -133,6 +150,7 @@ def build_team_report(team_filter=None, player_filter:list=None):
 
     overview_fig = None
     bars_fig = None
+    assists_fig = None  # <<< NUEVO
     if add_overview_and_bars:
         print("[DEBUG] Generating single overview page...")
         from team_report_overview.build_team_report_overview import build_team_report_overview, compute_advanced_stats_overview
@@ -143,8 +161,6 @@ def build_team_report(team_filter=None, player_filter:list=None):
         print("[DEBUG] Saving image to ./team_overview_test.png")
         overview_fig.savefig("./team_overview_test.png", dpi=180, bbox_inches='tight')
         
-        
-
         print("[DEBUG] Generating single bars page...")
         from team_report_bars.build_team_report_bars import build_team_report_bars,compute_advanced_stats_bars
         stats_advanced = df_team_filtered.apply(compute_advanced_stats_bars, axis=1)
@@ -166,6 +182,27 @@ def build_team_report(team_filter=None, player_filter:list=None):
         print(f"[DEBUG] stats_finalizacion: {stats_finalizacion}")
         bars_fig = build_team_report_bars(stats_puntos, stats_finalizacion, dpi=180)
         print(f"[DEBUG] bars_fig created")
+
+        # === NUEVO: Generar página de asistencias como tercera página ===
+        try:
+            if not df_assists_filtered.empty:
+                print("[DEBUG] Generating assists overview page...")
+                assists_fig = build_team_report_assists(
+                    df_assists_team=df_assists_filtered,
+                    output_path=None,           # embebemos en PDF, no guardamos aquí
+                    dpi=180,
+                    edge_threshold=2,
+                    roster_path=str(PLAYERS_FILE),
+                    fig_width=13.5,
+                    fig_height=8.27,
+                    pct_cell_threshold=0.05
+                )
+                print("[DEBUG] assists_fig created")
+            else:
+                print("[DEBUG] No assists data for this team. Skipping assists page.")
+        except Exception as e:
+            print(f"[DEBUG] Error generating assists page: {e}")
+            assists_fig = None
 
     # --- Generate main report pages (always) ---
     print("[DEBUG] Generating main report pages...")
@@ -196,30 +233,45 @@ def build_team_report(team_filter=None, player_filter:list=None):
 
     if add_overview_and_bars:
         print("[DEBUG] Adding overview and bars pages to PDF...")
-        # OVERVIEW: Save as PNG and embed directly, scaled by 0.9 (or 0.37 as before if you prefer)
+        # OVERVIEW
         overview_png_path = "./team_overview_pdf_direct.png"
         overview_fig.savefig(overview_png_path, dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
         img = Image.open(overview_png_path)
         img_w, img_h = img.size
-        # Reduce size by 10%
         scale = 0.37
         draw_w = img_w * scale
         draw_h = img_h * scale
         img_reader = ImageReader(overview_png_path)
-        c.drawImage(img_reader, 0, page_h-draw_h, width=draw_w, height=draw_h, preserveAspectRatio=False, mask='auto')
+        c.drawImage(img_reader, 0, page_h - draw_h, width=draw_w, height=draw_h, preserveAspectRatio=False, mask='auto')
         c.showPage()
 
-        # BARS: Save as PNG and embed directly, scaled by 0.9 and placed at top-left
+        # BARS
         bars_png_path = "./team_bars_pdf_direct.png"
         bars_fig.savefig(bars_png_path, dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
         img_bars = Image.open(bars_png_path)
         bars_w, bars_h = img_bars.size
-        bars_scale = 0.4  # 60% reduction
+        bars_scale = 0.4
         bars_draw_w = bars_w * bars_scale
         bars_draw_h = bars_h * bars_scale
         bars_reader = ImageReader(bars_png_path)
-        c.drawImage(bars_reader, 0, page_h-bars_draw_h, width=bars_draw_w, height=bars_draw_h, preserveAspectRatio=False, mask='auto')
+        c.drawImage(bars_reader, 0, page_h - bars_draw_h, width=bars_draw_w, height=bars_draw_h, preserveAspectRatio=False, mask='auto')
         c.showPage()
+
+        # === NUEVO: ASSISTS (tercera página), reducción 40% ===
+        if assists_fig is not None:
+            assists_png_path = "./team_assists_pdf_direct.png"
+            assists_fig.savefig(assists_png_path, dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
+            img_assists = Image.open(assists_png_path)
+            a_w, a_h = img_assists.size
+            assists_scale = 0.35  # reducción 25%
+            a_draw_w = a_w * assists_scale
+            a_draw_h = a_h * assists_scale
+            left_margin = int(page_w * 0.03)  # 8% del ancho de página como margen izquierdo
+            assists_reader = ImageReader(assists_png_path)
+            c.drawImage(assists_reader, -left_margin, page_h - a_draw_h, width=a_draw_w, height=a_draw_h, preserveAspectRatio=False, mask='auto')
+            c.showPage()
+        else:
+            print("[DEBUG] Assists figure missing; skipping third page.")
 
     # Add main report pages
     print("[DEBUG] Adding main report pages to PDF...")
@@ -255,14 +307,16 @@ def build_team_report(team_filter=None, player_filter:list=None):
     print(f"✅ Informe de equipo generado en {OUTPUT_PDF}")
     print(f"📄 Tamaño del archivo: {file_size_mb:.2f} MB")
     if add_overview_and_bars:
-        print(f"📊 PDF con overview, bars y main report")
+        if assists_fig is not None:
+            print(f"📊 PDF con overview, bars y asistencias + main report")
+        else:
+            print(f"📊 PDF con overview, bars (sin asistencias) + main report")
     else:
         print(f"📊 PDF solo con main report (filtrado por jugadores)")
     print("[DEBUG] build_team_report finished.")
     return OUTPUT_PDF
 
 if __name__ == '__main__':
-    
     team = 'UROS DE RIVAS'  # Example team
     players = [
         'A. APARICIO IZQUIERDO',
@@ -277,6 +331,6 @@ if __name__ == '__main__':
     ]
 
     build_team_report(
-        team_filter=None,
-        player_filter=players
+        team_filter=team,      # puedes activar el flujo de overview/bars/assists
+        player_filter=None
     )

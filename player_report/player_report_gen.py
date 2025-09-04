@@ -41,7 +41,7 @@ from player_report.tools.nacionalidad                import load_countries_data,
 
 
 # === RUTAS ===
-DATA_PATH      = Path("data/jugadores_aggregated.xlsx")
+DATA_PATH      = Path("data/jugadores_aggregated_24_25.xlsx")
 TEAMS_DATA_PATH = Path("data/teams_aggregated.xlsx")
 TEMPLATE_PATH  = Path("images/templates/background_template.png")
 DEFAULT_PHOTO   = Path("images/templates/generic_player.png")
@@ -273,6 +273,11 @@ def compute_advanced_stats(stats_base):
     result['T2 %'] = (T2C / T2I * 100) if T2I > 0 else 0
     result['T3 %'] = (T3C / T3I * 100) if T3I > 0 else 0
     
+    # Average attempts per game
+    result['T1I'] = T1I / G if G > 0 else 0
+    result['T2I'] = T2I / G if G > 0 else 0
+    result['T3I'] = T3I / G if G > 0 else 0
+    
     # Round all percentage values to 2 decimal places
     for key, value in result.items():
         if isinstance(value, (int, float)) and not pd.isna(value):
@@ -470,7 +475,17 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
         "EFG %": stats.get('EFG %', 0),
         "TS %": stats.get('TS %', 0)
     }
-    bars = plot_media_pct(bars_stats, width_px=3000, resize_px=690)
+    
+    # Attempt data for the bars (only for T1, T2, T3)
+    bars_attempts = {
+        "T1I": stats.get('T1I', 0),
+        "T2I": stats.get('T2I', 0),
+        "T3I": stats.get('T3I', 0),
+        "EFGI": 0,  # EFG % and TS % don't have direct attempts
+        "TSI": 0
+    }
+    
+    bars = plot_media_pct(bars_stats, bars_attempts, width_px=3000, resize_px=690)
     base.paste(bars, (COORDS['bars_start'][0], COORDS['bars_start'][1]), bars)
 
     # --- PPT INDICATORS ---

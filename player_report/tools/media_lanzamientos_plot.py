@@ -9,7 +9,7 @@ import io
 # ─────────── CONFIGURACIÓN ────────────────────────────────────────────────
 FONT            = "Montserrat, sans-serif"
 COLORS          = ["#9b59b6", "#3498db", "#1abc9c", "#de9826", "#e74c3c"]
-LOW_THRESH      = 0.20     # <15% of the max ⇒ etiqueta pequeña
+LOW_THRESH      = 0.36     # <15% of the max ⇒ etiqueta pequeña
 BAR_WIDTH       = 0.55     # grosor de la barra (0–1)
 CIRCLE_SIZE_PX  = 70       # diámetro del círculo en px
 TEXT_SIZE_IN    = 22       # texto dentro de la barra
@@ -22,6 +22,7 @@ def _circle_radius_units(fig_w: int, max_val: float) -> float:
     return (CIRCLE_SIZE_PX / 2) * max_val / fig_w
 
 def plot_media_pct(stats: dict,
+                   attempts: dict = None,
                    out_png: str = None,
                    width_px: int = 2000,
                    resize_px: int = 2000) -> Image.Image:
@@ -57,7 +58,22 @@ def plot_media_pct(stats: dict,
     # ── etiquetas grandes (dentro de barras altas) ──────────────────────
     big_x = [(v / 2 + 2 * r_units) for v, low in zip(pct, low_mask) if not low]
     big_y = [lab for lab, low in zip(labels, low_mask) if not low]
-    big_text = [f"<b>{lab} – {v:.1f} %</b>" for lab, v, low in zip(labels, pct, low_mask) if not low]
+    
+    # Create text with attempts if available
+    if attempts:
+        big_text = []
+        for lab, v, low in zip(labels, pct, low_mask):
+            if not low:
+                attempt_key = lab.replace(' %', 'I')  # T1 % -> T1I, T2 % -> T2I, etc.
+                attempt_val = attempts.get(attempt_key, 0)
+                clean_label = lab.replace(' %', '')  # Remove % from label
+                if attempt_val > 0:  # Only show attempts if they exist
+                    big_text.append(f"<b>{clean_label} {v:.1f}% ({attempt_val:.1f} tiros)</b>")
+                else:
+                    big_text.append(f"<b>{clean_label} {v:.1f}%</b>")
+    else:
+        big_text = [f"<b>{lab} – {v:.1f} %</b>" for lab, v, low in zip(labels, pct, low_mask) if not low]
+    
     fig.add_trace(go.Scatter(
         x=big_x, y=big_y,
         mode="text",
@@ -72,7 +88,22 @@ def plot_media_pct(stats: dict,
     # replicamos la misma lógica de offsets que en el original
     small_x = [9 + v * 0.15 for v, low in zip(pct, low_mask) if low]
     small_y = [lab for lab, low in zip(labels, low_mask) if low]
-    small_text = [f"<b>{lab} – {v:.1f} %</b>" for lab, v, low in zip(labels, pct, low_mask) if low]
+    
+    # Create text with attempts if available
+    if attempts:
+        small_text = []
+        for lab, v, low in zip(labels, pct, low_mask):
+            if low:
+                attempt_key = lab.replace(' %', 'I')  # T1 % -> T1I, T2 % -> T2I, etc.
+                attempt_val = attempts.get(attempt_key, 0)
+                clean_label = lab.replace(' %', '')  # Remove % from label
+                if attempt_val > 0:  # Only show attempts if they exist
+                    small_text.append(f"<b>{clean_label} {v:.1f}% ({attempt_val:.1f} tiros)</b>")
+                else:
+                    small_text.append(f"<b>{clean_label} {v:.1f}%</b>")
+    else:
+        small_text = [f"<b>{lab} – {v:.1f} %</b>" for lab, v, low in zip(labels, pct, low_mask) if low]
+    
     fig.add_trace(go.Scatter(
         x=small_x, y=small_y,
         mode="text",
@@ -126,10 +157,17 @@ def plot_media_pct(stats: dict,
 if __name__ == "__main__":
     sample_stats = {
         "T1 %": 100.0,
-        "T2 %": 14.9,
-        "T3 %": 15.1,
-        "EFG %":   3.3,
-        "TS %":  10.6
+        "T2 %": 35.9,
+        "T3 %": 37.1,
+        "EFG %":  34.3,
+        "TS %":  35.6
     }
-    print("PNG generado:", plot_media_pct(sample_stats,
+    sample_attempts = {
+        "T1I": 4.2,
+        "T2I": 6.8,
+        "T3I": 2.1,
+        "EFGI": 0.0,  # EFG and TS don't have attempts
+        "TSI": 0.0
+    }
+    print("PNG generado:", plot_media_pct(sample_stats, sample_attempts,
                                          "./player_report/media_lanzamientos.png",))

@@ -117,14 +117,14 @@ def aggregate_teams(df):
 
 if __name__ == "__main__":
     # Ejecutar la agregación
-    result = aggregate_games()
-    
-    result.to_excel('./data/games_aggregated.xlsx', index=False)
-    
+    result = aggregate_games('./data/jugadores_per_game_23_24_c.xlsx')
+
+    result.to_excel('./data/games_aggregated_23_24_c.xlsx', index=False)
+
     result_teams = aggregate_teams(result)
     
     
     # Guardar los resultados en un nuevo archivo Excel
-    output_path = './data/teams_aggregated.xlsx'
+    output_path = './data/teams_aggregated_23_24_c.xlsx'
     result_teams.to_excel(output_path, index=False)
     print(f"\nResultados guardados en '{output_path}'")

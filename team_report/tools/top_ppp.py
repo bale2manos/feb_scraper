@@ -302,7 +302,7 @@ def plot_top_ppp(
 
 
 if __name__ == "__main__":
-    PATH = './data/jugadores_aggregated.xlsx'
+    PATH = './data/jugadores_aggregated_24_25.xlsx'
     df_demo = pd.read_excel(PATH)
     # Filtramos solo un equipo...
     df_demo = df_demo[df_demo['EQUIPO'] == 'UROS DE RIVAS']

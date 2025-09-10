@@ -87,7 +87,7 @@ figsize: tuple = (4, 3.5)
     return fig
 
 if __name__ == "__main__":
-    FILE = './data/jugadores_aggregated.xlsx'
+    FILE = './data/jugadores_aggregated_24_25.xlsx'
     EQUIPO = "UROS DE RIVAS"
     df = pd.read_excel(FILE)
     fig = plot_top_scorers(df, EQUIPO)

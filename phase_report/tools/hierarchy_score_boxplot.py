@@ -276,7 +276,7 @@ def plot_annotation_hierarchy(
 
 if __name__ == '__main__':
     # Ejemplo de uso:
-    FILE = './data/jugadores_aggregated.xlsx'
+    FILE = './data/jugadores_aggregated_24_25.xlsx'
     MIS_EQUIPOS = ['BALONCESTO TALAVERA', 'C.B. TRES CANTOS', 'CB ARIDANE',
                    'CB LA MATANZA', 'EB FELIPE ANTÓN', 'LUJISA GUADALAJARA BASKET',
                    'REAL CANOE N.C.', 'UROS DE RIVAS', 'ZENTRO BASKET MADRID'

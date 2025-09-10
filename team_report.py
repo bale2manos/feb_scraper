@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from team_report.build_team_report import build_team_report
 
 # Define constants
-PLAYERS_FILE = Path("data/jugadores_aggregated.xlsx")
+PLAYERS_FILE = Path("data/jugadores_aggregated_24_25.xlsx")
 BASE_OUTPUT_DIR = Path("output/reports/team_reports/")
 
 # --- Página ---

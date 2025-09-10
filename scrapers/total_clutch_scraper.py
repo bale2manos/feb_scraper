@@ -3,6 +3,8 @@
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+from multiprocessing import set_start_method, freeze_support
+
 
 import time
 import logging
@@ -64,23 +66,20 @@ def scrape_one_game(meta: Tuple[str,int,str,int,str,str,str]) -> pd.DataFrame:
 
 def main():
     setup_logging()
-    logging.info("=== Inicio total_clutch_scraper_parallel ===")
+    logging.info("Starting parallel clutch scraper")
 
-    # 1) Listado de TODOS los partidos de la temporada
-    games = scrape_all()  # lista de filas [Fase, Jornada, IdPartido, IdEquipo, Local, Rival, Resultado]
-    logging.info(f"Scrape_all devolvió {len(games)} filas (incluye local/visitante).")
+    games = scrape_all()  # [Fase, Jornada, IdPartido, IdEquipo, Local, Rival, Resultado]
+    logging.info(f"scrape_all -> {len(games)} filas")
 
-    # 2) Un solo registro por PARTIDO_ID
-    unique_by_pid: Dict[str, Tuple[str,int,str,int,str,str,str]] = {}
-    for row in games:
-        fase, jornada, pid, idequipo, local, rival, resultado = row
+    # Un único registro por PARTIDO_ID
+    unique_by_pid = {}
+    for fase, jornada, pid, idequipo, local, rival, resultado in games:
         if pid not in unique_by_pid:
             unique_by_pid[pid] = (fase, jornada, pid, idequipo, local, rival, resultado)
     unique_games = list(unique_by_pid.values())
     logging.info(f"Partidos únicos: {len(unique_games)}")
 
-    # 3) Paralelizar por partido
-    all_dfs: List[pd.DataFrame] = []
+    all_dfs = []
     with ProcessPoolExecutor(max_workers=WORKERS) as exe:
         futures = { exe.submit(scrape_one_game, meta): meta[2] for meta in unique_games }
         for fut in as_completed(futures):
@@ -91,17 +90,15 @@ def main():
                     all_dfs.append(df)
                     logging.info(f"[{pid}] OK · {len(df)} filas")
                 else:
-                    logging.info(f"[{pid}] sin datos")
+                    logging.info(f"[{pid}] vacío")
             except Exception as e:
                 logging.error(f"[{pid}] crash: {e!r}")
 
     if not all_dfs:
-        logging.error("No se obtuvo ningún DataFrame de partidos. Abortando.")
+        logging.error("No se obtuvo ningún DataFrame. Abortando.")
         return
 
-    # 4) Concatenar y guardar
     df_all = pd.concat(all_dfs, ignore_index=True)
-    # Orden de columnas (si existen):
     desired = [
         "FASE","JORNADA","PARTIDO_ID","GAME",
         "EQUIPO","JUGADOR","MIN_CLUTCH","PTS","FGA","FGM","3PA","3PM","FTA","FTM",
@@ -112,7 +109,13 @@ def main():
 
     os.makedirs(os.path.dirname(OUT_XLSX) or ".", exist_ok=True)
     df_all.to_excel(OUT_XLSX, index=False)
-    logging.info(f"Guardado Excel: {OUT_XLSX} · {len(df_all)} filas totales · {df_all['PARTIDO_ID'].nunique()} partidos")
+    logging.info(f"Saved Excel: {OUT_XLSX} · {len(df_all)} filas · {df_all['PARTIDO_ID'].nunique()} partidos")
 
 if __name__ == "__main__":
+    # Muy importante para evitar ejecuciones recursivas en workers (Windows/macOS)
+    try:
+        set_start_method("spawn")
+    except RuntimeError:
+        pass
+    freeze_support()
     main()

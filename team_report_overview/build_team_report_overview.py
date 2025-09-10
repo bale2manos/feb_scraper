@@ -79,7 +79,7 @@ def build_team_report_overview(
 
     
     # 3b. Añadir máximos anotadores en la esquina superior derecha
-    df_jugadores = pd.read_excel('./data/jugadores_aggregated.xlsx')
+    df_jugadores = pd.read_excel('./data/jugadores_aggregated_24_25.xlsx')
     
     # Fijar tamaño constante para las figuras de los módulos de jugadores
     fixed_figsize = (4, 3.5)

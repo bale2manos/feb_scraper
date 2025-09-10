@@ -188,7 +188,7 @@ def aggregate_players_stats(file_path='./data/jugadores_per_game.xlsx'):
     
     return aggregated_df
 
-def save_aggregated_data(df, output_path='./data/jugadores_aggregated.xlsx'):
+def save_aggregated_data(df, output_path='./data/jugadores_aggregated_24_25.xlsx'):
     """
     Save the aggregated data to an Excel file.
     
@@ -200,7 +200,7 @@ def save_aggregated_data(df, output_path='./data/jugadores_aggregated.xlsx'):
     try:
         df.to_excel(output_path, index=False)
     except Exception as e:
-        df.to_excel('./data/alt_jugadores_aggregated.xlsx', index=False, engine='openpyxl')
+        df.to_excel('./data/alt_jugadores_aggregated_24_25.xlsx', index=False, engine='openpyxl')
     print("Data saved successfully!")
 
 def display_summary(df):
@@ -307,14 +307,16 @@ def main():
     """
     try:
         # Aggregate the player statistics
-        aggregated_df = aggregate_players_stats()
+        excel_path_in = './data/jugadores_per_game_23_24_c.xlsx'
+        aggregated_df = aggregate_players_stats(excel_path_in)
         
         # Display summary
         #display_summary(aggregated_df)
         
         # Save the aggregated data
-        save_aggregated_data(aggregated_df)
-        
+        excel_path_out = './data/jugadores_aggregated_23_24_c.xlsx'
+        save_aggregated_data(aggregated_df, excel_path_out)
+
         # Optionally save as CSV as well
         #csv_path = './data/jugadores_aggregated.csv'
         #print(f"\nAlso saving as CSV: {csv_path}")

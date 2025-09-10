@@ -2,7 +2,7 @@
 """
 Asistencias · Informe Overview (A4 apaisado)
 --------------------------------------------
-- Valida jugadores contra ./data/jugadores_aggregated.xlsx (descarta filas fuera del roster del equipo).
+- Valida jugadores contra ./data/jugadores_aggregated_24_25.xlsx (descarta filas fuera del roster del equipo).
 - Etiquetas con DORSAL + nombre corto (p.ej. "14 - G. DÍAZ").
 - Grafo a la izquierda ocupando casi TODA la altura (nota inferior opcional).
 - Derecha: Heatmap + Top-10; mayor separación entre ambos y respecto al grafo.
@@ -136,7 +136,7 @@ def _load_roster(roster_path: str, team_name: str):
 
     df_r = pd.read_excel(roster_path)
     if 'JUGADOR' not in df_r.columns:
-        print("⚠️ jugadores_aggregated.xlsx sin columna 'JUGADOR'.")
+        print("⚠️ jugadores_aggregated_24_25.xlsx sin columna 'JUGADOR'.")
         return set(), {}
 
     if 'EQUIPO' in df_r.columns:
@@ -172,7 +172,7 @@ def build_team_report_assists(
     output_path: str = None,
     dpi: int = 180,
     edge_threshold: int = 2,
-    roster_path: str = "./data/jugadores_aggregated.xlsx",
+    roster_path: str = "./data/jugadores_aggregated_24_25.xlsx",
     fig_width: float = 13.5,  # más ancho que A4 para ganar aire (A4≈11.69)
     fig_height: float = 8.27,
     pct_cell_threshold: float = 0.05  # Mostrar % solo si ≥ 5%
@@ -528,7 +528,7 @@ if __name__ == "__main__":
     parser.add_argument("--dpi", type=int, default=180)
     parser.add_argument("--edge-threshold", type=int, default=2,
                         help="Umbral mínimo de asistencias para dibujar aristas.")
-    parser.add_argument("--roster", type=str, default="./data/jugadores_aggregated.xlsx",
+    parser.add_argument("--roster", type=str, default="./data/jugadores_aggregated_24_25.xlsx",
                         help="Excel con roster y dorsales.")
     parser.add_argument("--fig-width", type=float, default=13.5,
                         help="Ancho del lienzo en pulgadas (default 13.5).")

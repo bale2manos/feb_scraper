@@ -30,7 +30,7 @@ from utils.web_scraping import (
 )
 
 # --- Configuración ---
-PHASES        = ['Liga Regular "B-A"', 'Liga Regular "B-B"']
+PHASES        = ['Liga Regular "C-A"']#, 'Liga Regular "B-B"']
 OUTPUT_FILE   = "all_phases_boxscores.xlsx"
 RETRY_COUNT   = 3
 RETRY_DELAY   = 2  # segundos entre reintentos

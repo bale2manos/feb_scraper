@@ -49,7 +49,7 @@ def setup_montserrat_pdf_fonts():
 
 # === Configuration ===
 TEAM_FILE     = Path("data/teams_aggregated.xlsx")
-PLAYERS_FILE  = Path("data/jugadores_aggregated.xlsx")
+PLAYERS_FILE  = Path("data/jugadores_aggregated_24_25.xlsx")
 BASE_OUTPUT_DIR = Path("output/reports/phase_reports/")
 
 # Create output directory if it doesn't exist

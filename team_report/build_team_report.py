@@ -22,6 +22,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # === NUEVO: import del informe de asistencias ===
 from team_report_assists.build_team_report_assists import build_team_report_assists
+from team_report_clutch.build_clutch_lineups import build_top3_card, load_roster_lookup, load_lineups_for_team
 
 # Setup Montserrat font for matplotlib
 setup_montserrat_font()
@@ -48,7 +49,7 @@ def setup_montserrat_pdf_fonts():
 
 # === Configuration ===
 TEAM_FILE       = Path("data/teams_aggregated.xlsx")
-PLAYERS_FILE    = Path("data/jugadores_aggregated.xlsx")
+PLAYERS_FILE    = Path("data/jugadores_aggregated_24_25.xlsx")
 ASSISTS_FILE    = Path("data/assists.xlsx")  # <<< NUEVO
 BASE_OUTPUT_DIR = Path("output/reports/team_reports/")
 
@@ -151,6 +152,7 @@ def build_team_report(team_filter=None, player_filter:list=None):
     overview_fig = None
     bars_fig = None
     assists_fig = None  # <<< NUEVO
+    clutch_fig = None
     if add_overview_and_bars:
         print("[DEBUG] Generating single overview page...")
         from team_report_overview.build_team_report_overview import build_team_report_overview, compute_advanced_stats_overview
@@ -182,6 +184,15 @@ def build_team_report(team_filter=None, player_filter:list=None):
         print(f"[DEBUG] stats_finalizacion: {stats_finalizacion}")
         bars_fig = build_team_report_bars(stats_puntos, stats_finalizacion, dpi=180)
         print(f"[DEBUG] bars_fig created")
+        
+        print("[DEBUG] Generating single clutch lineup page...")
+        # lookups
+        image_lookup, dorsal_lookup = load_roster_lookup(PLAYERS_FILE, team_filter)
+        # lineups
+        df_team = load_lineups_for_team("./data/clutch_lineups.xlsx", team_filter)
+
+        clutch_fig = build_top3_card(df_team, team_filter, image_lookup, dorsal_lookup)
+
 
         # === NUEVO: Generar página de asistencias como tercera página ===
         try:
@@ -255,6 +266,18 @@ def build_team_report(team_filter=None, player_filter:list=None):
         bars_draw_h = bars_h * bars_scale
         bars_reader = ImageReader(bars_png_path)
         c.drawImage(bars_reader, 0, page_h - bars_draw_h, width=bars_draw_w, height=bars_draw_h, preserveAspectRatio=False, mask='auto')
+        c.showPage()
+        
+        # CLUTCH LINEUP
+        clutch_png_path = "./team_clutch_pdf_direct.png"
+        clutch_fig.savefig(clutch_png_path, dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
+        img_clutch = Image.open(clutch_png_path)
+        clutch_w, clutch_h = img_clutch.size
+        clutch_scale = 0.35
+        clutch_draw_w = clutch_w * clutch_scale
+        clutch_draw_h = clutch_h * clutch_scale
+        clutch_reader = ImageReader(clutch_png_path)
+        c.drawImage(clutch_reader, 0, page_h - clutch_draw_h, width=clutch_draw_w, height=clutch_draw_h, preserveAspectRatio=False, mask='auto')
         c.showPage()
 
         # === NUEVO: ASSISTS (tercera página), reducción 40% ===

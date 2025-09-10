@@ -159,7 +159,7 @@ def plot_player_finalizacion_plays(df: pd.DataFrame) -> plt.Figure:
 
 # === EJEMPLO DE USO ===
 if __name__ == "__main__":
-    PATH = './data/jugadores_aggregated.xlsx'
+    PATH = './data/jugadores_aggregated_24_25.xlsx'
     df = pd.read_excel(PATH)
     # Filtramos un equipo de ejemplo
     df_eq = df[df['EQUIPO']=='UROS DE RIVAS']

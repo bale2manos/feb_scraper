@@ -41,12 +41,12 @@ from player_report.tools.nacionalidad                import load_countries_data,
 
 
 # === RUTAS ===
-DATA_PATH      = Path("data/jugadores_aggregated_24_25.xlsx")
-TEAMS_DATA_PATH = Path("data/teams_aggregated.xlsx")
+DATA_PATH      = Path("data/jugadores_aggregated_23_24_c.xlsx")
+TEAMS_DATA_PATH = Path("data/teams_aggregated_23_24_c.xlsx")
 TEMPLATE_PATH  = Path("images/templates/background_template.png")
 DEFAULT_PHOTO   = Path("images/templates/generic_player.png")
 CLUB_LOGO_PATH = Path("images/clubs/")
-REPORT_DIR     = Path("output/player_reports/")
+REPORT_DIR     = Path("output/reports/player_reports/")
 
 # === CONFIG COLUMNAS ===
 # Ajusta si tu Excel usa otros nombres de col.

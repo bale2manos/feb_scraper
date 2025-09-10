@@ -170,4 +170,4 @@ if __name__ == "__main__":
         "TSI": 0.0
     }
     print("PNG generado:", plot_media_pct(sample_stats, sample_attempts,
-                                         "./player_report/media_lanzamientos.png",))
+                                         "./media_lanzamientos.png",))

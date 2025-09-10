@@ -32,7 +32,7 @@ from ipywidgets.widgets.widget import CallbackDispatcher
 
 
 from player_report.tools.finalizacion_plays_plot     import plot_finalizacion_plays
-from player_report.tools.media_lanzamientos_plot     import plot_media_pct
+from player_report.tools.media_lanzamientos_clutch import plot_media_pct_with_clutch
 from player_report.tools.distribucion_puntos_plot    import plot_distribucion_puntos
 from player_report.tools.ppt_plays                   import plot_ppt_indicators
 from player_report.tools.stats_line_1                import plot_stats_table_simple
@@ -41,8 +41,8 @@ from player_report.tools.nacionalidad                import load_countries_data,
 
 
 # === RUTAS ===
-DATA_PATH      = Path("data/jugadores_aggregated_23_24_c.xlsx")
-TEAMS_DATA_PATH = Path("data/teams_aggregated_23_24_c.xlsx")
+DATA_PATH      = Path("data/jugadores_aggregated_24_25.xlsx")
+TEAMS_DATA_PATH = Path("data/teams_aggregated.xlsx")
 TEMPLATE_PATH  = Path("images/templates/background_template.png")
 DEFAULT_PHOTO   = Path("images/templates/generic_player.png")
 CLUB_LOGO_PATH = Path("images/clubs/")
@@ -485,7 +485,7 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
         "TSI": 0
     }
     
-    bars = plot_media_pct(bars_stats, bars_attempts, width_px=3000, resize_px=690)
+    bars = plot_media_pct_with_clutch(bars_stats, bars_attempts, player_name_roster=player_name, width_px=3000, resize_px=690)
     base.paste(bars, (COORDS['bars_start'][0], COORDS['bars_start'][1]), bars)
 
     # --- PPT INDICATORS ---
@@ -604,4 +604,4 @@ if __name__ == '__main__':
         generate_report(args.player, output_dir=out_dir, overwrite=args.overwrite)
     else:
         print("Usa -p 'Nombre' o -a para todos")
-  
+

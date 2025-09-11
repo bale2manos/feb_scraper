@@ -26,10 +26,10 @@ from utils.web_scraping import (
     SELECT_ID_FASE,
     SELECT_ID_JORNADA,
     BASE_URL,
-    TEMPORADA_TXT,
 )
 
 # --- Configuración ---
+TEMPORADA_TXT = "2024/2025"
 PHASES        = ['Liga Regular "C-A"']#, 'Liga Regular "B-B"']
 OUTPUT_FILE   = "all_phases_boxscores.xlsx"
 RETRY_COUNT   = 3

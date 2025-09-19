@@ -14,8 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from utils.web_scraping import init_driver, accept_cookies
-
-BASE_PLAY_URL = "https://baloncestoenvivo.feb.es/partido/{}"
+from config import BASE_PLAY_URL
 
 # Precompiled regexes
 ASSIST_RE = re.compile(

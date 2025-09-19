@@ -11,17 +11,47 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Import the team report building function
 from team_report.build_team_report import build_team_report
 
-# Define constants
-PLAYERS_FILE = Path("data/jugadores_aggregated_24_25.xlsx")
-BASE_OUTPUT_DIR = Path("output/reports/team_reports/")
+# Import file configuration utilities
+from utils.file_config_ui import render_file_config_ui, validate_files
 
 # --- Página ---
-st.set_page_config(page_title="Generador de Informe de Equipo", layout="wide")
+st.set_page_config(page_title="🏀 Generador de Informe de Equipo", layout="wide")
 st.title("🏀 Generador de Informe de Equipo")
-st.write("Selecciona un equipo o jugadores específicos, y luego pulsa **Generar informe**.")
+st.markdown("Genera informes detallados para equipos completos con estadísticas de todos los jugadores.")
+
+# Configuración de archivos
+file_paths = render_file_config_ui(
+    file_types=['jugadores_aggregated', 'teams_aggregated', 'clutch_lineups', 'assists'],
+    key_prefix="team_report"
+)
+
+# Validar archivos obligatorios antes de continuar
+required_files = ['jugadores_aggregated', 'teams_aggregated', 'clutch_lineups']
+required_file_paths = {k: v for k, v in file_paths.items() if k in required_files}
+
+if not validate_files(required_file_paths):
+    st.error("❌ **No se pueden cargar los archivos necesarios.** Por favor, verifica la configuración anterior.")
+    st.stop()
+
+# Obtener rutas de archivos
+players_file = file_paths.get('jugadores_aggregated')
+teams_file = file_paths.get('teams_aggregated')
+clutch_lineups_file = file_paths.get('clutch_lineups')
+assists_file = file_paths.get('assists')  # Puede ser None si no está disponible
+
+# Importar configuración centralizada
+from config import TEAM_REPORTS_DIR
+
+# Define constants
+BASE_OUTPUT_DIR = TEAM_REPORTS_DIR
 
 # --- Carga datos para multiselect ---
-df_players = pd.read_excel(PLAYERS_FILE)
+try:
+    df_players = pd.read_excel(players_file)
+    st.success(f"✅ Datos cargados: {df_players.shape[0]} jugadores encontrados")
+except Exception as e:
+    st.error(f"❌ Error cargando datos: {str(e)}")
+    st.stop()
 
 equipos = sorted(df_players['EQUIPO'].dropna().unique().tolist())
 jugadores = sorted(df_players['JUGADOR'].dropna().unique().tolist())
@@ -70,11 +100,25 @@ if st.button("📄 Generar informe", type="primary", use_container_width=True):
                 # Determinar los parámetros para build_team_report
                 if sel_jugadores:
                     # Prioridad a jugadores específicos
-                    pdf_path = build_team_report(team_filter=None, player_filter=sel_jugadores)
+                    pdf_path = build_team_report(
+                        team_filter=None, 
+                        player_filter=sel_jugadores,
+                        players_file=str(players_file),
+                        teams_file=str(teams_file),
+                        clutch_lineups_file=str(clutch_lineups_file),
+                        assists_file=str(assists_file) if assists_file else None
+                    )
                     filter_info = f"{len(sel_jugadores)} jugadores seleccionados"
                 else:
                     # Usar filtro de equipo
-                    pdf_path = build_team_report(team_filter=sel_equipo, player_filter=None)
+                    pdf_path = build_team_report(
+                        team_filter=sel_equipo, 
+                        player_filter=None,
+                        players_file=str(players_file),
+                        teams_file=str(teams_file),
+                        clutch_lineups_file=str(clutch_lineups_file),
+                        assists_file=str(assists_file) if assists_file else None
+                    )
                     filter_info = f"equipo '{sel_equipo}'"
 
                 # Read the generated PDF

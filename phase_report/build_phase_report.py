@@ -8,6 +8,10 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import os
+import pandas as pd
+
+# Importar configuración centralizada
+from config import JUGADORES_AGGREGATED_FILE, TEAMS_AGGREGATED_FILE, PHASE_REPORTS_DIR
 
 # Plotting functions
 from .tools.heatmap                   import generate_team_heatmap
@@ -48,9 +52,9 @@ def setup_montserrat_pdf_fonts():
                 print(f"Warning: Could not register font {font_name}: {e}")
 
 # === Configuration ===
-TEAM_FILE     = Path("data/teams_aggregated.xlsx")
-PLAYERS_FILE  = Path("data/jugadores_aggregated_24_25.xlsx")
-BASE_OUTPUT_DIR = Path("output/reports/phase_reports/")
+TEAM_FILE     = TEAMS_AGGREGATED_FILE
+PLAYERS_FILE  = JUGADORES_AGGREGATED_FILE
+BASE_OUTPUT_DIR = PHASE_REPORTS_DIR
 
 # Create output directory if it doesn't exist
 BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

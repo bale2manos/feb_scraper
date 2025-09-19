@@ -14,10 +14,10 @@ from selenium.webdriver.support import expected_conditions as EC
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.web_scraping import init_driver, accept_cookies
+from config import BASE_PLAY_URL
 
 # --- Configuración: cambia aquí el ID de partido ---
 PARTIDO_ID     = "2413725"
-BASE_PLAY_URL  = "https://baloncestoenvivo.feb.es/partido/{}"
 # -----------------------------------------------------
 
 def safe_int(s: str) -> int:

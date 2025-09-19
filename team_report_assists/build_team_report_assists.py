@@ -33,6 +33,9 @@ from PIL import Image
 from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
 from matplotlib.backends.backend_pdf import PdfPages
 
+# Importar configuración centralizada
+from config import JUGADORES_AGGREGATED_FILE
+
 
 # =========================
 # Fuente Montserrat
@@ -172,7 +175,7 @@ def build_team_report_assists(
     output_path: str = None,
     dpi: int = 180,
     edge_threshold: int = 2,
-    roster_path: str = "./data/jugadores_aggregated_24_25.xlsx",
+    roster_path: str = str(JUGADORES_AGGREGATED_FILE),
     fig_width: float = 13.5,  # más ancho que A4 para ganar aire (A4≈11.69)
     fig_height: float = 8.27,
     pct_cell_threshold: float = 0.05  # Mostrar % solo si ≥ 5%
@@ -528,7 +531,7 @@ if __name__ == "__main__":
     parser.add_argument("--dpi", type=int, default=180)
     parser.add_argument("--edge-threshold", type=int, default=2,
                         help="Umbral mínimo de asistencias para dibujar aristas.")
-    parser.add_argument("--roster", type=str, default="./data/jugadores_aggregated_24_25.xlsx",
+    parser.add_argument("--roster", type=str, default=str(JUGADORES_AGGREGATED_FILE),
                         help="Excel con roster y dorsales.")
     parser.add_argument("--fig-width", type=float, default=13.5,
                         help="Ancho del lienzo en pulgadas (default 13.5).")

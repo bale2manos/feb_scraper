@@ -30,8 +30,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from utils.web_scraping import init_driver, accept_cookies
+from config import BASE_PLAY_URL
 
-BASE_PLAY_URL = "https://baloncestoenvivo.feb.es/partido/{}"
 WIDGET_SEL = "div.widget-keyfacts"
 
 # ==========================

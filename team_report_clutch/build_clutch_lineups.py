@@ -31,6 +31,9 @@ import requests
 from io import BytesIO
 from rembg import remove
 
+# Importar configuración centralizada
+from config import GENERIC_PLAYER_IMAGE, JUGADORES_AGGREGATED_FILE
+
 # ------------------------- Config visual -------------------------
 FIG_W, FIG_H = 13.0, 7.5
 DPI = 200
@@ -40,7 +43,7 @@ SUBTITLE_COLOR = (0.33, 0.33, 0.36)
 ACCENT_COLOR = (0.08, 0.35, 0.80)  # azul para el NET ajustado
 K_MIN = 5.0                         # shrinkage de minutos
 
-GENERIC_IMG = "images/templates/generic_player.png"  # fallback
+GENERIC_IMG = str(GENERIC_PLAYER_IMAGE)  # fallback
 
 # ------------------- Utilidades de nombres ----------------------
 _ACENTS = str.maketrans("ÁÉÍÓÚÜÑáéíóúüñ", "AEIOUUNAEIOUUN")
@@ -305,7 +308,7 @@ def build_top3_card(df_team: pd.DataFrame, team: str,
 # CLI
 # ------------------------------------------------------------
 def main():
-    roster_excel= "./data/jugadores_aggregated_24_25.xlsx"
+    roster_excel= str(JUGADORES_AGGREGATED_FILE)
     lineups_excel = "./data/clutch_lineups.xlsx"
     out_png       = "./top3_clutch.png"
     team = "LUJISA GUADALAJARA BASKET"

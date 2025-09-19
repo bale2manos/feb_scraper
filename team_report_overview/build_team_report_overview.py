@@ -49,7 +49,8 @@ def build_team_report_overview(
     team_name: str,
     df_rebound_data: pd.DataFrame,
     output_path: str = None,
-    dpi: int = 180  # Usar mismo DPI que build_team_report.py para consistencia
+    dpi: int = 180,  # Usar mismo DPI que build_team_report.py para consistencia
+    players_file: str = None  # Nuevo parámetro para archivo de jugadores
 ) -> plt.Figure:
     """
     Genera el reporte overview del equipo con header y análisis de rebotes.
@@ -79,7 +80,9 @@ def build_team_report_overview(
 
     
     # 3b. Añadir máximos anotadores en la esquina superior derecha
-    df_jugadores = pd.read_excel('./data/jugadores_aggregated_24_25.xlsx')
+    # Usar el archivo de jugadores pasado como parámetro o usar default
+    jugadores_file = players_file if players_file else './data/jugadores_aggregated_24_25.xlsx'
+    df_jugadores = pd.read_excel(jugadores_file)
     
     # Fijar tamaño constante para las figuras de los módulos de jugadores
     fixed_figsize = (4, 3.5)

@@ -14,23 +14,25 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from utils.web_scraping import (
-    init_driver,
-    accept_cookies,
+    init_driver, 
+    accept_cookies, 
+    get_current_base_url,  # Función dinámica en lugar de constante
     SELECT_ID_TEMPORADA,
     SELECT_ID_FASE,
     SELECT_ID_JORNADA,
-    BASE_URL,
     TEMPORADA_TXT,
-)
+)# Importar configuración centralizada
+from config import FASES_PRINCIPALES, OUTPUT_RESULTADOS_FILE
 
 # --- Configuración ---
-PHASES = ['Liga Regular "B-A"', 'Liga Regular "B-B"']
-OUT_CSV = "resultados_completos.csv"
+PHASES = FASES_PRINCIPALES
+OUT_CSV = OUTPUT_RESULTADOS_FILE
 
 
 def scrape_all():
     driver = init_driver()
-    driver.get(BASE_URL)
+    base_url = get_current_base_url()  # Obtener URL dinámicamente
+    driver.get(base_url)
     accept_cookies(driver)
 
     wait = WebDriverWait(driver, 15)

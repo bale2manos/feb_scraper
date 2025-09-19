@@ -18,24 +18,30 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scrape_game import scrape_boxscore
+from .scrape_game import scrape_boxscore
 from utils.web_scraping import (
     init_driver,
     accept_cookies,
+)
+from config import (
+    TEMPORADA_TXT,
+    FASES_PRINCIPALES as PHASES,
+    OUTPUT_PHASES_FILE as OUTPUT_FILE,
+    BASE_PLAY_URL,
+    MAX_WORKERS,
     SELECT_ID_TEMPORADA,
     SELECT_ID_FASE,
     SELECT_ID_JORNADA,
-    BASE_URL,
+    WEBDRIVER_TIMEOUT
 )
+from utils.web_scraping import get_current_base_url
 
-# --- Configuración ---
-TEMPORADA_TXT = "2024/2025"
-PHASES        = ['Liga Regular "C-A"']#, 'Liga Regular "B-B"']
-OUTPUT_FILE   = "all_phases_boxscores.xlsx"
+# --- Configuración específica del scraper ---
 RETRY_COUNT   = 3
 RETRY_DELAY   = 2  # segundos entre reintentos
-BASE_PLAY_URL = "https://baloncestoenvivo.feb.es/partido/{}"
-MAX_WORKERS   = 4  # Número de threads para procesamiento paralelo
+
+# Variables globales para filtros
+SELECTED_JORNADAS = None  # Lista de jornadas a procesar (None = todas)
 
 # Thread-safe locks
 data_lock = Lock()
@@ -45,7 +51,8 @@ error_lock = Lock()
 def get_all_match_ids():
     """Extrae la lista de (fase, jornada, partido_id) para todas las jornadas de cada fase."""
     driver = init_driver()
-    driver.get(BASE_URL)
+    base_url = get_current_base_url()  # Obtener URL dinámicamente
+    driver.get(base_url)
     accept_cookies(driver)
 
     wait = WebDriverWait(driver, 15)
@@ -73,7 +80,17 @@ def get_all_match_ids():
         total_jornadas = len(Select(sel_jor_ini).options)
         print(f"    → {total_jornadas} jornadas detectadas")
 
-        for idx in range(total_jornadas):
+        # Determinar qué jornadas procesar
+        if SELECTED_JORNADAS is not None:
+            # Filtrar solo las jornadas seleccionadas (convertir a índices 0-based)
+            jornadas_to_process = [j-1 for j in SELECTED_JORNADAS if 1 <= j <= total_jornadas]
+            print(f"    → Filtrando {len(jornadas_to_process)} jornadas específicas: {[j+1 for j in jornadas_to_process]}")
+        else:
+            # Procesar todas las jornadas
+            jornadas_to_process = list(range(total_jornadas))
+            print(f"    → Procesando todas las {total_jornadas} jornadas")
+
+        for idx in jornadas_to_process:
             # Seleccionar jornada (re-buscar para evitar stale elements)
             sel_jor = wait.until(EC.presence_of_element_located((By.ID, SELECT_ID_JORNADA)))
             Select(sel_jor).select_by_index(idx)

@@ -6,8 +6,11 @@ import pandas as pd
 from PIL import Image
 import io
 
+# Importar configuración centralizada
+from config import FONT_FAMILY
+
 # ─────────── CONFIGURACIÓN ────────────────────────────────────────────────
-FONT       = "Montserrat, sans-serif"
+FONT       = FONT_FAMILY
 COLS_ORDER = ["T1 %", "T2 %", "T3 %", "PP %"]
 COLORS     = {
     "T1 %": "#9b59b6",

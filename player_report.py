@@ -5,26 +5,75 @@ from pathlib import Path
 import shutil
 
 # Import the report generation function and constants
-from player_report.player_report_gen import generate_report, DATA_PATH, COL_NAME
+from player_report.player_report_gen import generate_report, COL_NAME
+
+# Import file configuration utilities
+from utils.file_config_ui import render_file_config_ui, validate_files
+
+# Import config functions
+from config import find_best_file, get_available_files_by_type
+
+st.set_page_config(
+    page_title="🏀 Generador de Reportes de Jugador",
+    page_icon="🏀", 
+    layout="wide"
+)
+
+st.title("🏀 Generador de Reportes de Jugador")
+st.markdown("Genera reportes individuales personalizados para jugadores con estadísticas detalladas.")
+
+# Configuración de archivos
+file_paths = render_file_config_ui(
+    file_types=['jugadores_aggregated', 'teams_aggregated', 'clutch_aggregated'],
+    key_prefix="player_report"
+)
+
+# Validar archivos esenciales
+essential_files = {k: v for k, v in file_paths.items() if k in ['jugadores_aggregated', 'teams_aggregated']}
+if not validate_files(essential_files):
+    st.error("❌ **No se pueden cargar los archivos esenciales.** Por favor, verifica la configuración anterior.")
+    st.stop()
+
+# Obtener archivos
+players_file = file_paths.get('jugadores_aggregated')
+teams_file = file_paths.get('teams_aggregated')
+clutch_file = file_paths.get('clutch_aggregated')
+
+# Verificar archivo clutch
+if clutch_file and clutch_file.exists():
+    st.info(f"✅ **Archivo clutch encontrado:** {clutch_file.name}")
+else:
+    st.warning("⚠️ **Archivo clutch no disponible** - Algunas funcionalidades pueden estar limitadas.")
+    clutch_file = None
 
 @st.cache_data
-def load_data():
-    return pd.read_excel(DATA_PATH)
+def load_data(file_path):
+    """Carga datos desde el archivo especificado."""
+    return pd.read_excel(file_path)
+
+# Cargar datos
+try:
+    df = load_data(players_file)
+    st.success(f"✅ Datos cargados: {df.shape[0]} jugadores encontrados")
+except Exception as e:
+    st.error(f"❌ Error cargando datos: {str(e)}")
+    st.stop()
 
 # Adjust columns if needed
 player_col = COL_NAME
 team_col = 'EQUIPO'
 
-df = load_data()
 players_df = df[[player_col, team_col]].dropna()
 all_players = sorted(players_df[player_col].unique().tolist())
 all_teams = sorted(players_df[team_col].unique().tolist())
 
-def gen_single(player_name):
+def gen_single(player_name, data_file, teams_file, clutch_file):
     # Generate and display a single report
     status = st.empty()
     status.info(f'🔄 Generando informe para {player_name}…')
-    path = generate_report(player_name)
+    
+    # Pasar los archivos de datos al generador de reportes
+    path = generate_report(player_name, data_file=str(data_file), teams_file=str(teams_file), clutch_file=str(clutch_file) if clutch_file else None)
     status.success(f'✅ Generado: {path}')
     try:
         img = Image.open(path)
@@ -61,7 +110,7 @@ if st.button('Generar informe'):
     else:
         if mode == 'Jugador':
             if entity in all_players:
-                gen_single(entity)
+                gen_single(entity, players_file, teams_file, clutch_file)
             else:
                 st.warning('⚠️ Jugador no encontrado')
         else:
@@ -80,7 +129,7 @@ if st.button('Generar informe'):
                         # Actualizar texto de estado
                         status_text.write(f"📄 Informe {i}/{total} en cola: {player_name}")
                         # Generar y mover informe
-                        orig_path = generate_report(player_name)
+                        orig_path = generate_report(player_name, data_file=str(players_file), teams_file=str(teams_file), clutch_file=str(clutch_file) if clutch_file else None)
                         dest = out_dir / Path(orig_path).name
                         shutil.move(orig_path, dest)
                         st.success(f'✅ {player_name}: {dest}')

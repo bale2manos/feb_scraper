@@ -18,6 +18,9 @@ from .tools.oe                        import plot_player_OE_bar
 from .tools.eps                       import plot_player_EPS_bar
 from .tools.utils                     import setup_montserrat_font, compute_advanced_stats, compute_team_stats
 import pandas as pd
+
+# Importar configuración centralizada
+from config import TEAMS_AGGREGATED_FILE, JUGADORES_AGGREGATED_FILE
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # === NUEVO: import del informe de asistencias ===
@@ -48,8 +51,8 @@ def setup_montserrat_pdf_fonts():
                 print(f"Warning: Could not register font {font_name}: {e}")
 
 # === Configuration ===
-TEAM_FILE       = Path("data/teams_aggregated.xlsx")
-PLAYERS_FILE    = Path("data/jugadores_aggregated_24_25.xlsx")
+TEAM_FILE       = Path(str(TEAMS_AGGREGATED_FILE))
+PLAYERS_FILE    = Path(str(JUGADORES_AGGREGATED_FILE))
 ASSISTS_FILE    = Path("data/assists.xlsx")  # <<< NUEVO
 BASE_OUTPUT_DIR = Path("output/reports/team_reports/")
 
@@ -84,18 +87,26 @@ def optimize_png_buffer(buf, max_width=1400):
     optimized_buf.seek(0)
     return optimized_buf
 
-def build_team_report(team_filter=None, player_filter:list=None):
+def build_team_report(team_filter=None, player_filter:list=None, players_file=None, teams_file=None, assists_file=None, clutch_lineups_file=None):
     # Setup fonts
     setup_montserrat_pdf_fonts()
 
-    # 1) Load data
-    df_players = pd.read_excel(PLAYERS_FILE)
-    df_team    = pd.read_excel(TEAM_FILE)
+    # 1) Load data - usar archivos pasados como parámetros o usar defaults
+    players_path = Path(players_file) if players_file else PLAYERS_FILE
+    teams_path = Path(teams_file) if teams_file else TEAM_FILE
+    
+    df_players = pd.read_excel(players_path)
+    df_team    = pd.read_excel(teams_path)
+    
     # === NUEVO: cargar asistencias ===
-    try:
-        df_assists = pd.read_excel(ASSISTS_FILE)
-    except Exception as e:
-        print(f"[DEBUG] No se pudo leer {ASSISTS_FILE}: {e}")
+    if assists_file:
+        try:
+            df_assists = pd.read_excel(assists_file)
+        except Exception as e:
+            print(f"[DEBUG] No se pudo leer {assists_file}: {e}")
+            df_assists = pd.DataFrame()
+    else:
+        print("[DEBUG] No se proporcionó archivo de assists, usando DataFrame vacío")
         df_assists = pd.DataFrame()
 
     # 2) Prepare player stats for individual analysis
@@ -159,7 +170,7 @@ def build_team_report(team_filter=None, player_filter:list=None):
         df_advanced = compute_advanced_stats_overview(df_team_filtered)
         print(f"[DEBUG] df_advanced shape: {df_advanced.shape}")
         print(f"[DEBUG] team name: {team_name}")
-        overview_fig = build_team_report_overview(team_name, df_advanced, dpi=180)
+        overview_fig = build_team_report_overview(team_name, df_advanced, dpi=180, players_file=str(players_path))
         print("[DEBUG] Saving image to ./team_overview_test.png")
         overview_fig.savefig("./team_overview_test.png", dpi=180, bbox_inches='tight')
         
@@ -187,9 +198,10 @@ def build_team_report(team_filter=None, player_filter:list=None):
         
         print("[DEBUG] Generating single clutch lineup page...")
         # lookups
-        image_lookup, dorsal_lookup = load_roster_lookup(PLAYERS_FILE, team_filter)
-        # lineups
-        df_team = load_lineups_for_team("./data/clutch_lineups.xlsx", team_filter)
+        image_lookup, dorsal_lookup = load_roster_lookup(players_path, team_filter)
+        # lineups - usar archivo dinámico o default
+        clutch_lineups_path = clutch_lineups_file if clutch_lineups_file else "./data/clutch_lineups.xlsx"
+        df_team = load_lineups_for_team(clutch_lineups_path, team_filter)
 
         clutch_fig = build_top3_card(df_team, team_filter, image_lookup, dorsal_lookup)
 
@@ -203,7 +215,7 @@ def build_team_report(team_filter=None, player_filter:list=None):
                     output_path=None,           # embebemos en PDF, no guardamos aquí
                     dpi=180,
                     edge_threshold=2,
-                    roster_path=str(PLAYERS_FILE),
+                    roster_path=str(players_path),
                     fig_width=13.5,
                     fig_height=8.27,
                     pct_cell_threshold=0.05

@@ -11,6 +11,7 @@ import logging
 from typing import List, Dict, Tuple
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
 
 # Ajusta estos imports según tu estructura:
 from scraper_all_games import scrape_all        # devuelve [Fase, Jornada, IdPartido, IdEquipo, Local, Rival, Resultado]
@@ -110,6 +111,156 @@ def main():
     os.makedirs(os.path.dirname(OUT_XLSX) or ".", exist_ok=True)
     df_all.to_excel(OUT_XLSX, index=False)
     logging.info(f"Saved Excel: {OUT_XLSX} · {len(df_all)} filas · {df_all['PARTIDO_ID'].nunique()} partidos")
+    
+    return df_all
+
+def generate_clutch_season_stats(
+    output_path: str,
+    progress_callback=None,
+    temporada: str = None,
+    liga: str = None,
+    fases: list = None,
+    jornadas: list = None
+):
+    """
+    Función wrapper para generar estadísticas de clutch season desde la app.
+    Esta versión optimizada agrega desde los datos ya scrapeados en lugar de re-scrapear.
+    
+    Args:
+        output_path: Ruta donde guardar el archivo de estadísticas clutch
+        progress_callback: Función para reportar progreso
+        temporada: Temporada específica (no usado, para compatibilidad)
+        liga: Liga específica (no usado, para compatibilidad)
+        fases: Lista de fases específicas (no usado, para compatibilidad)
+        jornadas: Lista de jornadas específicas (no usado, para compatibilidad)
+    
+    Returns:
+        DataFrame con las estadísticas clutch generadas
+    """
+    if progress_callback is None:
+        progress_callback = lambda t, m: print(f"[{t}] {m}")
+    
+    try:
+        progress_callback("info", "🔥 Generando clutch season desde datos unificados")
+        
+        # Buscar el archivo clutch_data correspondiente
+        output_dir = Path(output_path).parent
+        clutch_data_pattern = output_dir / "clutch_data_*.xlsx"
+        
+        import glob
+        clutch_data_files = glob.glob(str(clutch_data_pattern))
+        
+        if not clutch_data_files:
+            progress_callback("warning", "⚠️ No se encontró archivo clutch_data para agregar")
+            progress_callback("info", "🔄 Ejecutando scraping completo como fallback")
+            return generate_clutch_season_stats_from_web(output_path, progress_callback)
+        
+        # Usar el primer archivo encontrado (debería ser único por directorio)
+        clutch_data_path = clutch_data_files[0]
+        progress_callback("info", f"📊 Agregando desde: {Path(clutch_data_path).name}")
+        
+        # Leer datos de clutch_data
+        clutch_df = pd.read_excel(clutch_data_path)
+        
+        if clutch_df.empty:
+            progress_callback("warning", "⚠️ Archivo clutch_data está vacío")
+            return pd.DataFrame()
+        
+        # Verificar que tenemos las columnas necesarias
+        required_columns = ["FASE", "JORNADA", "GAME", "JUGADOR", "EQUIPO", "MINUTOS_CLUTCH"]
+        missing_columns = [col for col in required_columns if col not in clutch_df.columns]
+        
+        if missing_columns:
+            progress_callback("warning", f"⚠️ Columnas faltantes en clutch_data: {missing_columns}")
+            progress_callback("info", "🔄 Ejecutando scraping completo como fallback")
+            return generate_clutch_season_stats_from_web(output_path, progress_callback)
+        
+        # Los datos ya están en el formato correcto para clutch season
+        # Solo necesitamos agregar PARTIDO_ID si no existe
+        if "PARTIDO_ID" not in clutch_df.columns:
+            # Generar un PARTIDO_ID único por juego basado en GAME
+            game_to_id = {game: f"GAME_{i:04d}" for i, game in enumerate(clutch_df["GAME"].unique())}
+            clutch_df["PARTIDO_ID"] = clutch_df["GAME"].map(game_to_id)
+        
+        # Reordenar columnas al formato esperado
+        desired_columns = [
+            "FASE", "JORNADA", "PARTIDO_ID", "GAME",
+            "EQUIPO", "JUGADOR", "MINUTOS_CLUTCH", "SEGUNDOS_CLUTCH"
+        ]
+        
+        # Añadir columnas de estadísticas si existen
+        stat_columns = ["PTS", "FGA", "FGM", "3PA", "3PM", "FTA", "FTM", 
+                       "eFG%", "TS%", "AST", "TO", "STL", "REB", "REB_O", "REB_D", 
+                       "USG%", "PLUS_MINUS", "NET_RTG"]
+        
+        available_stat_columns = [col for col in stat_columns if col in clutch_df.columns]
+        all_columns = desired_columns + available_stat_columns
+        
+        # Filtrar solo las columnas que existen
+        final_columns = [col for col in all_columns if col in clutch_df.columns]
+        clutch_season_df = clutch_df[final_columns].copy()
+        
+        # Guardar archivo
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        clutch_season_df.to_excel(output_path, index=False)
+        
+        progress_callback("success", f"✅ Clutch season agregado: {len(clutch_season_df)} registros")
+        progress_callback("info", f"📁 Guardado en: {Path(output_path).name}")
+        
+        return clutch_season_df
+        
+    except Exception as e:
+        progress_callback("error", f"❌ Error generando clutch season: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame()
+
+
+def generate_clutch_season_stats_from_web(
+    output_path: str,
+    progress_callback=None
+):
+    """
+    Función fallback que genera estadísticas clutch season scrapeando desde web.
+    Se usa cuando no hay datos clutch_data disponibles.
+    """
+    if progress_callback is None:
+        progress_callback = lambda t, m: print(f"[{t}] {m}")
+    
+    try:
+        # Configurar logging específico para clutch season
+        global LOG_FILE, OUT_XLSX
+        original_log_file = LOG_FILE
+        original_out_xlsx = OUT_XLSX
+        
+        # Actualizar rutas
+        LOG_FILE = str(Path(output_path).parent / "clutch_season.log")
+        OUT_XLSX = output_path
+        
+        progress_callback("info", "🔥 Iniciando scraping completo de clutch season")
+        
+        # Configurar logging
+        setup_logging()
+        
+        # Ejecutar la función principal
+        result_df = main()
+        
+        if result_df is not None and not result_df.empty:
+            progress_callback("success", f"✅ Clutch season scrapeado: {len(result_df)} estadísticas")
+            return result_df
+        else:
+            progress_callback("warning", "⚠️ No se generaron estadísticas clutch")
+            return pd.DataFrame()
+            
+    except Exception as e:
+        progress_callback("error", f"❌ Error en scraping clutch season: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame()
+    finally:
+        # Restaurar configuración original
+        LOG_FILE = original_log_file
+        OUT_XLSX = original_out_xlsx
 
 if __name__ == "__main__":
     # Muy importante para evitar ejecuciones recursivas en workers (Windows/macOS)

@@ -5,8 +5,11 @@ import plotly.graph_objects as go
 from PIL import Image
 import io
 
+# Importar configuración centralizada
+from config import FONT_FAMILY
+
 # ─────────── CONFIGURACIÓN ────────────────────────────────────────────────
-FONT   = "Montserrat, sans-serif"
+FONT   = FONT_FAMILY
 COLS   = ["PPT1", "PPT2", "PPT3"]
 COLORS = {
     "PPT1": "#9b59b6",  # azul

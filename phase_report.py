@@ -2,15 +2,37 @@
 import streamlit as st
 from pathlib import Path
 import pandas as pd
-from phase_report.build_phase_report import build_phase_report, OUTPUT_PDF, TEAM_FILE
+from phase_report.build_phase_report import build_phase_report, OUTPUT_PDF
+
+# Import file configuration utilities
+from utils.file_config_ui import render_file_config_ui, validate_files
 
 # --- Página ---
-st.set_page_config(page_title="Generador de Informe de Fase", layout="wide")
+st.set_page_config(page_title="🏀 Generador de Informe de Fase", layout="wide")
 st.title("🏀 Generador de Informe de Fase")
-st.write("Selecciona uno o más equipos y fases, y luego pulsa **Generar informe**.")
+st.markdown("Genera informes por fases de competición con análisis detallado de equipos.")
+
+# Configuración de archivos
+file_paths = render_file_config_ui(
+    file_types=['teams_aggregated'],
+    key_prefix="phase_report"
+)
+
+# Validar archivos antes de continuar
+if not validate_files(file_paths):
+    st.error("❌ **No se pueden cargar los archivos necesarios.** Por favor, verifica la configuración anterior.")
+    st.stop()
+
+# Obtener ruta de archivo de equipos
+teams_file = file_paths.get('teams_aggregated')
 
 # --- Carga datos para multiselect ---
-df_teams = pd.read_excel(TEAM_FILE)
+try:
+    df_teams = pd.read_excel(teams_file)
+    st.success(f"✅ Datos cargados: {df_teams.shape[0]} equipos encontrados")
+except Exception as e:
+    st.error(f"❌ Error cargando datos: {str(e)}")
+    st.stop()
 
 equipos = sorted(df_teams['EQUIPO'].dropna().unique().tolist())
 fases   = sorted(df_teams['FASE'].dropna().unique().tolist())
@@ -25,8 +47,8 @@ if st.button("📄 Generar informe"):
         st.error("Por favor, selecciona al menos un equipo o una fase.")
     else:
         with st.spinner("Generando PDF..."):
-            # Llamada a tu función
-            build_phase_report(teams=sel_equipos, phase=sel_fases or None)
+            # Llamada a tu función con el archivo de datos
+            build_phase_report(teams=sel_equipos, phase=sel_fases or None, data_file=str(teams_file))
 
         # Leer el PDF generado
         pdf_path = Path(OUTPUT_PDF)

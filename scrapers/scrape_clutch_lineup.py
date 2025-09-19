@@ -31,11 +31,11 @@ from multiprocessing import set_start_method, freeze_support
 # === utils propios del proyecto ===
 from utils.web_scraping import init_driver, accept_cookies
 from .scraper_all_games import scrape_all  # devuelve [Fase, Jornada, IdPartido, IdEquipo, Local, Rival, Resultado]
+from config import BASE_PLAY_URL
 
 # ==========================
 # Config y helpers base
 # ==========================
-BASE_PLAY_URL = "https://baloncestoenvivo.feb.es/partido/{}"
 WIDGET_SEL = "div.widget-keyfacts"
 MIN_SEC_HARDCODED = 60.0  # *** 1 minuto mínimo acumulado de clutch por quinteto ***
 

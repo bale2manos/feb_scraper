@@ -6,10 +6,13 @@ import plotly.graph_objects as go
 from PIL import Image
 import io
 
+# Importar configuración centralizada
+from config import FONT_FAMILY, LOW_THRESH
+
 # ─────────── CONFIGURACIÓN ────────────────────────────────────────────────
-FONT            = "Montserrat, sans-serif"
+FONT            = FONT_FAMILY
 COLORS          = ["#9b59b6", "#3498db", "#1abc9c", "#de9826", "#e74c3c"]
-LOW_THRESH      = 0.36     # <15% of the max ⇒ etiqueta pequeña
+LOW_THRESH      = LOW_THRESH     # Umbral para valores bajos
 BAR_WIDTH       = 0.55     # grosor de la barra (0–1)
 CIRCLE_SIZE_PX  = 70       # diámetro del círculo en px
 TEXT_SIZE_IN    = 22       # texto dentro de la barra

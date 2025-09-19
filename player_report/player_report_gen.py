@@ -38,15 +38,17 @@ from player_report.tools.ppt_plays                   import plot_ppt_indicators
 from player_report.tools.stats_line_1                import plot_stats_table_simple
 from player_report.tools.stats_line_2                import plot_generic_stats_table
 from player_report.tools.nacionalidad                import load_countries_data, get_country_flag_image
-
-
-# === RUTAS ===
-DATA_PATH      = Path("data/jugadores_aggregated_24_25.xlsx")
-TEAMS_DATA_PATH = Path("data/teams_aggregated.xlsx")
-TEMPLATE_PATH  = Path("images/templates/background_template.png")
-DEFAULT_PHOTO   = Path("images/templates/generic_player.png")
-CLUB_LOGO_PATH = Path("images/clubs/")
-REPORT_DIR     = Path("output/reports/player_reports/")
+from config import (
+    JUGADORES_AGGREGATED_FILE as DATA_PATH,
+    TEAMS_AGGREGATED_FILE as TEAMS_DATA_PATH,
+    TEMPLATE_BACKGROUND as TEMPLATE_PATH,
+    GENERIC_PLAYER_IMAGE as DEFAULT_PHOTO,
+    CLUBS_DIR as CLUB_LOGO_PATH,
+    PLAYER_REPORTS_DIR as REPORT_DIR,
+    FONT_REGULAR as FONT_PATH,
+    FONT_LARGE,
+    MAX_NAME_WIDTH
+)
 
 # === CONFIG COLUMNAS ===
 # Ajusta si tu Excel usa otros nombres de col.
@@ -70,16 +72,14 @@ COORDS = {
     'distribucion': (820, 980),  # posición de la distribución de puntos
 }
 
-# Ajusta esta ruta al .ttf de Montserrat que tengas instalado
-FONT_PATH      = Path("fonts/Montserrat-Regular.ttf")
-FONT_LARGE     = 48
+# Configuración de fuentes
 FONT_BIG       = 36
 FONT_MED       = 28
 FONT_SMALL     = 20
-MAX_NAME_WIDTH = 880
 
-def compute_usg(team_name, minutes, t1_attempts, t2_attempts, t3_attempts, turnovers):
-    df_teams = pd.read_excel(TEAMS_DATA_PATH)
+def compute_usg(team_name, minutes, t1_attempts, t2_attempts, t3_attempts, turnovers, teams_file=None):
+    teams_path = teams_file if teams_file else TEAMS_DATA_PATH
+    df_teams = pd.read_excel(teams_path)
     team_totals = df_teams.rename(columns={
         "MINUTOS JUGADOS": "team_MP",
         "T2 INTENTADO":    "team_T2I",
@@ -111,12 +111,13 @@ def compute_usg(team_name, minutes, t1_attempts, t2_attempts, t3_attempts, turno
     return round(usg * 100, 2)  # Devuelve en porcentaje
     
 
-def compute_advanced_stats(stats_base):
+def compute_advanced_stats(stats_base, teams_file=None):
     """
     Compute advanced basketball statistics from base stats.
     
     Args:
         stats_base: pandas Series with base statistics
+        teams_file: Path to teams data file (optional)
         
     Returns:
         dict: Dictionary with all computed advanced statistics
@@ -259,7 +260,7 @@ def compute_advanced_stats(stats_base):
     
     # Additional calculated stats for the report
     # TODO calcular USG
-    result['USG %'] = compute_usg(result['EQUIPO'], Min, T1I, T2I, T3I, TOV)
+    result['USG %'] = compute_usg(result['EQUIPO'], Min, T1I, T2I, T3I, TOV, teams_file)
     
     # PS%: Possession Scoring percentage (using the provided formula)
     if TCC != 0 and T1I > 0:
@@ -314,15 +315,21 @@ def fit_font_size(text, font_path, base_size, max_width):
 
     return font
 
-def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
+def generate_report(player_name, data_file=None, teams_file=None, clutch_file=None, output_dir=REPORT_DIR, overwrite=False):
     # cargar datos
-    df = pd.read_excel(DATA_PATH)
+    data_path = data_file if data_file else DATA_PATH
+    df = pd.read_excel(data_path)
     
     print(f"🔍 Generando informe para {player_name}...")
+    print(f"📄 Usando archivo de jugadores: {data_path}")
+    if teams_file:
+        print(f"📄 Usando archivo de equipos: {teams_file}")
+    if clutch_file:
+        print(f"📄 Usando archivo clutch: {clutch_file}")
         
     stats_base = df[df[COL_NAME] == player_name].iloc[0]
     
-    stats = compute_advanced_stats(stats_base)
+    stats = compute_advanced_stats(stats_base, teams_file)
     
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     
@@ -485,7 +492,7 @@ def generate_report(player_name, output_dir=REPORT_DIR, overwrite=False):
         "TSI": 0
     }
     
-    bars = plot_media_pct_with_clutch(bars_stats, bars_attempts, player_name_roster=player_name, width_px=3000, resize_px=690)
+    bars = plot_media_pct_with_clutch(bars_stats, bars_attempts, player_name_roster=player_name, clutch_file=clutch_file, width_px=3000, resize_px=690)
     base.paste(bars, (COORDS['bars_start'][0], COORDS['bars_start'][1]), bars)
 
     # --- PPT INDICATORS ---

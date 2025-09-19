@@ -5,26 +5,31 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service as ChromeService
 
-
-# -------- CONFIGURACIÓN GLOBAL --------
-# -------------- CONFIG --------------
-DRIVER_PATH = None  # Si no está en el PATH puedes poner aquí la ruta completa
-BASE_URL      = "https://baloncestoenvivo.feb.es/resultados/tercerafeb/3/2024"
-TEMPORADA_TXT = "2024/2025"
-FASE_TXT      = 'Liga Regular "B-A"'    # prueba sólo la primera fase
-JORNADA_IDX   = 5                        # 0-based → 0 = Jornada 1
-
-# IDs reales en el HTML
-SELECT_ID_TEMPORADA = "_ctl0_MainContentPlaceHolderMaster_temporadasDropDownList"
-SELECT_ID_FASE      = "_ctl0_MainContentPlaceHolderMaster_gruposDropDownList"
-SELECT_ID_JORNADA   = "_ctl0_MainContentPlaceHolderMaster_jornadasDropDownList"
-
-# XPath del botón de “CONSENTIR TODO”
-COOKIE_BTN_XPATH = (
-    "//button[normalize-space()='CONSENTIR TODO' or "
-    "normalize-space()='ACEPTAR TODO' or "
-    "normalize-space()='Acepto']"
+# Importar configuración centralizada
+from config import (
+    DRIVER_PATH,
+    BASE_URL as CONFIG_BASE_URL,  # Renombramos para evitar confusión
+    TEMPORADA_TXT,
+    FASE_DEFAULT as FASE_TXT,
+    JORNADA_DEFAULT_IDX as JORNADA_IDX,
+    SELECT_ID_TEMPORADA,
+    SELECT_ID_FASE,
+    SELECT_ID_JORNADA,
+    COOKIE_BTN_XPATH,
+    WEBDRIVER_TIMEOUT
 )
+
+# Variable global dinámica para BASE_URL
+BASE_URL = CONFIG_BASE_URL
+
+def get_current_base_url():
+    """Obtiene la URL base actual (puede ser cambiada dinámicamente)."""
+    return BASE_URL
+
+def set_base_url(new_url):
+    """Cambia la URL base dinámicamente."""
+    global BASE_URL
+    BASE_URL = new_url
 
 # -------- UTILIDADES WEB DRIVER --------
 def init_driver(minimized: bool = True):
@@ -53,10 +58,6 @@ def init_driver(minimized: bool = True):
 
     return driver
 
-# en utils.py
-
-from selenium.webdriver.common.by import By
-
 def accept_cookies(driver, short_timeout=0.5):
     """
     Cierra el banner de cookies de forma rápida:
@@ -67,41 +68,51 @@ def accept_cookies(driver, short_timeout=0.5):
     texts = ["CONSENTIR TODO", "ACEPTAR TODO", "Acepto", "ACEPTAR"]
     xpaths = [f"//button[normalize-space()='{t}']" for t in texts]
 
-    # 1) Intentar en documento principal
-    for xp in xpaths:
-        els = driver.find_elements(By.XPATH, xp)
-        if els:
-            try:
-                els[0].click()
-                print("✅ Modal cookies cerrado (root)")
-            except:
-                pass
-            return
-
-    # 2) Dentro de iframes
-    for iframe in driver.find_elements(By.TAG_NAME, "iframe"):
-        driver.switch_to.frame(iframe)
-        for xp in xpaths:
-            els = driver.find_elements(By.XPATH, xp)
-            if els:
-                try:
-                    els[0].click()
-                    print(f"✅ Modal cookies cerrado (iframe id={iframe.get_attribute('id')})")
-                except:
-                    pass
-                driver.switch_to.default_content()
-                return
-        driver.switch_to.default_content()
-
-    # 3) Rechazar todo (último recurso)
-    btns = driver.find_elements(By.XPATH, "//button[normalize-space()='Rechazar todo']")
-    if btns:
+    # 1) Root level (sin timeout largo)
+    for xpath in xpaths:
         try:
-            btns[0].click()
-            print("✅ Rechazar todo pulsado")
-        except:
-            pass
-        return
+            elems = driver.find_elements(By.XPATH, xpath)
+            for elem in elems:
+                if elem.is_displayed() and elem.is_enabled():
+                    elem.click()
+                    return True
+        except Exception:
+            continue
 
-    # Si llegamos aquí, nada
-    print("ℹ️ No se detectó banner de cookies")
+    # 2) En iframes
+    try:
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        for iframe in iframes[:3]:  # máximo 3 iframes
+            try:
+                driver.switch_to.frame(iframe)
+                for xpath in xpaths:
+                    try:
+                        elems = driver.find_elements(By.XPATH, xpath)
+                        for elem in elems:
+                            if elem.is_displayed() and elem.is_enabled():
+                                elem.click()
+                                driver.switch_to.default_content()
+                                return True
+                    except Exception:
+                        continue
+                driver.switch_to.default_content()
+            except Exception:
+                driver.switch_to.default_content()
+                continue
+    except Exception:
+        pass
+
+    # 3) Probar "Rechazar todo"
+    reject_xpaths = ["//button[normalize-space()='RECHAZAR TODO']",
+                     "//button[normalize-space()='Rechazar todo']"]
+    for xpath in reject_xpaths:
+        try:
+            elems = driver.find_elements(By.XPATH, xpath)
+            for elem in elems:
+                if elem.is_displayed() and elem.is_enabled():
+                    elem.click()
+                    return True
+        except Exception:
+            continue
+
+    return False

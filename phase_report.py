@@ -10,11 +10,18 @@ from utils.file_config_ui import render_file_config_ui, validate_files
 # --- Página ---
 st.set_page_config(page_title="🏀 Generador de Informe de Fase", layout="wide")
 st.title("🏀 Generador de Informe de Fase")
-st.markdown("Genera informes por fases de competición con análisis detallado de equipos.")
+st.markdown("""
+Genera informes por fases de competición con análisis detallado de equipos.
 
-# Configuración de archivos
+**🆕 Nueva funcionalidad:**
+- ✨ **Filtrado por jornadas:** Analiza rendimiento por fases en jornadas específicas
+- 📊 **Análisis temporal:** Compara diferentes momentos de cada fase
+- 🎯 **Segmentación avanzada:** Combina filtros de fase y jornada para análisis precisos
+""")
+
+# Configuración de archivos con soporte para jornadas: necesitamos equipos y jugadores agregados
 file_paths = render_file_config_ui(
-    file_types=['teams_aggregated'],
+    file_types=['teams_aggregated', 'jugadores_aggregated'],
     key_prefix="phase_report"
 )
 
@@ -23,8 +30,9 @@ if not validate_files(file_paths):
     st.error("❌ **No se pueden cargar los archivos necesarios.** Por favor, verifica la configuración anterior.")
     st.stop()
 
-# Obtener ruta de archivo de equipos
+# Obtener ruta de archivo de equipos y jugadores
 teams_file = file_paths.get('teams_aggregated')
+players_file = file_paths.get('jugadores_aggregated')
 
 # --- Carga datos para multiselect ---
 try:
@@ -47,15 +55,20 @@ if st.button("📄 Generar informe"):
         st.error("Por favor, selecciona al menos un equipo o una fase.")
     else:
         with st.spinner("Generando PDF..."):
-            # Llamada a tu función con el archivo de datos
-            build_phase_report(teams=sel_equipos, phase=sel_fases or None, data_file=str(teams_file))
+            # Llamada a tu función con los archivos de datos (equipos y jugadores)
+            build_phase_report(
+                teams=sel_equipos,
+                phase=sel_fases or None,
+                teams_file=str(teams_file) if teams_file else None,
+                players_file=str(players_file) if players_file else None
+            )
 
         # Leer el PDF generado
         pdf_path = Path(OUTPUT_PDF)
         if pdf_path.exists():
             pdf_bytes = pdf_path.read_bytes()
             st.success(f"✅ Informe listo: `{pdf_path.name}`")
-            
+
             # Store the PDF data in session state to persist the download button
             st.session_state['pdf_data'] = pdf_bytes
             st.session_state['pdf_name'] = pdf_path.name
@@ -84,5 +97,44 @@ if 'pdf_data' in st.session_state and 'pdf_name' in st.session_state:
 
 # --- Pie de página ---
 st.markdown("---")
-st.caption("Trabajo desarrollado con tus herramientas de generación de gráficos y ReportLab.")
+
+st.subheader("ℹ️ Información sobre el Análisis Temporal")
+
+with st.expander("🎯 Cómo usar el filtrado por jornadas"):
+    st.write("""
+    **🔄 Todas las jornadas:**
+    - Análisis completo de toda la fase seleccionada
+    - Visión general del rendimiento en la competición
+    - Ideal para análisis de temporada completa
+    
+    **📌 Jornadas específicas:**
+    - Enfoque en períodos concretos de la fase
+    - Análisis de rachas o momentos clave
+    - Comparación entre diferentes momentos de la competición
+    
+    **🎯 Combinación fase + jornadas:**
+    - **Liga Regular + Jornadas 1-5:** Análisis de inicio de temporada
+    - **Liga Regular + Jornadas 15-20:** Evaluación de mitad de temporada
+    - **Playoffs + Jornadas específicas:** Rendimiento en eliminatorias concretas
+    """)
+
+with st.expander("📊 Casos de uso del análisis temporal"):
+    st.write("""
+    **🏀 Para entrenadores:**
+    - Evaluar evolución táctica del equipo
+    - Identificar patrones de rendimiento temporal
+    - Comparar efectividad en diferentes momentos
+    
+    **📈 Para analistas:**
+    - Estudiar tendencias de competición
+    - Análisis de impacto de cambios reglamentarios
+    - Comparación entre diferentes períodos competitivos
+    
+    **🎯 Para scouts:**
+    - Evaluar consistencia de equipos a lo largo del tiempo
+    - Identificar fortalezas/debilidades en diferentes momentos
+    - Análisis de adaptación a la competición
+    """)
+
+st.caption("🏀 Generador de informes de fase desarrollado con herramientas de análisis temporal y ReportLab.")
 

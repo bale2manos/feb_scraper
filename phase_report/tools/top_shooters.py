@@ -76,6 +76,17 @@ def plot_top_shooters(
         colors.append(color_map[team])
         
 
+    # 6) guard against empty arrays: return a placeholder figure if no data
+    if x.size == 0 or y.size == 0:
+        fig, ax = plt.subplots(figsize=(13, 11))
+        ax.text(
+            0.5, 0.5,
+            'No hay suficientes datos para mostrar los Top Shooters\nRevisa filtros o archivos seleccionados',
+            ha='center', va='center', fontsize=16, weight='bold'
+        )
+        ax.axis('off')
+        return fig
+
     # 6) bubble size based on EFG% (50%) and TS% (50%)
     # Higher EFG% = bigger bubbles (50% weight), higher TS% = bigger bubbles (50% weight)
     efg_factor = (y / y.max()) ** 4.0  # Very strong EFG% influence for dramatic differences (50% weight)

@@ -17,9 +17,16 @@ from utils.file_config_ui import render_file_config_ui, validate_files
 # --- Página ---
 st.set_page_config(page_title="🏀 Generador de Informe de Equipo", layout="wide")
 st.title("🏀 Generador de Informe de Equipo")
-st.markdown("Genera informes detallados para equipos completos con estadísticas de todos los jugadores.")
+st.markdown("""
+Genera informes detallados para equipos completos con estadísticas de todos los jugadores.
 
-# Configuración de archivos
+**🆕 Nueva funcionalidad:**
+- ✨ **Filtrado por jornadas:** Analiza rendimiento del equipo en jornadas específicas
+- 📊 **Comparación temporal:** Compara diferentes períodos de la temporada
+- 🎯 **Análisis detallado:** Estadísticas granulares por jornada o conjunto de jornadas
+""")
+
+# Configuración de archivos con soporte para jornadas
 file_paths = render_file_config_ui(
     file_types=['jugadores_aggregated', 'teams_aggregated', 'clutch_lineups', 'assists'],
     key_prefix="team_report"
@@ -193,6 +200,37 @@ with st.expander("🎯 Cómo usar"):
     - Esta opción tiene prioridad sobre el filtro de equipo
     """)
 
+with st.expander("🎯 Cómo usar"):
+    st.write("""
+    **Opción 1: Análisis por equipo**
+    - Selecciona un equipo en el desplegable
+    - Se analizarán todos los jugadores del equipo
+    
+    **Opción 2: Análisis de jugadores específicos**
+    - Selecciona jugadores específicos en el multiselect
+    - Puedes elegir jugadores de diferentes equipos
+    - Esta opción tiene prioridad sobre el filtro de equipo
+    
+    **🆕 Configuración de jornadas:**
+    - **Todas las jornadas:** Análisis completo de la temporada
+    - **Jornadas específicas:** Enfoque en períodos determinados
+    - **Análisis comparativo:** Ideal para evaluar evolución del equipo
+    """)
+
+with st.expander("📊 Análisis temporal de equipos"):
+    st.write("""
+    **🎯 Ventajas del filtrado por jornadas:**
+    - **Progresión del equipo:** Evaluar mejora a lo largo de la temporada
+    - **Impacto de cambios:** Medir efectos de fichajes, lesiones o cambios tácticos
+    - **Análisis de rachas:** Estudiar períodos de buen/mal rendimiento
+    - **Preparación de partidos:** Análizar tendencias recientes del rival
+    
+    **📈 Métricas clave por período:**
+    - Eficiencia ofensiva y defensiva temporal
+    - Evolución de sistemas de juego
+    - Rendimiento individual en contexto temporal
+    """)
+
 # --- Pie de página ---
 st.markdown("---")
-st.caption("🏀 Generador de informes de equipo desarrollado con herramientas de análisis de baloncesto y ReportLab.")
+st.caption("🏀 Generador de informes de equipo desarrollado con herramientas de análisis de baloncesto y filtrado temporal.")

@@ -25,7 +25,22 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # === NUEVO: import del informe de asistencias ===
 from team_report_assists.build_team_report_assists import build_team_report_assists
-from team_report_clutch.build_clutch_lineups import build_top3_card, load_roster_lookup, load_lineups_for_team
+
+# === IMPORT CLUTCH (opcional, puede fallar por dependencias) ===
+try:
+    from team_report_clutch.build_clutch_lineups import build_top3_card, load_roster_lookup, load_lineups_for_team
+    CLUTCH_AVAILABLE = True
+    print("[DEBUG] Clutch module loaded successfully")
+except ImportError as e:
+    print(f"[DEBUG] Clutch module not available: {e}")
+    CLUTCH_AVAILABLE = False
+    # Define dummy functions to avoid NameError
+    def load_roster_lookup(*args, **kwargs):
+        return {}, {}
+    def load_lineups_for_team(*args, **kwargs):
+        raise ImportError("Clutch module not available")
+    def build_top3_card(*args, **kwargs):
+        raise ImportError("Clutch module not available")
 
 # Setup Montserrat font for matplotlib
 setup_montserrat_font()
@@ -197,16 +212,34 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         print(f"[DEBUG] bars_fig created")
         
         print("[DEBUG] Generating single clutch lineup page...")
-        # lookups
-        image_lookup, dorsal_lookup = load_roster_lookup(players_path, team_filter)
-        # lineups - usar archivo dinámico o default
-        clutch_lineups_path = clutch_lineups_file if clutch_lineups_file else "./data/clutch_lineups.xlsx"
-        df_team = load_lineups_for_team(clutch_lineups_path, team_filter)
-
-        clutch_fig = build_top3_card(df_team, team_filter, image_lookup, dorsal_lookup)
+        clutch_fig = None
+        
+        if not CLUTCH_AVAILABLE:
+            print("[DEBUG] Clutch module not available. Skipping clutch lineup page...")
+            clutch_fig = None
+        else:
+            try:
+                # lookups
+                image_lookup, dorsal_lookup = load_roster_lookup(players_path, team_filter)
+                # lineups - usar archivo dinámico o default
+                clutch_lineups_path = clutch_lineups_file if clutch_lineups_file else "./data/clutch_lineups.xlsx"
+                print(f"[DEBUG] Loading clutch lineups from: {clutch_lineups_path}")
+                df_team = load_lineups_for_team(clutch_lineups_path, team_filter)
+                print(f"[DEBUG] Found {len(df_team)} clutch lineups for team '{team_filter}'")
+                clutch_fig = build_top3_card(df_team, team_filter, image_lookup, dorsal_lookup)
+                print("[DEBUG] clutch_fig created successfully")
+            except (FileNotFoundError, ValueError, SystemExit) as e:
+                print(f"[DEBUG] No clutch data available for team '{team_filter}': {e}")
+                print("[DEBUG] Skipping clutch lineup page...")
+                clutch_fig = None
+            except Exception as e:
+                print(f"[DEBUG] Error generating clutch lineup page: {e}")
+                print("[DEBUG] Skipping clutch lineup page...")
+                clutch_fig = None
 
 
         # === NUEVO: Generar página de asistencias como tercera página ===
+        assists_fig = None
         try:
             if not df_assists_filtered.empty:
                 print("[DEBUG] Generating assists overview page...")
@@ -223,6 +256,7 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
                 print("[DEBUG] assists_fig created")
             else:
                 print("[DEBUG] No assists data for this team. Skipping assists page.")
+                assists_fig = None
         except Exception as e:
             print(f"[DEBUG] Error generating assists page: {e}")
             assists_fig = None
@@ -280,17 +314,20 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         c.drawImage(bars_reader, 0, page_h - bars_draw_h, width=bars_draw_w, height=bars_draw_h, preserveAspectRatio=False, mask='auto')
         c.showPage()
         
-        # CLUTCH LINEUP
-        clutch_png_path = "./team_clutch_pdf_direct.png"
-        clutch_fig.savefig(clutch_png_path, dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
-        img_clutch = Image.open(clutch_png_path)
-        clutch_w, clutch_h = img_clutch.size
-        clutch_scale = 0.35
-        clutch_draw_w = clutch_w * clutch_scale
-        clutch_draw_h = clutch_h * clutch_scale
-        clutch_reader = ImageReader(clutch_png_path)
-        c.drawImage(clutch_reader, 0, page_h - clutch_draw_h, width=clutch_draw_w, height=clutch_draw_h, preserveAspectRatio=False, mask='auto')
-        c.showPage()
+        # CLUTCH LINEUP (only if data is available)
+        if clutch_fig is not None:
+            clutch_png_path = "./team_clutch_pdf_direct.png"
+            clutch_fig.savefig(clutch_png_path, dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
+            img_clutch = Image.open(clutch_png_path)
+            clutch_w, clutch_h = img_clutch.size
+            clutch_scale = 0.35
+            clutch_draw_w = clutch_w * clutch_scale
+            clutch_draw_h = clutch_h * clutch_scale
+            clutch_reader = ImageReader(clutch_png_path)
+            c.drawImage(clutch_reader, 0, page_h - clutch_draw_h, width=clutch_draw_w, height=clutch_draw_h, preserveAspectRatio=False, mask='auto')
+            c.showPage()
+        else:
+            print("[DEBUG] Clutch figure missing; skipping clutch lineup page.")
 
         # === NUEVO: ASSISTS (tercera página), reducción 40% ===
         if assists_fig is not None:

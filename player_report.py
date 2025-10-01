@@ -20,9 +20,16 @@ st.set_page_config(
 )
 
 st.title("🏀 Generador de Reportes de Jugador")
-st.markdown("Genera reportes individuales personalizados para jugadores con estadísticas detalladas.")
+st.markdown("""
+Genera reportes individuales personalizados para jugadores con estadísticas detalladas.
 
-# Configuración de archivos
+**🆕 Nueva funcionalidad:**
+- ✨ **Filtrado por jornadas:** Analiza datos de jornadas específicas o todas las jornadas
+- 📊 **Detección automática:** El sistema detecta automáticamente las carpetas de datos disponibles
+- 🎯 **Análisis granular:** Compara rendimiento entre diferentes jornadas
+""")
+
+# Configuración de archivos con soporte para jornadas
 file_paths = render_file_config_ui(
     file_types=['jugadores_aggregated', 'teams_aggregated', 'clutch_aggregated'],
     key_prefix="player_report"
@@ -142,3 +149,41 @@ if st.button('Generar informe'):
                         progress_bar.progress(i/total)
             else:
                 st.warning('⚠️ Equipo no encontrado')
+
+# --- Información adicional ---
+st.markdown("---")
+st.subheader("ℹ️ Información")
+
+with st.expander("🎯 Cómo usar"):
+    st.write("""
+    **Opción 1: Análisis por jugador**
+    - Selecciona un jugador en el desplegable
+    - Se analizarán sus estadísticas según la configuración de jornadas
+    
+    **Opción 2: Análisis de equipo completo**
+    - Selecciona un equipo en el desplegable
+    - Se generarán reportes para todos los jugadores del equipo
+    - Esta opción tiene prioridad sobre el filtro de jugador
+    
+    **🆕 Configuración de jornadas:**
+    - **Todas las jornadas:** Usa el dataset completo de la temporada
+    - **Jornadas específicas:** Analiza solo las jornadas seleccionadas (ej: jornada 1, jornadas 1-5, etc.)
+    - **Comparación temporal:** Útil para análisis de evolución o períodos específicos
+    """)
+
+with st.expander("📊 Beneficios del filtrado por jornadas"):
+    st.write("""
+    **🎯 Análisis de rendimiento específico:**
+    - Evaluar jugadores en inicio vs final de temporada
+    - Análisis de rachas o períodos problemáticos
+    - Comparación pre/post cambios tácticos
+    
+    **📈 Casos de uso:**
+    - **Scouts:** Evaluar consistencia de jugadores en diferentes momentos
+    - **Entrenadores:** Identificar patrones de rendimiento temporal
+    - **Analistas:** Estudiar impacto de cambios en plantilla o táctica
+    """)
+
+# --- Pie de página ---
+st.markdown("---")
+st.caption("🏀 Generador de reportes desarrollado con herramientas de análisis de baloncesto y filtrado temporal.")

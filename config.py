@@ -44,7 +44,8 @@ TODAS_LAS_FASES = [
 TEMPORADAS_DISPONIBLES = [
     "2022/2023",
     "2023/2024", 
-    "2024/2025"
+    "2024/2025",
+    "2025/2026"   # añadido para soportar la temporada 2025/2026
 ]
 
 # Fase por defecto para pruebas

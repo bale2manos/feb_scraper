@@ -75,6 +75,17 @@ def plot_offensive_efficiency(
         colors.append(color_map[team])
         
 
+    # 6) guard against empty arrays: create an informative placeholder figure
+    if x.size == 0 or y.size == 0:
+        fig, ax = plt.subplots(figsize=(13, 11))
+        ax.text(
+            0.5, 0.5,
+            'No hay suficientes datos para mostrar el TOP20\nRevisa filtros o archivos seleccionados',
+            ha='center', va='center', fontsize=16, weight='bold'
+        )
+        ax.axis('off')
+        return fig
+
     # 6) bubble size based on PPP (70%) and plays volume (30%)
     # Higher PPP = bigger bubbles (70% weight), more plays = bigger bubbles (30% weight)
     ppp_factor = (y / y.max()) ** 4.0  # Very strong PPP influence for dramatic differences (70% weight)

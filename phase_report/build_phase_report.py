@@ -93,13 +93,15 @@ def optimize_png_buffer(buf, max_width=1400):
     optimized_buf.seek(0)
     return optimized_buf
 
-def build_phase_report(teams=None, phase=None):
+def build_phase_report(teams=None, phase=None, teams_file: str | None = None, players_file: str | None = None):
     # Setup fonts
     setup_montserrat_pdf_fonts()
     
-    # 1) Load data
-    df_teams   = pd.read_excel(TEAM_FILE)
-    df_players = pd.read_excel(PLAYERS_FILE)
+    # 1) Load data - allow overriding files via parameters
+    team_path = Path(teams_file) if teams_file else TEAM_FILE
+    players_path = Path(players_file) if players_file else PLAYERS_FILE
+    df_teams   = pd.read_excel(team_path)
+    df_players = pd.read_excel(players_path)
 
     # 2) Generate all figures
     stats = None

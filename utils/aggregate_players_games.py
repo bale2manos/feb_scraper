@@ -307,14 +307,14 @@ def main():
     """
     try:
         # Aggregate the player statistics
-        excel_path_in = './data/jugadores_per_game_23_24_c.xlsx'
+        excel_path_in = './data/1FEB_24_25/players_24_25_1FEB_games.xlsx'
         aggregated_df = aggregate_players_stats(excel_path_in)
         
         # Display summary
         #display_summary(aggregated_df)
         
         # Save the aggregated data
-        excel_path_out = './data/jugadores_aggregated_23_24_c.xlsx'
+        excel_path_out = './data/1FEB_24_25/players_24_25_1FEB.xlsx'
         save_aggregated_data(aggregated_df, excel_path_out)
 
         # Optionally save as CSV as well

@@ -102,7 +102,7 @@ def optimize_png_buffer(buf, max_width=1400):
     optimized_buf.seek(0)
     return optimized_buf
 
-def build_team_report(team_filter=None, player_filter:list=None, players_file=None, teams_file=None, assists_file=None, clutch_lineups_file=None):
+def build_team_report(team_filter=None, player_filter:list=None, players_file=None, teams_file=None, assists_file=None, clutch_lineups_file=None, min_games=5, min_minutes=50, min_shots=20):
     # Setup fonts
     setup_montserrat_pdf_fonts()
 
@@ -155,6 +155,18 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         print("[DEBUG] No valid filter provided")
         raise ValueError("Must provide either a non-empty team_filter or a non-empty player_filter")
 
+    # Después de filtrar por equipo/jugadores, añadir filtro por partidos mínimos
+    # Usar los parámetros configurables recibidos en la función
+
+    # Filtrar jugadores con partidos mínimos
+    if 'PARTIDOS' in df_players_filtered.columns:
+        df_players_filtered = df_players_filtered[df_players_filtered['PARTIDOS'] >= min_games]
+    elif 'PJ' in df_players_filtered.columns:
+        df_players_filtered = df_players_filtered[df_players_filtered['PJ'] >= min_games]
+
+    print(f"[DEBUG] After minimum games filter: {df_players_filtered.shape[0]} players")
+    print(f"[DEBUG] Available columns: {list(df_players_filtered.columns)}")
+
     # Compute advanced stats for players
     print("[DEBUG] Computing advanced stats for filtered players...")
     stats_list = []
@@ -166,9 +178,15 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
 
     df_players_stats = pd.DataFrame(stats_list)
     print(f"[DEBUG] df_players_stats shape: {df_players_stats.shape}")
-    # Add team info back
+    print(f"[DEBUG] df_players_stats columns: {list(df_players_stats.columns)}")
+    
+    # Add team info and original columns back
     df_players_stats['EQUIPO'] = df_players_filtered['EQUIPO'].values
-    print(f"[DEBUG] Added EQUIPO column to df_players_stats")
+    df_players_stats['JUGADOR'] = df_players_filtered['JUGADOR'].values
+    df_players_stats['DORSAL'] = df_players_filtered['DORSAL'].values
+    df_players_stats['PJ'] = df_players_filtered['PJ'].values
+    df_players_stats['MINUTOS JUGADOS'] = df_players_filtered['MINUTOS JUGADOS'].values
+    print(f"[DEBUG] Added original columns to df_players_stats")
 
     # --- Generate report pages depending on filter ---
     figs = []
@@ -187,7 +205,7 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         print(f"[DEBUG] team name: {team_name}")
         overview_fig = build_team_report_overview(team_name, df_advanced, dpi=180, players_file=str(players_path))
         print("[DEBUG] Saving image to ./team_overview_test.png")
-        overview_fig.savefig("./team_overview_test.png", dpi=180, bbox_inches='tight')
+        overview_fig.savefig("./team_overview_test.png", dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
         
         print("[DEBUG] Generating single bars page...")
         from team_report_bars.build_team_report_bars import build_team_report_bars,compute_advanced_stats_bars
@@ -208,7 +226,16 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
             "PP %": float(df_advanced_bars['TO Plays%'].mean())
         }
         print(f"[DEBUG] stats_finalizacion: {stats_finalizacion}")
-        bars_fig = build_team_report_bars(stats_puntos, stats_finalizacion, dpi=180)
+        
+        # Crear stats_media con los porcentajes reales de anotación (anotados/intentados)
+        stats_media = {
+            "T1 %": float(df_advanced_bars['T1 %'].mean()),
+            "T2 %": float(df_advanced_bars['T2 %'].mean()),
+            "T3 %": float(df_advanced_bars['T3 %'].mean())
+        }
+        print(f"[DEBUG] stats_media: {stats_media}")
+        
+        bars_fig = build_team_report_bars(stats_puntos, stats_finalizacion, stats_media, dpi=180)
         print(f"[DEBUG] bars_fig created")
         
         print("[DEBUG] Generating single clutch lineup page...")
@@ -265,17 +292,17 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
     print("[DEBUG] Generating main report pages...")
     figs = []
     try:
-        figs.append(plot_player_OE_bar(df_players_stats))
+        figs.append(plot_player_OE_bar(df_players_stats, min_games=min_games, min_minutes=min_minutes))
         print("[DEBUG] plot_player_OE_bar done")
-        figs.append(plot_player_EPS_bar(df_players_stats))
+        figs.append(plot_player_EPS_bar(df_players_stats, min_games=min_games, min_minutes=min_minutes))
         print("[DEBUG] plot_player_EPS_bar done")
-        figs.append(plot_top_shooters(df_players_stats))
+        figs.append(plot_top_shooters(df_players_stats, min_games=min_games, min_shots=min_shots))
         print("[DEBUG] plot_top_shooters done")
-        figs.append(plot_top_turnovers(df_players_stats))
+        figs.append(plot_top_turnovers(df_players_stats, min_games=min_games, min_minutes=min_minutes))
         print("[DEBUG] plot_top_turnovers done")
-        figs.append(plot_top_ppp(df_players_stats))
+        figs.append(plot_top_ppp(df_players_stats, min_games=min_games, min_minutes=min_minutes))
         print("[DEBUG] plot_top_ppp done")
-        figs.append(plot_player_finalizacion_plays(df_players_stats))
+        figs.append(plot_player_finalizacion_plays(df_players_stats, min_games=min_games, min_minutes=min_minutes))
         print("[DEBUG] plot_player_finalizacion_plays done")
     except Exception as e:
         print(f"[DEBUG] Error generating main report pages: {e}")

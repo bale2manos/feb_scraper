@@ -3,17 +3,7 @@
 App de Scraping FEB UNIFICADO - Interfaz Streamlit
 ==================================================
 
-Aplica        # Guardar valores originales para restauración
-        original_temporada = web_scraping.TEMPORADA_TXT
-        original_phases = scraper_all_games.PHASES
-        original_web_base_url = web_scraping.get_current_base_url()  # Usar función dinámica
-        
-        # Configurar URL según la liga seleccionada
-        year = int(selected_season.split("/")[0])
-        liga_url = get_liga_url(selected_league, year)
-        
-        # Actualizar configuración
-        web_scraping.set_base_url(liga_url)  # Usar función dinámicagable para ejecutar pipeline UNIFICADO de scraping FEB.
+Aplicación para ejecutar pipeline UNIFICADO de scraping FEB.
 Permite a usuarios no expertos seleccionar temporadas, fases y jornadas
 de forma intuitiva.
 
@@ -160,9 +150,7 @@ def run_unified_scraper_thread(
         liga_url = get_liga_url(selected_league, year)
         
         # Actualizar configuración
-        if hasattr(web_scraping, 'BASE_URL'):
-            web_scraping.BASE_URL = liga_url
-        
+        web_scraping.set_base_url(liga_url)  # Usar función dinámica
         web_scraping.TEMPORADA_TXT = selected_season
         scraper_all_games.PHASES = selected_phases
         

@@ -20,9 +20,7 @@ TEMPORADA_ANTERIOR = "23_24"  # Para archivos de temporada anterior
 
 # Fases de competición (Tercera FEB por defecto para compatibilidad)
 FASES_PRINCIPALES = [
-    'Liga Regular "B-A"', 
     'Liga Regular "B-B"',
-    'Liga Regular "C-A"',
 
 ]
 
@@ -49,7 +47,7 @@ TEMPORADAS_DISPONIBLES = [
 ]
 
 # Fase por defecto para pruebas
-FASE_DEFAULT = 'Liga Regular "B-A"'
+FASE_DEFAULT = 'Liga Regular "B-B"'
 
 # =============================================================================
 # CONFIGURACIÓN WEB SCRAPING

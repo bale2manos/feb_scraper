@@ -64,7 +64,7 @@ def compute_advanced_stats_bars(stats_base):
     return result
 
 
-def build_team_report_bars(stats_puntos: dict, stats_finalizacion: dict, dpi: int = 180) -> plt.Figure:
+def build_team_report_bars(stats_puntos: dict, stats_finalizacion: dict, stats_media: dict, dpi: int = 180) -> plt.Figure:
     """
     Genera un lienzo A4 horizontal con la barra de distribución de puntos arriba
     y la barra de finalización plays debajo, sin márgenes extra y respetando el diseño original.
@@ -84,7 +84,7 @@ def build_team_report_bars(stats_puntos: dict, stats_finalizacion: dict, dpi: in
 
     # Añadir barra de medias lanzamientos debajo de finalización plays
     # Queremos que ocupe todo el ancho del lienzo y el hueco vertical disponible
-    stats_media = {k: stats_finalizacion[k] for k in ["T1 %", "T2 %", "T3 %"] if k in stats_finalizacion}
+    # Usar los porcentajes reales de anotación (anotados/intentados) recibidos como parámetro
 
     import numpy as np
     img_puntos_np = np.array(img_puntos)
@@ -185,10 +185,18 @@ def main():
             "T3 %": float(stats_df['F3 Plays%'].mean()),
             "PP %": float(stats_df['TO Plays%'].mean())
         }
+        
+        # Crear stats_media con los porcentajes reales de anotación
+        stats_media = {
+            "T1 %": float(stats_df['T1 %'].mean()),
+            "T2 %": float(stats_df['T2 %'].mean()),
+            "T3 %": float(stats_df['T3 %'].mean())
+        }
 
         fig = build_team_report_bars(
             stats_puntos=stats_puntos,
             stats_finalizacion=stats_finalizacion,
+            stats_media=stats_media,
             dpi=180
         )
         fig.savefig("team_report_bars.png", dpi=180)

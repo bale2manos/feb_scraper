@@ -18,7 +18,7 @@ from .utils import (
     compute_advanced_stats
 )
 
-def plot_player_finalizacion_plays(df: pd.DataFrame) -> plt.Figure:
+def plot_player_finalizacion_plays(df: pd.DataFrame, min_games: int = 5, min_minutes: int = 50) -> plt.Figure:
     """
     Gráfico de 'Finalización de Plays (%)' por jugador:
       1) logo del club
@@ -33,6 +33,13 @@ def plot_player_finalizacion_plays(df: pd.DataFrame) -> plt.Figure:
 
     # --- 1) Prepara y filtra datos ---
     df = df.copy()
+    
+    # Apply dynamic filters
+    df = df[
+        (df['PJ'] >= min_games) & 
+        (df['MINUTOS JUGADOS'] >= min_minutes)
+    ].reset_index(drop=True)
+    
     df['FORMATTED'] = df.apply(
         lambda r: format_player_name(r['JUGADOR'], r['DORSAL']), axis=1
     )

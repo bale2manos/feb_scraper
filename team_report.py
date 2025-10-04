@@ -24,6 +24,8 @@ Genera informes detallados para equipos completos con estadísticas de todos los
 - ✨ **Filtrado por jornadas:** Analiza rendimiento del equipo en jornadas específicas
 - 📊 **Comparación temporal:** Compara diferentes períodos de la temporada
 - 🎯 **Análisis detallado:** Estadísticas granulares por jornada o conjunto de jornadas
+- 🚀 **Generación masiva:** Crea informes de TODOS los equipos automáticamente
+- 📦 **Descarga ZIP:** Obtén todos los informes en un archivo comprimido
 """)
 
 # Configuración de archivos con soporte para jornadas
@@ -84,6 +86,54 @@ with col2:
         placeholder="Selecciona jugadores específicos (opcional)"
     )
 
+# --- Configuración de filtros mínimos ---
+st.subheader("⚙️ Configuración de filtros mínimos")
+st.info("🎯 Ajusta los valores mínimos para filtrar jugadores en los gráficos según su participación.")
+
+# Crear tres columnas para los filtros
+filter_col1, filter_col2, filter_col3 = st.columns(3)
+
+with filter_col1:
+    min_games = st.slider(
+        "🏀 Partidos mínimos",
+        min_value=0,
+        max_value=20,
+        value=5,
+        step=1,
+        help="Número mínimo de partidos jugados para aparecer en los gráficos"
+    )
+
+with filter_col2:
+    min_minutes = st.slider(
+        "⏱️ Minutos mínimos",
+        min_value=0,
+        max_value=200,
+        value=50,
+        step=10,
+        help="Número mínimo de minutos totales jugados para aparecer en los gráficos"
+    )
+
+with filter_col3:
+    min_shots = st.slider(
+        "🎯 Tiros mínimos",
+        min_value=0,
+        max_value=100,
+        value=20,
+        step=5,
+        help="Número mínimo de tiros realizados para aparecer en gráficos de tiro"
+    )
+
+# Mostrar resumen de filtros activos
+with st.expander("📊 Resumen de filtros activos", expanded=False):
+    st.write(f"""
+    **Filtros configurados:**
+    - **Partidos mínimos:** {min_games} partidos
+    - **Minutos mínimos:** {min_minutes} minutos totales
+    - **Tiros mínimos:** {min_shots} tiros (para gráficos de tiro)
+    
+    **Efecto:** Solo aparecerán jugadores que cumplan estos criterios en los gráficos correspondientes.
+    """)
+
 # Información sobre el filtrado
 if sel_equipo and sel_jugadores:
     st.info("🔄 Se usarán los jugadores seleccionados, ignorando el filtro de equipo.")
@@ -97,51 +147,202 @@ else:
     st.warning("⚠️ Selecciona un equipo o jugadores específicos para generar el informe.")
 
 # --- Botón de generación ---
-if st.button("📄 Generar informe", type="primary", use_container_width=True):
-    # Validar que hay algo seleccionado
-    if not sel_equipo and not sel_jugadores:
-        st.error("❌ Por favor, selecciona un equipo o jugadores específicos.")
-    else:
-        with st.spinner("Generando PDF con gráficos de equipo..."):
-            try:
-                # Determinar los parámetros para build_team_report
-                if sel_jugadores:
-                    # Prioridad a jugadores específicos
-                    pdf_path = build_team_report(
-                        team_filter=None, 
-                        player_filter=sel_jugadores,
-                        players_file=str(players_file),
-                        teams_file=str(teams_file),
-                        clutch_lineups_file=str(clutch_lineups_file),
-                        assists_file=str(assists_file) if assists_file else None
-                    )
-                    filter_info = f"{len(sel_jugadores)} jugadores seleccionados"
-                else:
-                    # Usar filtro de equipo
-                    pdf_path = build_team_report(
-                        team_filter=sel_equipo, 
-                        player_filter=None,
-                        players_file=str(players_file),
-                        teams_file=str(teams_file),
-                        clutch_lineups_file=str(clutch_lineups_file),
-                        assists_file=str(assists_file) if assists_file else None
-                    )
-                    filter_info = f"equipo '{sel_equipo}'"
+col_btn1, col_btn2 = st.columns(2)
 
-                # Read the generated PDF
-                if pdf_path and Path(pdf_path).exists():
-                    pdf_bytes = Path(pdf_path).read_bytes()
-                    st.success(f"✅ Informe listo para {filter_info}: `{Path(pdf_path).name}`")
+with col_btn1:
+    if st.button("📄 Generar informe individual", type="primary", use_container_width=True):
+        # Validar que hay algo seleccionado
+        if not sel_equipo and not sel_jugadores:
+            st.error("❌ Por favor, selecciona un equipo o jugadores específicos.")
+        else:
+            with st.spinner("Generando PDF con gráficos de equipo..."):
+                try:
+                    # Determinar los parámetros para build_team_report
+                    if sel_jugadores:
+                        # Prioridad a jugadores específicos
+                        pdf_path = build_team_report(
+                            team_filter=None, 
+                            player_filter=sel_jugadores,
+                            players_file=str(players_file),
+                            teams_file=str(teams_file),
+                            clutch_lineups_file=str(clutch_lineups_file),
+                            assists_file=str(assists_file) if assists_file else None,
+                            min_games=min_games,
+                            min_minutes=min_minutes,
+                            min_shots=min_shots
+                        )
+                        filter_info = f"{len(sel_jugadores)} jugadores seleccionados"
+                    else:
+                        # Usar filtro de equipo
+                        pdf_path = build_team_report(
+                            team_filter=sel_equipo, 
+                            player_filter=None,
+                            players_file=str(players_file),
+                            teams_file=str(teams_file),
+                            clutch_lineups_file=str(clutch_lineups_file),
+                            assists_file=str(assists_file) if assists_file else None,
+                            min_games=min_games,
+                            min_minutes=min_minutes,
+                            min_shots=min_shots
+                        )
+                        filter_info = f"equipo '{sel_equipo}'"
+
+                    # Read the generated PDF
+                    if pdf_path and Path(pdf_path).exists():
+                        pdf_bytes = Path(pdf_path).read_bytes()
+                        st.success(f"✅ Informe listo para {filter_info}: `{Path(pdf_path).name}`")
+                        
+                        # Store the PDF data in session state to persist the download button
+                        st.session_state['pdf_data'] = pdf_bytes
+                        st.session_state['pdf_name'] = Path(pdf_path).name
+                        st.session_state['filter_info'] = filter_info
+                    else:
+                        st.error("😞 Algo falló: no se ha encontrado el PDF.")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error al generar el informe: {str(e)}")
+
+with col_btn2:
+    if st.button("🚀 Generar informes de TODOS los equipos", type="secondary", use_container_width=True):
+        # Obtener lista de equipos únicos
+        equipos_disponibles = sorted(df_players['EQUIPO'].dropna().unique().tolist())
+        
+        st.info(f"🎯 Iniciando generación de informes para **{len(equipos_disponibles)} equipos**...")
+        
+        with st.spinner("🚀 Generando informes para todos los equipos... Esto puede tardar varios minutos."):
+            try:
+                import time
+                import zipfile
+                import shutil
+                from datetime import datetime
+                
+                # Crear directorio temporal para PDFs
+                temp_dir = BASE_OUTPUT_DIR / "temp_batch"
+                temp_dir.mkdir(exist_ok=True)
+                
+                pdf_paths = []
+                
+                # Contenedores para mostrar progreso
+                progress_bar = st.progress(0)
+                status_container = st.empty()
+                log_container = st.empty()
+                
+                total_equipos = len(equipos_disponibles)
+                equipos_exitosos = 0
+                equipos_fallidos = []
+                logs = []
+                
+                for i, equipo in enumerate(equipos_disponibles):
+                    try:
+                        # Actualizar estado
+                        status_msg = f"🔄 Procesando {equipo} ({i+1}/{total_equipos})..."
+                        status_container.text(status_msg)
+                        logs.append(f"[{i+1}/{total_equipos}] Iniciando: {equipo}")
+                        
+                        # Mostrar últimos 5 logs
+                        if len(logs) > 5:
+                            log_text = "\n".join(logs[-5:])
+                        else:
+                            log_text = "\n".join(logs)
+                        log_container.text_area("📋 Progreso detallado:", value=log_text, height=100, key=f"log_{i}")
+                        
+                        # Generar informe para este equipo
+                        pdf_path = build_team_report(
+                            team_filter=equipo, 
+                            player_filter=None,
+                            players_file=str(players_file),
+                            teams_file=str(teams_file),
+                            clutch_lineups_file=str(clutch_lineups_file),
+                            assists_file=str(assists_file) if assists_file else None,
+                            min_games=min_games,
+                            min_minutes=min_minutes,
+                            min_shots=min_shots
+                        )
+                        
+                        if pdf_path and Path(pdf_path).exists():
+                            # Renombrar PDF con nombre del equipo
+                            equipo_safe = "".join(c for c in equipo if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                            new_name = f"Informe_{equipo_safe.replace(' ', '_')}.pdf"
+                            new_path = temp_dir / new_name
+                            
+                            # Copiar a directorio temporal con nuevo nombre
+                            shutil.copy2(pdf_path, new_path)
+                            pdf_paths.append(new_path)
+                            equipos_exitosos += 1
+                            logs.append(f"✅ {equipo}: Completado")
+                        else:
+                            equipos_fallidos.append(equipo)
+                            logs.append(f"❌ {equipo}: Falló (sin PDF)")
+                        
+                        # Actualizar barra de progreso
+                        progress_bar.progress((i + 1) / total_equipos)
+                        
+                        # Pequeña pausa para permitir actualización de UI
+                        time.sleep(0.1)
+                        
+                    except Exception as e:
+                        error_msg = str(e)[:100] + "..." if len(str(e)) > 100 else str(e)
+                        equipos_fallidos.append(f"{equipo} (Error: {error_msg})")
+                        logs.append(f"❌ {equipo}: Error - {error_msg}")
+                        continue
+                
+                # Crear ZIP con todos los PDFs exitosos
+                if pdf_paths:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    zip_path = temp_dir / f"Informes_Equipos_{timestamp}.zip"
                     
-                    # Store the PDF data in session state to persist the download button
-                    st.session_state['pdf_data'] = pdf_bytes
-                    st.session_state['pdf_name'] = Path(pdf_path).name
-                    st.session_state['filter_info'] = filter_info
+                    status_container.text("📦 Creando archivo ZIP...")
+                    
+                    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                        for pdf_path in pdf_paths:
+                            zipf.write(pdf_path, pdf_path.name)
+                    
+                    # Leer ZIP para descarga
+                    zip_bytes = zip_path.read_bytes()
+                    
+                    # Limpiar UI de progreso
+                    status_container.empty()
+                    log_container.empty()
+                    progress_bar.progress(1.0)
+                    
+                    # Mostrar resultados finales
+                    st.success(f"🎉 **Proceso completado!**")
+                    st.success(f"✅ **{equipos_exitosos}/{total_equipos}** informes generados exitosamente")
+                    
+                    if equipos_fallidos:
+                        st.warning(f"⚠️ **Equipos con errores ({len(equipos_fallidos)}):**")
+                        for eq_error in equipos_fallidos[:5]:  # Mostrar máximo 5
+                            st.write(f"- {eq_error}")
+                        if len(equipos_fallidos) > 5:
+                            st.write(f"... y {len(equipos_fallidos) - 5} más")
+                    
+                    # Botón de descarga del ZIP
+                    st.download_button(
+                        label=f"📦 Descargar ZIP con {equipos_exitosos} informes ({len(pdf_paths)} archivos)",
+                        data=zip_bytes,
+                        file_name=f"Informes_Equipos_{timestamp}.zip",
+                        mime="application/zip",
+                        use_container_width=True,
+                        key="download_batch_zip"
+                    )
+                    
+                    # Limpiar archivos temporales
+                    try:
+                        shutil.rmtree(temp_dir)
+                    except Exception as cleanup_error:
+                        st.warning(f"⚠️ No se pudieron limpiar archivos temporales: {cleanup_error}")
+                        
                 else:
-                    st.error("😞 Algo falló: no se ha encontrado el PDF.")
-                    
+                    st.error("❌ No se pudo generar ningún informe exitosamente.")
+                    if equipos_fallidos:
+                        st.error("**Todos los equipos fallaron:**")
+                        for eq_error in equipos_fallidos:
+                            st.write(f"- {eq_error}")
+                        
             except Exception as e:
-                st.error(f"❌ Error al generar el informe: {str(e)}")
+                st.error(f"❌ Error crítico en el proceso masivo: {str(e)}")
+                st.error("**Detalles del error para depuración:**")
+                st.code(str(e))
 
 # Show download button if PDF data is available in session state
 if 'pdf_data' in st.session_state and 'pdf_name' in st.session_state:
@@ -186,35 +387,55 @@ with st.expander("📊 Contenido del informe"):
     4. **Top Turnovers** - Análisis de pérdidas (Plays vs TOV%)
     5. **Top PPP** - Puntos por posesión (Plays vs PPP)
     6. **Finalización Plays** - Distribución de tipos de jugadas
+    
+    **🔧 Filtros personalizables:**
+    - **Partidos mínimos:** Número mínimo de partidos para aparecer en gráficos
+    - **Minutos mínimos:** Minutos totales mínimos para análisis de eficiencia
+    - **Tiros mínimos:** Tiros mínimos para gráficos de tiro (Top Shooters)
+    """)
+
+with st.expander("⚙️ Configuración de filtros avanzada"):
+    st.write("""
+    **🎯 Filtros mínimos configurables:**
+    
+    **🏀 Partidos mínimos (0-20):**
+    - Controla qué jugadores aparecen según participación en partidos
+    - **0:** Incluye todos los jugadores (sin filtro)
+    - **Recomendado:** 3-5 para análisis completo, 8-10 para jugadores regulares
+    
+    **⏱️ Minutos mínimos (0-200):**
+    - Filtra por tiempo total de juego en la temporada
+    - **0:** Incluye todos los jugadores (sin filtro)
+    - **Recomendado:** 50-100 para análisis de eficiencia, 150+ para titulares
+    
+    **🎯 Tiros mínimos (0-100):**
+    - Específico para gráficos de tiro (Top Shooters)
+    - **0:** Incluye todos los jugadores (sin filtro)
+    - **Recomendado:** 15-25 para muestras representativas, 50+ para especialistas
+    
+    **💡 Consejos de configuración:**
+    - **Valores bajos:** Incluye más jugadores, análisis más amplio
+    - **Valores altos:** Enfoque en jugadores principales, datos más fiables
+    - **Ajuste dinámico:** Cambia según el objetivo del análisis
     """)
 
 with st.expander("🎯 Cómo usar"):
     st.write("""
-    **Opción 1: Análisis por equipo**
-    - Selecciona un equipo en el desplegable
-    - Se analizarán todos los jugadores del equipo
+    **📄 Informe individual:**
+    - **Opción 1: Análisis por equipo** - Selecciona un equipo en el desplegable
+    - **Opción 2: Análisis de jugadores específicos** - Selecciona jugadores específicos (tiene prioridad sobre equipo)
     
-    **Opción 2: Análisis de jugadores específicos**
-    - Selecciona jugadores específicos en el multiselect
-    - Puedes elegir jugadores de diferentes equipos
-    - Esta opción tiene prioridad sobre el filtro de equipo
-    """)
-
-with st.expander("🎯 Cómo usar"):
-    st.write("""
-    **Opción 1: Análisis por equipo**
-    - Selecciona un equipo en el desplegable
-    - Se analizarán todos los jugadores del equipo
+    **🚀 Generación masiva de informes:**
+    - **Procesa TODOS los equipos** encontrados en los datos cargados
+    - **Genera un ZIP** con todos los informes PDF
+    - **Ideal para análisis completo** de una competición o liga
+    - **Nombres automáticos** por equipo para fácil identificación
     
-    **Opción 2: Análisis de jugadores específicos**
-    - Selecciona jugadores específicos en el multiselect
-    - Puedes elegir jugadores de diferentes equipos
-    - Esta opción tiene prioridad sobre el filtro de equipo
-    
-    **🆕 Configuración de jornadas:**
-    - **Todas las jornadas:** Análisis completo de la temporada
-    - **Jornadas específicas:** Enfoque en períodos determinados
-    - **Análisis comparativo:** Ideal para evaluar evolución del equipo
+    **⚠️ Consideraciones para generación masiva:**
+    - El proceso puede tardar varios minutos (depende del número de equipos)
+    - Se requiere confirmación antes de iniciar
+    - Los equipos con errores se reportan al final
+    - Los archivos se descargan en un solo ZIP comprimido
     """)
 
 with st.expander("📊 Análisis temporal de equipos"):
@@ -223,14 +444,38 @@ with st.expander("📊 Análisis temporal de equipos"):
     - **Progresión del equipo:** Evaluar mejora a lo largo de la temporada
     - **Impacto de cambios:** Medir efectos de fichajes, lesiones o cambios tácticos
     - **Análisis de rachas:** Estudiar períodos de buen/mal rendimiento
-    - **Preparación de partidos:** Análizar tendencias recientes del rival
+    - **Preparación de partidos:** Analizar tendencias recientes del rival
     
     **📈 Métricas clave por período:**
     - Eficiencia ofensiva y defensiva temporal
     - Evolución de sistemas de juego
     - Rendimiento individual en contexto temporal
+    
+    **🚀 Generación masiva temporal:**
+    - Aplica los mismos filtros de jornadas a TODOS los equipos
+    - Perfecto para análisis comparativo entre equipos en períodos específicos
+    - Ideal para reportes de competición por fases
     """)
 
-# --- Pie de página ---
+with st.expander("💡 Casos de uso de la generación masiva"):
+    st.write("""
+    **🏀 Para entrenadores y directivos:**
+    - **Análisis de competición completa:** Estudiar todos los rivales de la liga
+    - **Reportes de fin de temporada:** Generar informes de todos los equipos
+    - **Scouting masivo:** Analizar múltiples equipos de una vez
+    
+    **📊 Para analistas:**
+    - **Comparativas liga/grupo:** Análisis estadístico de toda la competición
+    - **Benchmarking:** Comparar rendimiento del equipo con toda la liga
+    - **Estudios longitudinales:** Analizar evolución de múltiples equipos
+    
+    **📋 Para organizadores:**
+    - **Informes oficiales:** Generar documentación para federaciones
+    - **Historiales completos:** Archivar datos de temporadas completas
+    - **Análisis de competición:** Estudios globales de rendimiento
+    """)
+
+# Eliminar el expander duplicado
+# with st.expander("🎯 Cómo usar"):
 st.markdown("---")
 st.caption("🏀 Generador de informes de equipo desarrollado con herramientas de análisis de baloncesto y filtrado temporal.")

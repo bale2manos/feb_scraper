@@ -10,7 +10,7 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from .utils import COLORS, setup_montserrat_font, format_player_name, compute_advanced_stats, get_team_logo
 from rembg import remove
 
-def plot_player_OE_bar(df: pd.DataFrame) -> plt.Figure:
+def plot_player_OE_bar(df: pd.DataFrame, min_games: int = 5, min_minutes: int = 50) -> plt.Figure:
     """
     Grafica barras horizontales de OE con cuatro columnas:
       1) logo del club
@@ -22,8 +22,15 @@ def plot_player_OE_bar(df: pd.DataFrame) -> plt.Figure:
     """
     setup_montserrat_font()
 
-    # 1) prepara datos
+    # 1) prepara datos con filtros dinámicos
     df = df.copy()
+    
+    # Apply dynamic filters
+    df = df[
+        (df['PJ'] >= min_games) & 
+        (df['MINUTOS JUGADOS'] >= min_minutes)
+    ].reset_index(drop=True)
+    
     df['FORMATTED'] = df.apply(lambda r: format_player_name(r['JUGADOR'], r['DORSAL']), axis=1)
     df = df.sort_values('OE', ascending=True).reset_index(drop=True)
     df = df[(df['OE'].notna()) & (df['OE'] != 0)]

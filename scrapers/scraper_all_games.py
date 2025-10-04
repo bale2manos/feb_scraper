@@ -20,9 +20,9 @@ from utils.web_scraping import (
     SELECT_ID_TEMPORADA,
     SELECT_ID_FASE,
     SELECT_ID_JORNADA,
-    TEMPORADA_TXT,
 )# Importar configuración centralizada
 from config import FASES_PRINCIPALES, OUTPUT_RESULTADOS_FILE
+import utils.web_scraping as web_scraping  # Importar módulo completo para acceso dinámico
 
 # --- Configuración ---
 PHASES = FASES_PRINCIPALES
@@ -38,10 +38,10 @@ def scrape_all():
     wait = WebDriverWait(driver, 15)
     # 1) Seleccionar Temporada una sola vez
     sel_temp = wait.until(EC.presence_of_element_located((By.ID, SELECT_ID_TEMPORADA)))
-    Select(sel_temp).select_by_visible_text(TEMPORADA_TXT)
+    Select(sel_temp).select_by_visible_text(web_scraping.TEMPORADA_TXT)
     wait.until(EC.text_to_be_present_in_element(
         (By.CSS_SELECTOR, f"#{SELECT_ID_TEMPORADA} option[selected]"),
-        TEMPORADA_TXT
+        web_scraping.TEMPORADA_TXT
     ))
 
     all_rows = []
@@ -87,6 +87,12 @@ def scrape_all():
                 res = tr.find_element(By.CSS_SELECTOR, "td:nth-child(2) a")
                 marcador = res.text.strip()
                 pid = re.search(r"p=(\d+)", res.get_attribute("href")).group(1)
+                
+                # Omitir partidos no jugados (resultado *-*)
+                if "*" in marcador:
+                    print(f"⏭️ Omitiendo partido no jugado: {local} vs {visit} ({marcador})")
+                    continue
+                
                 # Resultado por equipo
                 pts_l, pts_v = map(int, marcador.split("-"))
                 res_l, res_v = ("Gano","Perdio") if pts_l>pts_v else ("Perdio","Gano")

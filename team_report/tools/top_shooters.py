@@ -16,6 +16,8 @@ from .utils import (
 
 def plot_top_shooters(
     df: pd.DataFrame,
+    min_games: int = 5,
+    min_shots: int = 20
 ):
     """
     TOP-20 Offensive Efficiency: scatter PPP vs Plays, bubble size ~ minutes,
@@ -25,8 +27,11 @@ def plot_top_shooters(
     # 0) load + Montserrat
     setup_montserrat_font()
     
-    # Filter out those with less than 1 TCC
-    df = df[df['TCC'] >0].reset_index(drop=True)
+    # Apply dynamic filters
+    df = df[
+        (df['PJ'] >= min_games) & 
+        (df['TCC'] >= min_shots)
+    ].reset_index(drop=True)
     
     # 4) prepare data arrays
     x = df['TS %'].to_numpy()

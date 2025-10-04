@@ -102,6 +102,17 @@ def build_phase_report(teams=None, phase=None, teams_file: str | None = None, pl
     players_path = Path(players_file) if players_file else PLAYERS_FILE
     df_teams   = pd.read_excel(team_path)
     df_players = pd.read_excel(players_path)
+    
+    # Apply minimum games filter to ensure data quality
+    MIN_GAMES = 5
+    if 'PJ' in df_players.columns:
+        initial_players = df_players.shape[0]
+        df_players = df_players[df_players['PJ'] >= MIN_GAMES]
+        print(f"[DEBUG] Players filter: {initial_players} → {df_players.shape[0]} (min {MIN_GAMES} games)")
+    elif 'PARTIDOS' in df_players.columns:
+        initial_players = df_players.shape[0]
+        df_players = df_players[df_players['PARTIDOS'] >= MIN_GAMES]
+        print(f"[DEBUG] Players filter: {initial_players} → {df_players.shape[0]} (min {MIN_GAMES} games)")
 
     # 2) Generate all figures
     stats = None

@@ -24,7 +24,6 @@ from utils.web_scraping import (
     accept_cookies,
 )
 from config import (
-    TEMPORADA_TXT,
     FASES_PRINCIPALES as PHASES,
     OUTPUT_PHASES_FILE as OUTPUT_FILE,
     BASE_PLAY_URL,
@@ -35,6 +34,7 @@ from config import (
     WEBDRIVER_TIMEOUT
 )
 from utils.web_scraping import get_current_base_url
+import utils.web_scraping as web_scraping  # Importar módulo completo para acceso dinámico
 
 # --- Configuración específica del scraper ---
 RETRY_COUNT   = 3
@@ -58,10 +58,10 @@ def get_all_match_ids():
     wait = WebDriverWait(driver, 15)
     # Seleccionar temporada
     sel_temp = wait.until(EC.presence_of_element_located((By.ID, SELECT_ID_TEMPORADA)))
-    Select(sel_temp).select_by_visible_text(TEMPORADA_TXT)
+    Select(sel_temp).select_by_visible_text(web_scraping.TEMPORADA_TXT)
     wait.until(EC.text_to_be_present_in_element(
         (By.CSS_SELECTOR, f"#{SELECT_ID_TEMPORADA} option[selected]"),
-        TEMPORADA_TXT
+        web_scraping.TEMPORADA_TXT
     ))
 
     matches = []

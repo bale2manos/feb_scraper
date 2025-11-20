@@ -68,12 +68,46 @@ def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: 
     df['TCC'] = T2C + T3C  # Total field goals made
     df['TCI'] = T2I + T3I  # Total field goals
 
+    # Normalizar todos los valores por partido jugado
+    PJ = df.get('PJ', 1)
+    T1I_per_game = T1I / PJ
+    T2I_per_game = T2I / PJ
+    T3I_per_game = T3I / PJ
+    TOV_per_game = TOV / PJ  # TOV también son totales, no promedios
+    
+    # Recalcular Plays por partido para consistencia
+    Plays_per_game = T1I_per_game * 0.44 + T2I_per_game + T3I_per_game + TOV_per_game
 
     # Play distribution percentages - Using vectorized operations
-    df['F1 Plays%'] = np.where(Plays > 0, (T1I * 0.44 / Plays * 100), 0)
-    df['F2 Plays%'] = np.where(Plays > 0, (T2I / Plays * 100), 0)
-    df['F3 Plays%'] = np.where(Plays > 0, (T3I / Plays * 100), 0)
-    df['TO Plays%'] = np.where(Plays > 0, (TOV / Plays * 100), 0)
+    df['F1 Plays%'] = np.where(Plays_per_game > 0, (T1I_per_game * 0.44 / Plays_per_game * 100), 0)
+    df['F2 Plays%'] = np.where(Plays_per_game > 0, (T2I_per_game / Plays_per_game * 100), 0)
+    df['F3 Plays%'] = np.where(Plays_per_game > 0, (T3I_per_game / Plays_per_game * 100), 0)
+    df['TO Plays%'] = np.where(Plays_per_game > 0, (TOV_per_game / Plays_per_game * 100), 0)
+    
+    # DEBUG: Mostrar cálculos para la primera fila
+    if len(df) > 0:
+        idx = df.index[0]
+        print(f"\n{'='*80}")
+        print(f"🔍 DEBUG compute_team_stats - EQUIPO: {df.loc[idx, 'EQUIPO']}")
+        print(f"{'='*80}")
+        print(f"PJ: {df.loc[idx, 'PJ']}")
+        print(f"T1I total: {df.loc[idx, 'T1I']}, T2I total: {df.loc[idx, 'T2I']}, T3I total: {df.loc[idx, 'T3I']}")
+        print(f"TOV total: {df.loc[idx, 'TOV']}")
+        print(f"\nValores por partido:")
+        print(f"  T1I_per_game: {T1I_per_game.iloc[0]:.2f}")
+        print(f"  T2I_per_game: {T2I_per_game.iloc[0]:.2f}")
+        print(f"  T3I_per_game: {T3I_per_game.iloc[0]:.2f}")
+        print(f"  TOV_per_game: {TOV_per_game.iloc[0]:.2f}")
+        print(f"\nPlays calculadas por partido: {Plays_per_game.iloc[0]:.2f}")
+        print(f"  = {T1I_per_game.iloc[0]:.2f} * 0.44 + {T2I_per_game.iloc[0]:.2f} + {T3I_per_game.iloc[0]:.2f} + {TOV_per_game.iloc[0]:.2f}")
+        print(f"\nPorcentajes calculados:")
+        print(f"  F1 Plays%: {df.loc[idx, 'F1 Plays%']:.2f}%")
+        print(f"  F2 Plays%: {df.loc[idx, 'F2 Plays%']:.2f}%")
+        print(f"  F3 Plays%: {df.loc[idx, 'F3 Plays%']:.2f}%")
+        print(f"  TO Plays%: {df.loc[idx, 'TO Plays%']:.2f}%")
+        total = df.loc[idx, 'F1 Plays%'] + df.loc[idx, 'F2 Plays%'] + df.loc[idx, 'F3 Plays%'] + df.loc[idx, 'TO Plays%']
+        print(f"  TOTAL: {total:.2f}%")
+        print(f"{'='*80}\n")
     
     # Points per shot type
     df['PT1'] = T1C
@@ -197,7 +231,7 @@ def generate_team_play_distribution(
 
 if __name__ == '__main__':
     # Ejemplo de uso:
-    FILE = './data/teams_aggregated.xlsx'
+    FILE = 'f:/PyCharm/feb_scraper/data/older/teams_aggregated.xlsx'
     MIS_EQUIPOS = ['BALONCESTO TALAVERA', 'C.B. TRES CANTOS', 'CB ARIDANE',
                    'CB LA MATANZA', 'EB FELIPE ANTÓN', 'LUJISA GUADALAJARA BASKET',
                    'REAL CANOE N.C.', 'UROS DE RIVAS', 'ZENTRO BASKET MADRID'

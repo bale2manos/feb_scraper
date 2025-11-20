@@ -118,14 +118,31 @@ def generate_team_heatmap(
                              'TOV', 'ROB', 'OREB', 'DREB',  'AST'
                              ]]
 
-    # 4) Calcular ranking: el valor más alto recibe el puesto 1
-    ranks = team_stats.rank(ascending=False, method='min').astype(int)
+    # 4) Calcular ranking con lógica específica por métrica
+    ranks = pd.DataFrame(index=team_stats.index, columns=team_stats.columns)
+    
+    # Métricas donde MENOS es MEJOR (ascending=True para que el menor valor tenga rank=1)
+    negative_metrics = ['PUNTOS -', 'PPP OPP', 'TOV']
+    
+    # Métricas donde MÁS es MEJOR (ascending=False para que el mayor valor tenga rank=1)  
+    positive_metrics = [col for col in team_stats.columns if col not in negative_metrics]
+    
+    # Calcular rankings
+    for col in team_stats.columns:
+        if col in negative_metrics:
+            # Para métricas negativas: menor valor = mejor ranking (rank 1)
+            ranks[col] = team_stats[col].rank(ascending=True, method='min').astype(int)
+        else:
+            # Para métricas positivas: mayor valor = mejor ranking (rank 1)
+            ranks[col] = team_stats[col].rank(ascending=False, method='min').astype(int)
     
     # Validar que ranks no está vacío
     if ranks.empty:
         raise ValueError("No se pudieron calcular rankings. Los datos están vacíos.")
     
     print(f"Rankings calculados para {len(ranks)} equipos")
+    print(f"Métricas positivas (más=mejor): {positive_metrics}")
+    print(f"Métricas negativas (menos=mejor): {negative_metrics}")
     print(f"Columnas en rankings: {ranks.columns.tolist()}")
     
     # 5) Ordenar por 'PUNTOS +' si está en las métricas

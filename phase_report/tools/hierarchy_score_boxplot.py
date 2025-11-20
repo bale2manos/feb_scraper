@@ -33,14 +33,57 @@ def plot_annotation_hierarchy(
     
     # 2) Agrupar puntos por equipo en orden alfabético
     df = df[['EQUIPO', 'JUGADOR', 'PUNTOS', 'DORSAL']].dropna()
+    
+    # Check if we have any data after filtering
+    if df.empty:
+        # Return empty figure if no data
+        fig, ax = plt.subplots(figsize=(15, 8))
+        ax.text(0.5, 0.5, 'No hay datos disponibles para los filtros seleccionados', 
+                ha='center', va='center', transform=ax.transAxes, fontsize=16)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis('off')
+        return fig
+    
     teams_sorted = sorted(df['EQUIPO'].unique())
     data = [df.loc[df['EQUIPO'] == t, 'PUNTOS'].values for t in teams_sorted]
+    
+    # Filter out teams with no data points
+    valid_teams = []
+    valid_data = []
+    for i, team in enumerate(teams_sorted):
+        if len(data[i]) > 0:
+            valid_teams.append(team)
+            valid_data.append(data[i])
+    
+    # Update variables with valid data only
+    teams_sorted = valid_teams
+    data = valid_data
     n = len(teams_sorted)
+    
+    # Check if we have any valid teams after filtering
+    if n == 0:
+        # Return empty figure if no valid teams
+        fig, ax = plt.subplots(figsize=(15, 8))
+        ax.text(0.5, 0.5, 'No hay equipos con datos válidos para los filtros seleccionados', 
+                ha='center', va='center', transform=ax.transAxes, fontsize=16)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis('off')
+        return fig
     
     # 3) Cálculo de estadísticas y rango para desplazamientos
     all_points = df['PUNTOS']
-    span = all_points.max() - all_points.min()
-    dy = span * 0.04
+    
+    # Ensure we have enough data for span calculation
+    if len(all_points) < 2:
+        span = 1.0  # Default span if insufficient data
+        dy = 0.04
+    else:
+        span = all_points.max() - all_points.min()
+        if span == 0:  # All values are the same
+            span = 1.0
+        dy = span * 0.04
 
     # 4) Crear figura
     fig, ax = plt.subplots(figsize=(15, 8))

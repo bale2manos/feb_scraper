@@ -59,8 +59,7 @@ BASE_OUTPUT_DIR = PHASE_REPORTS_DIR
 # Create output directory if it doesn't exist
 BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Add a timestamp to the output PDF to avoid overwriting
-OUTPUT_PDF = BASE_OUTPUT_DIR / f"phase_report_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+# OUTPUT_PDF will be dynamically generated in build_phase_report() based on filters
 
 # Convert matplotlib Figure to PNG buffer with optimization
 def fig_to_png_buffer(fig, dpi=180):
@@ -93,7 +92,7 @@ def optimize_png_buffer(buf, max_width=1400):
     optimized_buf.seek(0)
     return optimized_buf
 
-def build_phase_report(teams=None, phase=None, teams_file: str | None = None, players_file: str | None = None):
+def build_phase_report(teams=None, phase=None, teams_file: str | None = None, players_file: str | None = None, min_games: int = 5, min_minutes: int = 50, min_shots: int = 20):
     # Setup fonts
     setup_montserrat_pdf_fonts()
     
@@ -103,16 +102,44 @@ def build_phase_report(teams=None, phase=None, teams_file: str | None = None, pl
     df_teams   = pd.read_excel(team_path)
     df_players = pd.read_excel(players_path)
     
-    # Apply minimum games filter to ensure data quality
-    MIN_GAMES = 5
+    # 1.1) Generate dynamic filename based on phase and jornada
+    timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+    
+    # Determinar nombre de fase
+    if phase and len(phase) > 0:
+        fase_name = "_".join([str(f).replace(' ', '_').replace('"', '') for f in phase])
+        fase_name = fase_name[:50]  # Limitar longitud
+    else:
+        fase_name = "TODAS_FASES"
+    
+    # Detectar jornadas únicas en los datos filtrados
+    df_filtered = df_teams.copy()
+    if phase:
+        df_filtered = df_filtered[df_filtered['FASE'].isin(phase)]
+    if teams:
+        df_filtered = df_filtered[df_filtered['EQUIPO'].isin(teams)]
+    
+    jornadas_str = "ACUMULADO"
+    if 'JORNADA' in df_filtered.columns:
+        jornadas_unicas = sorted(df_filtered['JORNADA'].dropna().unique())
+        if len(jornadas_unicas) == 1:
+            jornadas_str = f"J{int(jornadas_unicas[0]):02d}"
+        elif len(jornadas_unicas) > 1:
+            jornadas_str = "ACUMULADO"
+    
+    # Construir nombre del archivo: FASE_JORNADA_fecha.pdf
+    filename = f"{fase_name}_{jornadas_str}_{timestamp}.pdf"
+    OUTPUT_PDF = BASE_OUTPUT_DIR / filename
+    
+    # Apply minimum games filter to ensure data quality using configurable parameter
     if 'PJ' in df_players.columns:
         initial_players = df_players.shape[0]
-        df_players = df_players[df_players['PJ'] >= MIN_GAMES]
-        print(f"[DEBUG] Players filter: {initial_players} → {df_players.shape[0]} (min {MIN_GAMES} games)")
+        df_players = df_players[df_players['PJ'] >= min_games]
+        print(f"[DEBUG] Players filter: {initial_players} → {df_players.shape[0]} (min {min_games} games)")
     elif 'PARTIDOS' in df_players.columns:
         initial_players = df_players.shape[0]
-        df_players = df_players[df_players['PARTIDOS'] >= MIN_GAMES]
-        print(f"[DEBUG] Players filter: {initial_players} → {df_players.shape[0]} (min {MIN_GAMES} games)")
+        df_players = df_players[df_players['PARTIDOS'] >= min_games]
+        print(f"[DEBUG] Players filter: {initial_players} → {df_players.shape[0]} (min {min_games} games)")
 
     # 2) Generate all figures
     stats = None
@@ -130,8 +157,8 @@ def build_phase_report(teams=None, phase=None, teams_file: str | None = None, pl
         generate_team_points_distribution(stats, teams=teams, phase=phase),
         draw_ppp_quadrant(df_teams, teams=teams, phase=phase),
         generate_team_rebound_analysis(df_teams, teams=teams, phase=phase),
-        plot_offensive_efficiency(df_players, teams=teams, phase=phase),
-        plot_top_shooters(df_players, teams=teams, phase=phase, MIN_SHOTS=200)
+        plot_offensive_efficiency(df_players, teams=teams, phase=phase, min_games=min_games, min_minutes=min_minutes),
+        plot_top_shooters(df_players, teams=teams, phase=phase, MIN_SHOTS=min_shots)
     ]
 
     # 3) Prepare PDF canvas (A4 landscape) with compression
@@ -195,6 +222,9 @@ def build_phase_report(teams=None, phase=None, teams_file: str | None = None, pl
     print(f"✅ Informe generado en {OUTPUT_PDF}")
     print(f"📄 Tamaño del archivo: {file_size_mb:.2f} MB")
     print(f"📊 {total} gráficos procesados con optimización PNG")
+    
+    # Return the path to the generated PDF
+    return OUTPUT_PDF
 
 if __name__ == '__main__':
     build_phase_report(

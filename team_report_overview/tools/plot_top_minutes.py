@@ -43,15 +43,20 @@ def get_image_from_url(url, size=(80, 80)):
 def plot_top_minutes(
 df: pd.DataFrame,
 equipo: str,
-figsize: tuple = (4, 3.5)
+figsize: tuple = (4, 3.5),
+min_games: int = None
 ) -> plt.Figure:
     """
-    Genera una figura con los 4 jugadores que más puntos meten de media (mínimo 5 partidos) para un equipo.
-    Muestra: Imagen pequeña, Dorsal, Nombre, Puntos/PJ
+    Genera una figura con los 4 jugadores que más minutos juegan de media (mínimo partidos configurables) para un equipo.
+    Muestra: Imagen pequeña, Dorsal, Nombre, Minutos/PJ
     """
     setup_montserrat_font()
-    # Filtrar jugadores del equipo con al menos 5 partidos
-    df_team = df[(df['EQUIPO'] == equipo) & (df['PJ'] >= MIN_PARTIDOS)].copy()
+    
+    # Use parameter min_games if provided, otherwise use MIN_PARTIDOS constant
+    min_partidos = min_games if min_games is not None else MIN_PARTIDOS
+    
+    # Filtrar jugadores del equipo con al menos el mínimo de partidos especificado
+    df_team = df[(df['EQUIPO'] == equipo) & (df['PJ'] >= min_partidos)].copy()
     df_team['MINUTOS_PJ'] = df_team['MINUTOS JUGADOS'] / df_team['PJ']
     top = df_team.sort_values('MINUTOS_PJ', ascending=False).head(4)
 

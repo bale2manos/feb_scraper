@@ -41,7 +41,7 @@ def generate_team_rebound_analysis(
     # Colors & legend labels
     metrics = ['%DREB','%REB','%OREB']
     colors  = ['#3498DB','#E74C3C','#F39C12']  # naranja, rojo, azul
-    labels  = ['Rebote Ofensivo %','Rebotes Totales %','Rebote Defensivo %']
+    labels  = ['Rebote Defensivo %','Rebotes Totales %','Rebote Ofensivo %']
 
     n = len(stats)
     fig = plt.figure(figsize=(16, n*1.2))

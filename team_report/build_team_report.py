@@ -2,6 +2,9 @@ import io
 from pathlib import Path
 from PIL import Image
 import matplotlib.pyplot as plt
+
+# FORZAR RECARGA - VERSIÓN CORREGIDA SIN INVERSIÓN
+print("[BUILD_TEAM_REPORT] 🔄 Módulo cargado - VERSIÓN SIN INVERSIÓN DE COLUMNAS")
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib.utils import ImageReader
@@ -16,6 +19,7 @@ from .tools.top_ppp                   import plot_top_ppp
 from .tools.finalizacion_plays        import plot_player_finalizacion_plays
 from .tools.oe                        import plot_player_OE_bar
 from .tools.eps                       import plot_player_EPS_bar
+from .tools.top_assists_vs_turnovers  import plot_top_assists_vs_turnovers
 from .tools.utils                     import setup_montserrat_font, compute_advanced_stats, compute_team_stats
 import pandas as pd
 
@@ -25,6 +29,9 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # === NUEVO: import del informe de asistencias ===
 from team_report_assists.build_team_report_assists import build_team_report_assists
+
+# === NUEVO: import de head-to-head comparison ===
+from team_report_overview.tools.plot_head_to_head import generate_head_to_head_comparison
 
 # === IMPORT CLUTCH (opcional, puede fallar por dependencias) ===
 try:
@@ -74,8 +81,7 @@ BASE_OUTPUT_DIR = Path("output/reports/team_reports/")
 # Create output directory if it doesn't exist
 BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Add a timestamp to the output PDF to avoid overwriting
-OUTPUT_PDF = BASE_OUTPUT_DIR / f"team_report_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+# OUTPUT_PDF will be dynamically generated in build_team_report() based on team filter
 
 # Convert matplotlib Figure to PNG buffer with optimization
 def fig_to_png_buffer(fig, dpi=180):
@@ -102,7 +108,51 @@ def optimize_png_buffer(buf, max_width=1400):
     optimized_buf.seek(0)
     return optimized_buf
 
-def build_team_report(team_filter=None, player_filter:list=None, players_file=None, teams_file=None, assists_file=None, clutch_lineups_file=None, min_games=5, min_minutes=50, min_shots=20):
+def _apply_home_away_filter(df_team, prefix):
+    """
+    Aplica filtro de local/visitante reemplazando columnas con las de prefijo.
+    VERSIÓN CORREGIDA - SIN INVERSIÓN
+    
+    Args:
+        df_team: DataFrame original con todas las columnas
+        prefix: "LOCAL_" o "VISITANTE_"
+    
+    Returns:
+        DataFrame con columnas originales reemplazadas por las del prefijo
+    """
+    df_result = df_team.copy()
+    
+    # Usar el prefijo directamente SIN INVERTIR (CORREGIDO)
+    if prefix == "LOCAL_":
+        actual_prefix = "LOCAL_"
+        actual_pj_col = "PJ_LOCAL"
+        print(f"[DEBUG] ✅✅✅ Filtro LOCAL → Usando LOCAL_* (NO INVERTIDO)")
+    else:  # "VISITANTE_"
+        actual_prefix = "VISITANTE_"
+        actual_pj_col = "PJ_VISITANTE"
+        print(f"[DEBUG] ✅✅✅ Filtro VISITANTE → Usando VISITANTE_* (NO INVERTIDO)")
+    
+    # Actualizar PJ con el correcto
+    if actual_pj_col in df_team.columns:
+        df_result["PJ"] = df_team[actual_pj_col]
+        print(f"[DEBUG] Actualizando PJ con {actual_pj_col} (valor: {df_team[actual_pj_col].sum()})")
+    
+    # Buscar columnas con el prefijo
+    prefixed_cols = [col for col in df_team.columns if col.startswith(actual_prefix)]
+    print(f"[DEBUG] Encontradas {len(prefixed_cols)} columnas con prefijo {actual_prefix}")
+    
+    for prefixed_col in prefixed_cols:
+        # Obtener nombre original (sin prefijo)
+        original_name = prefixed_col.replace(actual_prefix, "", 1)
+        
+        # Si la columna original existe, reemplazarla con la del prefijo
+        if original_name in df_result.columns:
+            df_result[original_name] = df_team[prefixed_col]
+            print(f"[DEBUG] Reemplazando {original_name} con {prefixed_col}")
+    
+    return df_result
+
+def build_team_report(team_filter=None, player_filter:list=None, players_file=None, teams_file=None, assists_file=None, clutch_lineups_file=None, rival_team=None, home_away_filter="Todos", h2h_home_away_filter="Todos", min_games=5, min_minutes=50, min_shots=20):
     # Setup fonts
     setup_montserrat_pdf_fonts()
 
@@ -111,7 +161,36 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
     teams_path = Path(teams_file) if teams_file else TEAM_FILE
     
     df_players = pd.read_excel(players_path)
-    df_team    = pd.read_excel(teams_path)
+    df_team_raw = pd.read_excel(teams_path)
+    
+    # Aplicar filtro de local/visitante a df_team
+    if home_away_filter == "Local":
+        print("[DEBUG] Aplicando filtro LOCAL: usando columnas LOCAL_*")
+        df_team = _apply_home_away_filter(df_team_raw, "LOCAL_")
+    elif home_away_filter == "Visitante":
+        print("[DEBUG] Aplicando filtro VISITANTE: usando columnas VISITANTE_*")
+        df_team = _apply_home_away_filter(df_team_raw, "VISITANTE_")
+    else:
+        print("[DEBUG] Sin filtro de localía: usando todas las columnas")
+        df_team = df_team_raw
+    
+    # Debug: Verificar porcentajes de rebote después del filtro
+    if not df_team.empty and 'EB FELIPE ANTÓN' in df_team['EQUIPO'].values:
+        felipe_row = df_team[df_team['EQUIPO'] == 'EB FELIPE ANTÓN'].iloc[0]
+        print(f"\n[DEBUG] ════════════════════════════════════════")
+        print(f"[DEBUG] 🏀 EB FELIPE ANTÓN DESPUÉS FILTRO GENERAL ({home_away_filter}):")
+        print(f"[DEBUG] ════════════════════════════════════════")
+        print(f"[DEBUG]   PJ: {felipe_row.get('PJ', 'N/A')}")
+        print(f"[DEBUG]   T3 CONVERTIDO: {felipe_row.get('T3 CONVERTIDO', 'N/A')}")
+        print(f"[DEBUG]   T3 INTENTADO: {felipe_row.get('T3 INTENTADO', 'N/A')}")
+        if felipe_row.get('T3 INTENTADO', 0) > 0:
+            print(f"[DEBUG]   T3%: {felipe_row.get('T3 CONVERTIDO', 0) / felipe_row.get('T3 INTENTADO', 1) * 100:.2f}%")
+        print(f"[DEBUG]   REB OFFENSIVO: {felipe_row.get('REB OFFENSIVO', 'N/A')}")
+        print(f"[DEBUG]   REB DEFENSIVO: {felipe_row.get('REB DEFENSIVO', 'N/A')}")
+        print(f"[DEBUG]   %OREB: {felipe_row.get('%OREB', 'N/A')}")
+        print(f"[DEBUG]   %DREB: {felipe_row.get('%DREB', 'N/A')}")
+        print(f"[DEBUG]   %REB: {felipe_row.get('%REB', 'N/A')}")
+        print(f"[DEBUG] ════════════════════════════════════════\n")
     
     # === NUEVO: cargar asistencias ===
     if assists_file:
@@ -155,6 +234,33 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         print("[DEBUG] No valid filter provided")
         raise ValueError("Must provide either a non-empty team_filter or a non-empty player_filter")
 
+    # 2.1) Generate dynamic filename based on team and jornada
+    timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+    
+    # Normalizar nombre del equipo para el archivo
+    equipo_safe = "".join(c for c in team_name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    equipo_safe = equipo_safe.replace(' ', '_')[:50]  # Limitar longitud
+    
+    # Detectar jornadas únicas en los datos del equipo
+    jornadas_str = "ACUMULADO"
+    if 'JORNADA' in df_players_filtered.columns:
+        jornadas_unicas = sorted(df_players_filtered['JORNADA'].dropna().unique())
+        if len(jornadas_unicas) == 1:
+            jornadas_str = f"J{int(jornadas_unicas[0]):02d}"
+        elif len(jornadas_unicas) > 1:
+            jornadas_str = "ACUMULADO"
+    
+    # Añadir sufijo de local/visitante si aplica
+    home_away_suffix = ""
+    if home_away_filter == "Local":
+        home_away_suffix = "_LOCAL"
+    elif home_away_filter == "Visitante":
+        home_away_suffix = "_VISITANTE"
+    
+    # Construir nombre del archivo: EQUIPO_JORNADA_LOCAL/VISITANTE_fecha.pdf
+    filename = f"{equipo_safe}_{jornadas_str}{home_away_suffix}_{timestamp}.pdf"
+    OUTPUT_PDF = BASE_OUTPUT_DIR / filename
+
     # Después de filtrar por equipo/jugadores, añadir filtro por partidos mínimos
     # Usar los parámetros configurables recibidos en la función
 
@@ -195,17 +301,158 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
 
     overview_fig = None
     bars_fig = None
+    head_to_head_fig = None  # <<< NUEVO: página head-to-head
     assists_fig = None  # <<< NUEVO
     clutch_fig = None
     if add_overview_and_bars:
         print("[DEBUG] Generating single overview page...")
         from team_report_overview.build_team_report_overview import build_team_report_overview, compute_advanced_stats_overview
+        
+        # Debug antes de compute_advanced_stats_overview
+        if not df_team_filtered.empty and 'EB FELIPE ANTÓN' in df_team_filtered['EQUIPO'].values:
+            felipe = df_team_filtered[df_team_filtered['EQUIPO'] == 'EB FELIPE ANTÓN'].iloc[0]
+            print(f"\n[DEBUG] ════════════════════════════════════════")
+            print(f"[DEBUG] 📊 DATOS PARA OVERVIEW (antes compute_advanced_stats):")
+            print(f"[DEBUG] ════════════════════════════════════════")
+            print(f"[DEBUG]   PJ: {felipe.get('PJ', 'N/A')}")
+            print(f"[DEBUG]   T3 CONVERTIDO: {felipe.get('T3 CONVERTIDO', 'N/A')}")
+            print(f"[DEBUG]   T3 INTENTADO: {felipe.get('T3 INTENTADO', 'N/A')}")
+            print(f"[DEBUG]   %OREB: {felipe.get('%OREB', 'N/A')}")
+            print(f"[DEBUG]   %DREB: {felipe.get('%DREB', 'N/A')}")
+            print(f"[DEBUG]   %REB: {felipe.get('%REB', 'N/A')}")
+            print(f"[DEBUG] ════════════════════════════════════════\n")
+        
         df_advanced = compute_advanced_stats_overview(df_team_filtered)
+        
+        # Debug después de compute_advanced_stats_overview
+        if not df_advanced.empty and 'EB FELIPE ANTÓN' in df_advanced['EQUIPO'].values:
+            felipe_adv = df_advanced[df_advanced['EQUIPO'] == 'EB FELIPE ANTÓN'].iloc[0]
+            print(f"\n[DEBUG] ════════════════════════════════════════")
+            print(f"[DEBUG] 📊 DATOS PARA OVERVIEW (después compute_advanced_stats):")
+            print(f"[DEBUG] ════════════════════════════════════════")
+            print(f"[DEBUG]   PJ: {felipe_adv.get('PJ', 'N/A')}")
+            print(f"[DEBUG]   T3 CONVERTIDO: {felipe_adv.get('T3 CONVERTIDO', 'N/A')}")
+            print(f"[DEBUG]   T3 INTENTADO: {felipe_adv.get('T3 INTENTADO', 'N/A')}")
+            print(f"[DEBUG]   %OREB: {felipe_adv.get('%OREB', 'N/A')}")
+            print(f"[DEBUG]   %DREB: {felipe_adv.get('%DREB', 'N/A')}")
+            print(f"[DEBUG]   %REB: {felipe_adv.get('%REB', 'N/A')}")
+            print(f"[DEBUG] ════════════════════════════════════════\n")
+        
         print(f"[DEBUG] df_advanced shape: {df_advanced.shape}")
         print(f"[DEBUG] team name: {team_name}")
-        overview_fig = build_team_report_overview(team_name, df_advanced, dpi=180, players_file=str(players_path))
+        overview_fig = build_team_report_overview(team_name, df_advanced, dpi=180, players_file=str(players_path), min_games=min_games)
         print("[DEBUG] Saving image to ./team_overview_test.png")
         overview_fig.savefig("./team_overview_test.png", dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
+        
+        # === NUEVO: Generar head-to-head con el rival seleccionado ===
+        print("[DEBUG] ========================================")
+        print("[DEBUG] GENERANDO HEAD-TO-HEAD COMPARISON")
+        print("[DEBUG] ========================================")
+        print(f"[DEBUG] Equipo principal: {team_name}")
+        print(f"[DEBUG] Filtro GENERAL (mi equipo): {home_away_filter}")
+        print(f"[DEBUG] Filtro H2H (rival): {h2h_home_away_filter}")
+        
+        try:
+            # IMPORTANTE: El equipo principal (izquierda) usa el FILTRO GENERAL
+            # El filtro H2H se aplica solo al RIVAL (derecha)
+            print("[DEBUG] H2H: Equipo principal usa FILTRO GENERAL (ya aplicado)")
+            df_team_filtered_h2h = df_team_filtered  # Ya tiene el filtro general aplicado
+            
+            # DEBUG: Verificar datos del equipo principal ANTES de pasar al H2H
+            print(f"[DEBUG] ========================================")
+            print(f"[DEBUG] DATOS EQUIPO PRINCIPAL ({team_name})")
+            print(f"[DEBUG] ========================================")
+            if len(df_team_filtered_h2h) > 0:
+                row = df_team_filtered_h2h.iloc[0]
+                print(f"[DEBUG] PJ: {row.get('PJ', 'N/A')}")
+                print(f"[DEBUG] PJ_LOCAL (original): {df_team_raw[df_team_raw['EQUIPO'] == team_name].iloc[0].get('PJ_LOCAL', 'N/A')}")
+                print(f"[DEBUG] PJ_VISITANTE (original): {df_team_raw[df_team_raw['EQUIPO'] == team_name].iloc[0].get('PJ_VISITANTE', 'N/A')}")
+                print(f"[DEBUG] T3 CONVERTIDO: {row.get('T3 CONVERTIDO', 'N/A')}")
+                print(f"[DEBUG] T3 INTENTADO: {row.get('T3 INTENTADO', 'N/A')}")
+                print(f"[DEBUG] LOCAL_T3 CONVERTIDO (original): {df_team_raw[df_team_raw['EQUIPO'] == team_name].iloc[0].get('LOCAL_T3 CONVERTIDO', 'N/A')}")
+                print(f"[DEBUG] LOCAL_T3 INTENTADO (original): {df_team_raw[df_team_raw['EQUIPO'] == team_name].iloc[0].get('LOCAL_T3 INTENTADO', 'N/A')}")
+                print(f"[DEBUG] VISITANTE_T3 CONVERTIDO (original): {df_team_raw[df_team_raw['EQUIPO'] == team_name].iloc[0].get('VISITANTE_T3 CONVERTIDO', 'N/A')}")
+                print(f"[DEBUG] VISITANTE_T3 INTENTADO (original): {df_team_raw[df_team_raw['EQUIPO'] == team_name].iloc[0].get('VISITANTE_T3 INTENTADO', 'N/A')}")
+            
+            # Para el rival, aplicar el FILTRO H2H
+            print("[DEBUG] ========================================")
+            print(f"[DEBUG] H2H: Aplicando filtro {h2h_home_away_filter} al RIVAL")
+            
+            # Aplicar filtro H2H al rival
+            if h2h_home_away_filter == "Local":
+                df_rival_source = _apply_home_away_filter(df_team_raw, "LOCAL_")
+            elif h2h_home_away_filter == "Visitante":
+                df_rival_source = _apply_home_away_filter(df_team_raw, "VISITANTE_")
+            else:
+                df_rival_source = df_team_raw  # Sin filtro
+            
+            # Determinar el rival a usar
+            otros_equipos = df_rival_source[df_rival_source['EQUIPO'] != team_name]
+            
+            if not otros_equipos.empty:
+                # Si se especificó un rival y existe en los datos, usarlo
+                if rival_team and rival_team in otros_equipos['EQUIPO'].values:
+                    rival_name = rival_team
+                    rival_count = len(otros_equipos[otros_equipos['EQUIPO'] == rival_name])
+                    print(f"[DEBUG] Usando rival especificado: {rival_name} ({rival_count} partidos)")
+                else:
+                    # Fallback: Intentar con GRUPO EGIDO PINTOBASKET por defecto
+                    default_rival = "GRUPO EGIDO PINTOBASKET"
+                    if default_rival in otros_equipos['EQUIPO'].values:
+                        rival_name = default_rival
+                        rival_count = len(otros_equipos[otros_equipos['EQUIPO'] == rival_name])
+                        print(f"[DEBUG] Usando rival por defecto: {rival_name} ({rival_count} partidos)")
+                    else:
+                        # Último recurso: usar el más frecuente
+                        rival_counts = otros_equipos['EQUIPO'].value_counts()
+                        rival_name = rival_counts.index[0]
+                        print(f"[DEBUG] Usando rival más frecuente: {rival_name} ({rival_counts.iloc[0]} partidos)")
+                
+                df_rival = df_rival_source[df_rival_source['EQUIPO'] == rival_name]
+                
+                # DEBUG: Verificar datos del rival ANTES de pasar al H2H
+                print(f"[DEBUG] ========================================")
+                print(f"[DEBUG] DATOS RIVAL ({rival_name})")
+                print(f"[DEBUG] ========================================")
+                if len(df_rival) > 0:
+                    rival_row = df_rival.iloc[0]
+                    print(f"[DEBUG] PJ: {rival_row.get('PJ', 'N/A')}")
+                    print(f"[DEBUG] T3 CONVERTIDO: {rival_row.get('T3 CONVERTIDO', 'N/A')}")
+                    print(f"[DEBUG] T3 INTENTADO: {rival_row.get('T3 INTENTADO', 'N/A')}")
+                
+                # Debug datos para H2H
+                if not df_team_filtered_h2h.empty and 'EB FELIPE ANTÓN' in df_team_filtered_h2h['EQUIPO'].values:
+                    felipe_h2h = df_team_filtered_h2h[df_team_filtered_h2h['EQUIPO'] == 'EB FELIPE ANTÓN'].iloc[0]
+                    print(f"\n[DEBUG] ════════════════════════════════════════")
+                    print(f"[DEBUG] 🔄 DATOS PARA HEAD-TO-HEAD:")
+                    print(f"[DEBUG] ════════════════════════════════════════")
+                    print(f"[DEBUG]   PJ: {felipe_h2h.get('PJ', 'N/A')}")
+                    print(f"[DEBUG]   T3 CONVERTIDO: {felipe_h2h.get('T3 CONVERTIDO', 'N/A')}")
+                    print(f"[DEBUG]   T3 INTENTADO: {felipe_h2h.get('T3 INTENTADO', 'N/A')}")
+                    if felipe_h2h.get('T3 INTENTADO', 0) > 0:
+                        print(f"[DEBUG]   T3%: {felipe_h2h.get('T3 CONVERTIDO', 0) / felipe_h2h.get('T3 INTENTADO', 1) * 100:.2f}%")
+                    print(f"[DEBUG]   %OREB: {felipe_h2h.get('%OREB', 'N/A')}")
+                    print(f"[DEBUG]   %DREB: {felipe_h2h.get('%DREB', 'N/A')}")
+                    print(f"[DEBUG]   %REB: {felipe_h2h.get('%REB', 'N/A')}")
+                    print(f"[DEBUG] ════════════════════════════════════════\n")
+                
+                print(f"[DEBUG] ========================================")
+                print(f"[DEBUG] LLAMANDO A generate_head_to_head_comparison")
+                print(f"[DEBUG] ========================================")
+                
+                head_to_head_fig = generate_head_to_head_comparison(
+                    df_main=df_team_filtered_h2h,
+                    df_rival=df_rival,
+                    main_team_name=team_name,
+                    rival_team_name=rival_name
+                )
+                print("[DEBUG] head_to_head_fig created")
+            else:
+                print("[DEBUG] No rival teams found in dataset")
+                head_to_head_fig = None
+        except Exception as e:
+            print(f"[DEBUG] Error generating head-to-head page: {e}")
+            head_to_head_fig = None
         
         print("[DEBUG] Generating single bars page...")
         from team_report_bars.build_team_report_bars import build_team_report_bars,compute_advanced_stats_bars
@@ -302,6 +549,8 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         print("[DEBUG] plot_top_turnovers done")
         figs.append(plot_top_ppp(df_players_stats, min_games=min_games, min_minutes=min_minutes))
         print("[DEBUG] plot_top_ppp done")
+        figs.append(plot_top_assists_vs_turnovers(df_players_stats, min_games=min_games, min_minutes=min_minutes))
+        print("[DEBUG] plot_top_assists_vs_turnovers done")
         figs.append(plot_player_finalizacion_plays(df_players_stats, min_games=min_games, min_minutes=min_minutes))
         print("[DEBUG] plot_player_finalizacion_plays done")
     except Exception as e:
@@ -328,6 +577,29 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         img_reader = ImageReader(overview_png_path)
         c.drawImage(img_reader, 0, page_h - draw_h, width=draw_w, height=draw_h, preserveAspectRatio=False, mask='auto')
         c.showPage()
+        
+        # HEAD-TO-HEAD
+        if head_to_head_fig is not None:
+            h2h_png_path = "./team_head_to_head_pdf_direct.png"
+            head_to_head_fig.savefig(h2h_png_path, dpi=180, bbox_inches='tight', facecolor='white', edgecolor='none', pad_inches=0.2)
+            img_h2h = Image.open(h2h_png_path)
+            h2h_w, h2h_h = img_h2h.size
+            # Calcular escala para que ocupe la mayor parte de la página manteniendo aspecto
+            available_w = page_w - 2*margin
+            available_h = page_h - 2*margin
+            scale_w = available_w / h2h_w
+            scale_h = available_h / h2h_h
+            h2h_scale = min(scale_w, scale_h) * 0.9  # 90% del espacio disponible
+            h2h_draw_w = h2h_w * h2h_scale
+            h2h_draw_h = h2h_h * h2h_scale
+            # Centrar en la página
+            h2h_x = (page_w - h2h_draw_w) / 2
+            h2h_y = (page_h - h2h_draw_h) / 2
+            h2h_reader = ImageReader(h2h_png_path)
+            c.drawImage(h2h_reader, h2h_x, h2h_y, width=h2h_draw_w, height=h2h_draw_h, preserveAspectRatio=True, mask='auto')
+            c.showPage()
+        else:
+            print("[DEBUG] Head-to-head figure missing; skipping head-to-head page.")
 
         # BARS
         bars_png_path = "./team_bars_pdf_direct.png"
@@ -406,10 +678,15 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
     print(f"✅ Informe de equipo generado en {OUTPUT_PDF}")
     print(f"📄 Tamaño del archivo: {file_size_mb:.2f} MB")
     if add_overview_and_bars:
+        pages = ["overview"]
+        if head_to_head_fig is not None:
+            pages.append("head-to-head")
+        pages.append("bars")
+        if clutch_fig is not None:
+            pages.append("clutch")
         if assists_fig is not None:
-            print(f"📊 PDF con overview, bars y asistencias + main report")
-        else:
-            print(f"📊 PDF con overview, bars (sin asistencias) + main report")
+            pages.append("asistencias")
+        print(f"📊 PDF con {', '.join(pages)} + main report")
     else:
         print(f"📊 PDF solo con main report (filtrado por jugadores)")
     print("[DEBUG] build_team_report finished.")

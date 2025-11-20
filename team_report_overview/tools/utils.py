@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 
 COLORS =  ["#f94144","#f3722c","#f8961e","#f9844a","#f9c74f","#90be6d","#43aa8b","#4d908e"  ]
-MIN_PARTIDOS = 5
+# Minimum games constant (can be overridden by function parameters)
+MIN_PARTIDOS = 1  # Changed from 5 to 1 as default
 
 def compute_advanced_stats(stats_base):
     """

@@ -2,7 +2,7 @@
 import streamlit as st
 from pathlib import Path
 import pandas as pd
-from phase_report.build_phase_report import build_phase_report, OUTPUT_PDF
+from phase_report.build_phase_report import build_phase_report
 
 # Import file configuration utilities
 from utils.file_config_ui import render_file_config_ui, validate_files
@@ -49,6 +49,54 @@ fases   = sorted(df_teams['FASE'].dropna().unique().tolist())
 sel_equipos = st.multiselect("Equipo(s):", options=equipos, placeholder="Selecciona equipos si es necesario")
 sel_fases   = st.multiselect("Fase(s):",   options=fases,  placeholder="Selecciona fases si es necesario")
 
+# --- Configuración de filtros mínimos ---
+st.subheader("⚙️ Configuración de filtros mínimos")
+st.info("🎯 Ajusta los valores mínimos para filtrar jugadores en los gráficos según su participación.")
+
+# Crear tres columnas para los filtros
+filter_col1, filter_col2, filter_col3 = st.columns(3)
+
+with filter_col1:
+    min_games = st.slider(
+        "🏀 Partidos mínimos",
+        min_value=0,
+        max_value=20,
+        value=5,
+        step=1,
+        help="Número mínimo de partidos jugados para aparecer en los gráficos"
+    )
+
+with filter_col2:
+    min_minutes = st.slider(
+        "⏱️ Minutos mínimos",
+        min_value=0,
+        max_value=200,
+        value=50,
+        step=10,
+        help="Número mínimo de minutos totales jugados para aparecer en los gráficos"
+    )
+
+with filter_col3:
+    min_shots = st.slider(
+        "🎯 Tiros mínimos",
+        min_value=0,
+        max_value=100,
+        value=20,
+        step=5,
+        help="Número mínimo de tiros realizados para aparecer en gráficos de tiro"
+    )
+
+# Mostrar resumen de filtros activos
+with st.expander("📊 Resumen de filtros activos", expanded=False):
+    st.write(f"""
+    **Filtros configurados:**
+    - **Partidos mínimos:** {min_games} partidos
+    - **Minutos mínimos:** {min_minutes} minutos totales
+    - **Tiros mínimos:** {min_shots} tiros (para gráficos de tiro)
+    
+    **Efecto:** Solo aparecerán jugadores que cumplan estos criterios en los gráficos correspondientes.
+    """)
+
 # --- Botón de generación ---
 if st.button("📄 Generar informe"):
     if not sel_equipos and not sel_fases:
@@ -56,22 +104,25 @@ if st.button("📄 Generar informe"):
     else:
         with st.spinner("Generando PDF..."):
             # Llamada a tu función con los archivos de datos (equipos y jugadores)
-            build_phase_report(
+            # La función ahora retorna la ruta del PDF generado
+            pdf_path = build_phase_report(
                 teams=sel_equipos,
                 phase=sel_fases or None,
                 teams_file=str(teams_file) if teams_file else None,
-                players_file=str(players_file) if players_file else None
+                players_file=str(players_file) if players_file else None,
+                min_games=min_games,
+                min_minutes=min_minutes,
+                min_shots=min_shots
             )
 
         # Leer el PDF generado
-        pdf_path = Path(OUTPUT_PDF)
-        if pdf_path.exists():
-            pdf_bytes = pdf_path.read_bytes()
-            st.success(f"✅ Informe listo: `{pdf_path.name}`")
+        if pdf_path and Path(pdf_path).exists():
+            pdf_bytes = Path(pdf_path).read_bytes()
+            st.success(f"✅ Informe listo: `{Path(pdf_path).name}`")
 
             # Store the PDF data in session state to persist the download button
             st.session_state['pdf_data'] = pdf_bytes
-            st.session_state['pdf_name'] = pdf_path.name
+            st.session_state['pdf_name'] = Path(pdf_path).name
         else:
             st.error("😞 Algo falló: no se ha encontrado el PDF.")
 
@@ -99,6 +150,52 @@ if 'pdf_data' in st.session_state and 'pdf_name' in st.session_state:
 st.markdown("---")
 
 st.subheader("ℹ️ Información sobre el Análisis Temporal")
+
+with st.expander("📊 Contenido del informe"):
+    st.write("""
+    El informe de fase incluye los siguientes análisis:
+    
+    1. **Team Heatmap** - Ranking de equipos por estadísticas
+    2. **Hierarchy Score Boxplot** - Distribución de puntos por equipo
+    3. **Net Rating Chart** - Rating ofensivo vs defensivo
+    4. **Plays vs Possessions** - Análisis de posesiones
+    5. **Play Distribution** - Distribución de tipos de jugadas
+    6. **Points Distribution** - Distribución de puntos
+    7. **PPP Quadrant** - Cuadrantes de eficiencia
+    8. **Rebound Analysis** - Análisis de rebotes
+    9. **Offensive Efficiency** - Top 20 eficiencia ofensiva
+    10. **Top Shooters** - Mejores tiradores
+    
+    **🔧 Filtros personalizables:**
+    - **Partidos mínimos:** Número mínimo de partidos para aparecer en gráficos de jugadores
+    - **Minutos mínimos:** Minutos totales mínimos para análisis de eficiencia
+    - **Tiros mínimos:** Tiros mínimos para gráficos de Top Shooters
+    """)
+
+with st.expander("⚙️ Configuración de filtros avanzada"):
+    st.write("""
+    **🎯 Filtros mínimos configurables:**
+    
+    **🏀 Partidos mínimos (0-20):**
+    - Controla qué jugadores aparecen en análisis individuales según participación
+    - **0:** Incluye todos los jugadores (sin filtro)
+    - **Recomendado:** 3-5 para análisis completo, 8-10 para jugadores regulares
+    
+    **⏱️ Minutos mínimos (0-200):**
+    - Filtra por tiempo total de juego en la temporada/fase
+    - **0:** Incluye todos los jugadores (sin filtro)
+    - **Recomendado:** 50-100 para análisis de eficiencia, 150+ para titulares
+    
+    **🎯 Tiros mínimos (0-100):**
+    - Específico para gráfico Top Shooters
+    - **0:** Incluye todos los jugadores (sin filtro)
+    - **Recomendado:** 15-25 para muestras representativas, 50+ para especialistas
+    
+    **💡 Consejos de configuración:**
+    - **Valores bajos:** Incluye más jugadores, análisis más amplio
+    - **Valores altos:** Enfoque en jugadores principales, datos más fiables
+    - **Ajuste por fase:** Ajusta según duración de la fase analizada
+    """)
 
 with st.expander("🎯 Cómo usar el filtrado por jornadas"):
     st.write("""

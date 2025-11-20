@@ -79,9 +79,22 @@ def generate_team_rebound_analysis(
     setup_montserrat_font()
 
 
-    # Agregar medias por equipo
-    stats = df.groupby('EQUIPO')[['%OREB','%REB','%DREB','REB OFFENSIVO','REB DEFENSIVO','PJ']].mean()
+    # IMPORTANTE: df ya viene filtrado (1 fila por equipo), NO agrupar
+    # Si agrupamos con mean(), estamos promediando valores ya filtrados incorrectamente
+    stats = df[['EQUIPO', '%OREB','%REB','%DREB','REB OFFENSIVO','REB DEFENSIVO','PJ']].copy()
+    
+    # Debug: Mostrar valores para EB FELIPE ANTÓN si existe
+    if 'EB FELIPE ANTÓN' in stats['EQUIPO'].values:
+        felipe = stats[stats['EQUIPO'] == 'EB FELIPE ANTÓN'].iloc[0]
+        print(f"[DEBUG REBOUND_ANALYSIS] 🏀 EB FELIPE ANTÓN:")
+        print(f"[DEBUG REBOUND_ANALYSIS]   %OREB: {felipe['%OREB']}")
+        print(f"[DEBUG REBOUND_ANALYSIS]   %DREB: {felipe['%DREB']}")
+        print(f"[DEBUG REBOUND_ANALYSIS]   %REB: {felipe['%REB']}")
+        print(f"[DEBUG REBOUND_ANALYSIS]   REB OFFENSIVO: {felipe['REB OFFENSIVO']}")
+        print(f"[DEBUG REBOUND_ANALYSIS]   REB DEFENSIVO: {felipe['REB DEFENSIVO']}")
+    
     stats = stats.sort_values('EQUIPO', ascending=True)
+    stats = stats.set_index('EQUIPO')  # Para mantener compatibilidad con el resto del código
     stats['REB'] = stats[['REB OFFENSIVO', 'REB DEFENSIVO']].sum(axis=1)
 
     # Colors & metric labels

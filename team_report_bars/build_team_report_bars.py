@@ -31,8 +31,12 @@ def compute_advanced_stats_bars(stats_base):
     T3C = stats.get('T3 CONVERTIDO', 0)         # 3-point field goals made
     T3I = stats.get('T3 INTENTADO', 0)          # 3-point field goals attempted
     
-    TOV = stats.get('PERDIDAS', 0)               # Turnovers
-    Plays = T1I * 0.44 + T2I + T3I + TOV
+    # IMPORTANTE: PERDIDAS ya está promediado por partido en teams_aggregated.xlsx
+    TOV = stats.get('PERDIDAS', 0)               # Turnovers (ya por partido)
+    PJ = stats.get('PJ', 1)                      # Partidos jugados
+    
+    # Calcular Plays promediado por partido para mantener consistencia con TOV
+    Plays = (T1I * 0.44 + T2I + T3I) / PJ + TOV if PJ > 0 else 0
 
     # --- BASIC CALCULATED STATS ---
     result = {}
@@ -42,10 +46,14 @@ def compute_advanced_stats_bars(stats_base):
     result['T2C'] = T2C
     result['T3C'] = T3C
 
-    # Play distribution percentages
-    result['F1 Plays%'] = (T1I * 0.44 / Plays * 100) if Plays > 0 else 0
-    result['F2 Plays%'] = (T2I / Plays * 100) if Plays > 0 else 0
-    result['F3 Plays%'] = (T3I / Plays * 100) if Plays > 0 else 0
+    # Play distribution percentages - calcular por partido también para consistencia
+    T1I_per_game = T1I / PJ if PJ > 0 else 0
+    T2I_per_game = T2I / PJ if PJ > 0 else 0
+    T3I_per_game = T3I / PJ if PJ > 0 else 0
+    
+    result['F1 Plays%'] = (T1I_per_game * 0.44 / Plays * 100) if Plays > 0 else 0
+    result['F2 Plays%'] = (T2I_per_game / Plays * 100) if Plays > 0 else 0
+    result['F3 Plays%'] = (T3I_per_game / Plays * 100) if Plays > 0 else 0
     result['TO Plays%'] = (TOV / Plays * 100) if Plays > 0 else 0
 
     # Individual shooting percentages

@@ -180,104 +180,128 @@ def compute_advanced_stats(stats_base, teams_file=None):
     result['PERDIDAS'] = TOV
     
     result['PJ'] = G  # Games played
-    result['Avg. MIN'] = Min / G if G > 0 else 0  # Average minutes per game
-    result['PUNTOS'] = Puntos / G if G > 0 else 0  # Average points per game
-
     
-    # Plays calculation (possessions used)
-    Plays = T1I * 0.44 + T2I + T3I + TOV
+    # CONVERTIR ESTADÍSTICAS A PROMEDIOS POR PARTIDO
+    # NOTA: RECUPEROS y PERDIDAS ya vienen promediados del archivo aggregated
+    # El resto vienen como TOTALES y hay que dividir por PJ
+    if G > 0:
+        Min_avg = Min / G
+        Puntos_avg = Puntos / G
+        T1C_avg = T1C / G
+        T1I_avg = T1I / G
+        T2C_avg = T2C / G
+        T2I_avg = T2I / G
+        T3C_avg = T3C / G
+        T3I_avg = T3I / G
+        RO_avg = RO / G
+        RD_avg = RD / G
+        AS_avg = AS / G
+        ROB_avg = ROB  # Ya es promedio
+        TOV_avg = TOV  # Ya es promedio
+        FC_avg = FC / G
+        FR_avg = FR / G
+    else:
+        Min_avg = Puntos_avg = T1C_avg = T1I_avg = T2C_avg = T2I_avg = 0
+        T3C_avg = T3I_avg = RO_avg = RD_avg = AS_avg = 0
+        ROB_avg = TOV_avg = FC_avg = FR_avg = 0
+    
+    result['Avg. MIN'] = Min_avg
+    result['PUNTOS'] = Puntos_avg
+    
+    # Plays calculation (possessions used) - usando promedios
+    Plays = T1I_avg * 0.44 + T2I_avg + T3I_avg + TOV_avg
     result['Plays'] = Plays
     
     # Points per play
-    result['PPP'] = Puntos / Plays
+    result['PPP'] = Puntos_avg / Plays if Plays > 0 else 0
     
-    # Per 100 possessions stats
-    result['RT'] = (RO + RD) / G if G > 0 else 0  # Total rebounds
-    result['RD'] = RD / G if G > 0 else 0  # Defensive rebounds
-    result['RO'] = RO / G if G > 0 else 0  # Offensive rebounds
-    result['AS'] = AS / G if G > 0 else 0  # Assists
-    result['ROB'] = ROB / G if G > 0 else 0  # Steals
-    result['TOV'] = TOV / G if G > 0 else 0  # Turnovers
-    result['TOV %'] = per100(TOV, Plays)
-    result['FC'] = FC / G if G > 0 else 0  # Fouls committed
-    result['FR'] = FR / G if G > 0 else 0  # Fouls received
+    # Estadísticas por partido (promedios)
+    result['RT'] = RO_avg + RD_avg  # Total rebounds
+    result['RD'] = RD_avg  # Defensive rebounds
+    result['RO'] = RO_avg  # Offensive rebounds
+    result['AS'] = AS_avg  # Assists
+    result['ROB'] = ROB_avg  # Steals
+    result['TOV'] = TOV_avg  # Turnovers
+    result['TOV %'] = per100(TOV_avg, Plays)
+    result['FC'] = FC_avg  # Fouls committed
+    result['FR'] = FR_avg  # Fouls received
 
-    # Total field goals
-    TCC = T2C + T3C  # Total field goals made
-    TCI = T2I + T3I  # Total field goals attempted
-    result['TCC'] = TCC / G if G > 0 else 0  # Total field goals per game
-    result['TCI'] = TCI / G if G > 0 else 0  # Total field goals attempted per game
+    # Total field goals - promedios por partido
+    TCC_avg = T2C_avg + T3C_avg  # Total field goals made per game
+    TCI_avg = T2I_avg + T3I_avg  # Total field goals attempted per game
+    result['TCC'] = TCC_avg
+    result['TCI'] = TCI_avg
 
     # --- ADVANCED METRICS ---
     
-    # Effective Field Goal percentage
-    result['EFG %'] = ((TCC + 0.5 * T3C) / TCI * 100) if TCI > 0 else 0
+    # Effective Field Goal percentage (usa valores originales para porcentajes)
+    result['EFG %'] = ((TCC_avg + 0.5 * T3C_avg) / TCI_avg * 100) if TCI_avg > 0 else 0
     
     # True Shooting percentage
-    TSA = TCI + 0.44 * T1I  # True shooting attempts
-    result['TS %'] = (Puntos / (2 * TSA) * 100) if TSA > 0 else 0
+    TSA_avg = TCI_avg + 0.44 * T1I_avg  # True shooting attempts per game
+    result['TS %'] = (Puntos_avg / (2 * TSA_avg) * 100) if TSA_avg > 0 else 0
     
     # Free throw rate
-    result['RTL'] = (T1I / Plays) if Plays > 0 else 0
+    result['RTL'] = (T1I_avg / Plays) if Plays > 0 else 0
     
-    # Points per shot type
-    result['PT1'] = T1C if T1I > 0 else 0  # Points from free throws
-    result['PT2'] = T2C * 2 if T2I > 0 else 0  # Points from 2-point shots
-    result['PT3'] = T3C * 3 if T3I > 0 else 0  # Points from 3-point shots
+    # Points per shot type (promedios por partido)
+    result['PT1'] = T1C_avg if T1I_avg > 0 else 0  # Points from free throws per game
+    result['PT2'] = T2C_avg * 2 if T2I_avg > 0 else 0  # Points from 2-point shots per game
+    result['PT3'] = T3C_avg * 3 if T3I_avg > 0 else 0  # Points from 3-point shots per game
     
-    # Points per attempt by shot type
-    result['PPT1'] = (T1C / T1I) if T1I > 0 else 0
-    result['PPT2'] = (T2C * 2 / T2I) if T2I > 0 else 0
-    result['PPT3'] = (T3C * 3 / T3I) if T3I > 0 else 0
+    # Points per attempt by shot type (porcentajes, no necesitan conversión)
+    result['PPT1'] = (T1C_avg / T1I_avg) if T1I_avg > 0 else 0
+    result['PPT2'] = (T2C_avg * 2 / T2I_avg) if T2I_avg > 0 else 0
+    result['PPT3'] = (T3C_avg * 3 / T3I_avg) if T3I_avg > 0 else 0
     
     # Percentage of points from each shot type relative to PPP
     PPP = result['PPP'] if result['PPP'] > 0 else 1  # Avoid division by zero
-    result['PPPT1'] = ((T1C / Plays) / PPP) if Plays > 0 and PPP > 0 else 0
-    result['PPPT2'] = ((T2C * 2 / Plays) / PPP) if Plays > 0 and PPP > 0 else 0
-    result['PPPT3'] = ((T3C * 3 / Plays) / PPP) if Plays > 0 and PPP > 0 else 0
+    result['PPPT1'] = ((T1C_avg / Plays) / PPP) if Plays > 0 and PPP > 0 else 0
+    result['PPPT2'] = ((T2C_avg * 2 / Plays) / PPP) if Plays > 0 and PPP > 0 else 0
+    result['PPPT3'] = ((T3C_avg * 3 / Plays) / PPP) if Plays > 0 and PPP > 0 else 0
     
-    # Play distribution percentages
-    result['F1 Plays%'] = (T1I * 0.44 / Plays * 100) if Plays > 0 else 0
-    result['F2 Plays%'] = (T2I / Plays * 100) if Plays > 0 else 0
-    result['F3 Plays%'] = (T3I / Plays * 100) if Plays > 0 else 0
-    result['TO Plays%'] = (TOV / Plays * 100) if Plays > 0 else 0
+    # Play distribution percentages (usar promedios)
+    result['F1 Plays%'] = (T1I_avg * 0.44 / Plays * 100) if Plays > 0 else 0
+    result['F2 Plays%'] = (T2I_avg / Plays * 100) if Plays > 0 else 0
+    result['F3 Plays%'] = (T3I_avg / Plays * 100) if Plays > 0 else 0
+    result['TO Plays%'] = (TOV_avg / Plays * 100) if Plays > 0 else 0
     
-    # Possession Scoring percentage (complex formula)
-    if TCC > 0 and T1I > 0:
-        FT_miss_impact = (1 - (1 - T1C/T1I)**2) * 0.44 * T1I
-        PS_numerator = TCC + FT_miss_impact
+    # Possession Scoring percentage (complex formula) - usar promedios
+    if TCC_avg > 0 and T1I_avg > 0:
+        FT_miss_impact = (1 - (1 - T1C_avg/T1I_avg)**2) * 0.44 * T1I_avg
+        PS_numerator = TCC_avg + FT_miss_impact
     else:
-        PS_numerator = TCC
+        PS_numerator = TCC_avg
     
     result['PS%'] = (PS_numerator / Plays * 100) if Plays > 0 else 0
     
-    # Offensive Efficiency
-    OE_denominator = TCI - RO + AS + TOV
-    result['OE'] = ((TCC + AS) / OE_denominator) if OE_denominator > 0 else 0
+    # Offensive Efficiency - usar promedios
+    OE_denominator = TCI_avg - RO_avg + AS_avg + TOV_avg
+    result['OE'] = ((TCC_avg + AS_avg) / OE_denominator) if OE_denominator > 0 else 0
     
     # Efficient Points Scored
-    result['EPS'] = Puntos * result['OE']
+    result['EPS'] = Puntos_avg * result['OE']
     
     # Additional calculated stats for the report
-    # TODO calcular USG
+    # USG usa TOTALES, no promedios
     result['USG %'] = compute_usg(result['EQUIPO'], Min, T1I, T2I, T3I, TOV, teams_file)
     
-    # PS%: Possession Scoring percentage (using the provided formula)
-    if TCC != 0 and T1I > 0:
-        PS_numerator = TCC + (1 - (1 - T1C / T1I) ** 2) * 0.44 * T1I
+    # PS%: Possession Scoring percentage (using the provided formula) - usar promedios
+    if TCC_avg > 0 and T1I_avg > 0:
+        PS_numerator = TCC_avg + (1 - (1 - T1C_avg / T1I_avg) ** 2) * 0.44 * T1I_avg
     else:
         PS_numerator = 0
     result['P. Anot. %'] = (PS_numerator / Plays * 100) if Plays > 0 else 0
     
-    # Individual shooting percentages
+    # Individual shooting percentages (porcentajes, usan totales)
     result['T1 %'] = (T1C / T1I * 100) if T1I > 0 else 0
     result['T2 %'] = (T2C / T2I * 100) if T2I > 0 else 0
     result['T3 %'] = (T3C / T3I * 100) if T3I > 0 else 0
     
-    # Average attempts per game
-    result['T1I'] = T1I / G if G > 0 else 0
-    result['T2I'] = T2I / G if G > 0 else 0
-    result['T3I'] = T3I / G if G > 0 else 0
+    # Intentos: ya convertidos a promedios arriba
+    result['T1I'] = T1I_avg
+    result['T2I'] = T2I_avg
+    result['T3I'] = T3I_avg
     
     # Round all percentage values to 2 decimal places
     for key, value in result.items():
@@ -368,16 +392,25 @@ def generate_report(player_name, data_file=None, teams_file=None, clutch_file=No
 
     # --- FOTO DEL JUGADOR ---
     photo_url = stats.get('IMAGEN', '')
-    if photo_url:
+    # Convert to string and handle NaN/empty values
+    if pd.notna(photo_url) and str(photo_url).strip():
+        photo_url_str = str(photo_url).strip()
         # Check if the photo URL is a valid path or URL
-        if photo_url.startswith('http'):
+        if photo_url_str.startswith('http'):
             # Download the image from the URL
             try:
-                response = requests.get(photo_url, timeout=10)
+                response = requests.get(photo_url_str, timeout=10)
                 response.raise_for_status()
                 photo = Image.open(io.BytesIO(response.content)).convert('RGBA')
             except Exception as e:
-                print(f"⚠️ Error downloading photo from {photo_url}: {e}")
+                print(f"⚠️ Error downloading photo from {photo_url_str}: {e}")
+                photo = Image.open(DEFAULT_PHOTO).convert('RGBA')
+        else:
+            # Try to load as local file
+            try:
+                photo = Image.open(photo_url_str).convert('RGBA')
+            except Exception as e:
+                print(f"⚠️ Error loading photo from {photo_url_str}: {e}")
                 photo = Image.open(DEFAULT_PHOTO).convert('RGBA')
     else:
         photo = Image.open(DEFAULT_PHOTO).convert('RGBA')
@@ -457,16 +490,16 @@ def generate_report(player_name, data_file=None, teams_file=None, clutch_file=No
     base.paste(tbl1, (COORDS['table_start'][0], COORDS['table_start'][1]), tbl1)
 
     
-    # Prepare stats for second table (line 2)
+    # Prepare stats for second table (line 2) - todos son promedios por partido
     stats_line_2 = {
-        "Puntos": str(stats.get('PUNTOS', 0)),
-        "RT": str(stats.get('RT', 0)),
-        "RD": str(stats.get('RD', 0)),
-        "RO": str(stats.get('RO', 0)),
-        "AST": str(stats.get('AS', 0)),
-        "TOV": str(stats.get('TOV', 0)),
-        "TCC": str(stats.get('TCC', 0)),
-        "TCI": str(stats.get('TCI', 0)),
+        "Puntos": f"{stats.get('PUNTOS', 0):.1f}",
+        "RT": f"{stats.get('RT', 0):.1f}",
+        "RD": f"{stats.get('RD', 0):.1f}",
+        "RO": f"{stats.get('RO', 0):.1f}",
+        "AST": f"{stats.get('AS', 0):.1f}",
+        "TOV": f"{stats.get('TOV', 0):.1f}",
+        "TCC": f"{stats.get('TCC', 0):.1f}",
+        "TCI": f"{stats.get('TCI', 0):.1f}",
         "P. Anot. %": f"{stats.get('P. Anot. %', 0):.1f}%"
     }
     tbl2 = plot_generic_stats_table(stats_line_2, width_px=1300, height_px=85)
@@ -484,10 +517,11 @@ def generate_report(player_name, data_file=None, teams_file=None, clutch_file=No
     }
     
     # Attempt data for the bars (only for T1, T2, T3)
+    # Los intentos ya vienen como promedios por partido desde compute_advanced_stats
     bars_attempts = {
-        "T1I": stats.get('T1I', 0),
-        "T2I": stats.get('T2I', 0),
-        "T3I": stats.get('T3I', 0),
+        "T1I": stats.get('T1I', 0),  # Ya es promedio por partido
+        "T2I": stats.get('T2I', 0),  # Ya es promedio por partido
+        "T3I": stats.get('T3I', 0),  # Ya es promedio por partido
         "EFGI": 0,  # EFG % and TS % don't have direct attempts
         "TSI": 0
     }

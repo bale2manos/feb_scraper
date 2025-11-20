@@ -50,7 +50,8 @@ def build_team_report_overview(
     df_rebound_data: pd.DataFrame,
     output_path: str = None,
     dpi: int = 180,  # Usar mismo DPI que build_team_report.py para consistencia
-    players_file: str = None  # Nuevo parámetro para archivo de jugadores
+    players_file: str = None,  # Nuevo parámetro para archivo de jugadores
+    min_games: int = 1  # Nuevo parámetro para filtro mínimo de partidos
 ) -> plt.Figure:
     """
     Genera el reporte overview del equipo con header y análisis de rebotes.
@@ -86,7 +87,7 @@ def build_team_report_overview(
     
     # Fijar tamaño constante para las figuras de los módulos de jugadores
     fixed_figsize = (4, 3.5)
-    top_minutes_fig = plot_top_minutes(df_jugadores, team_name, figsize=fixed_figsize)
+    top_minutes_fig = plot_top_minutes(df_jugadores, team_name, figsize=fixed_figsize, min_games=min_games)
     buf = io.BytesIO()
     top_minutes_fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.0)
     plt.close(top_minutes_fig)
@@ -99,7 +100,7 @@ def build_team_report_overview(
     
     # Fijar tamaño constante para las figuras de los módulos de jugadores
     fixed_figsize = (4, 3.5)
-    top_scorers_fig = plot_top_scorers(df_jugadores, team_name, figsize=fixed_figsize)
+    top_scorers_fig = plot_top_scorers(df_jugadores, team_name, figsize=fixed_figsize, min_games=min_games)
     buf = io.BytesIO()
     top_scorers_fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.0)
     plt.close(top_scorers_fig)
@@ -112,7 +113,7 @@ def build_team_report_overview(
     
     # Fijar tamaño constante para las figuras de los módulos de jugadores
     fixed_figsize = (4, 3.5)
-    top_scorers_fig = plot_top_rebounders(df_jugadores, team_name, figsize=fixed_figsize)
+    top_scorers_fig = plot_top_rebounders(df_jugadores, team_name, figsize=fixed_figsize, min_games=min_games)
     buf = io.BytesIO()
     top_scorers_fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.0)
     plt.close(top_scorers_fig)
@@ -125,7 +126,7 @@ def build_team_report_overview(
     
         # Fijar tamaño constante para las figuras de los módulos de jugadores
     fixed_figsize = (4, 3.5)
-    top_scorers_fig = plot_top_turnovers(df_jugadores, team_name, figsize=fixed_figsize)
+    top_scorers_fig = plot_top_turnovers(df_jugadores, team_name, figsize=fixed_figsize, min_games=min_games)
     buf = io.BytesIO()
     top_scorers_fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', pad_inches=0.0)
     plt.close(top_scorers_fig)

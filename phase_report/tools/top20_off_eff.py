@@ -21,12 +21,14 @@ from .utils import (
 def plot_offensive_efficiency(
     df: pd.DataFrame,
     teams: list[str] | None = None,
-    phase: str | None = None
+    phase: str | None = None,
+    min_games: int = 5,
+    min_minutes: int = 50
 ):
     """
     TOP-20 Offensive Efficiency: scatter PPP vs Plays, bubble size ~ minutes,
     color = team's main logo color, median reference lines.
-    Filters: PJ>2, MINUTOS JUGADOS>10.
+    Filters: PJ>min_games, MINUTOS JUGADOS>min_minutes (configurable).
     """
     # 0) load + Montserrat
     setup_montserrat_font()
@@ -35,8 +37,8 @@ def plot_offensive_efficiency(
     df = apply_phase_filter(df, phase)
     df = apply_teams_filter(df, teams)
 
-    # 2) apply PJ and minutes filters
-    df = apply_basic_filters(df, min_games=5, min_minutes_avg=10, min_total_minutes=150)
+    # 2) apply configurable PJ and minutes filters
+    df = apply_basic_filters(df, min_games=min_games, min_minutes_avg=10, min_total_minutes=min_minutes)
 
     # 3) compute plays and PPP
     df['PLAYS'] = compute_plays(df)
@@ -100,7 +102,9 @@ def plot_offensive_efficiency(
     # Draw circles with original team colors (no lightening)
     ax.scatter(x, y, s=s, c=colors, alpha=0.7, edgecolor='k', linewidth=0.5, zorder=2)
     
-    # 8.1) Add team logos inside bubbles
+    # 8.1) Add team logos inside bubbles with fixed maximum size
+    from PIL import Image as PILImage
+    
     fig.canvas.draw()  # Draw figure to get correct bbox
     x_data_range = ax.get_xlim()[1] - ax.get_xlim()[0]
     y_data_range = ax.get_ylim()[1] - ax.get_ylim()[0]
@@ -111,35 +115,36 @@ def plot_offensive_efficiency(
         if logo is None:
             continue
             
-        # Calculate bubble size in data coordinates
-        bubble_radius = np.sqrt(s[i] / np.pi)  # Radius from area in points
+        # Calculate target size: percentage of bubble radius
+        bubble_area = s[i]  # Area in points^2
+        bubble_radius_points = np.sqrt(bubble_area / np.pi)  # Radius in points
+        logo_radius_points = bubble_radius_points * 0.4  # 40% of bubble radius
+        target_size_points = logo_radius_points * 2  # Diameter in points
         
-        # Convert bubble radius to data coordinates
-        data_to_pixel_ratio = bbox.height / y_data_range
-        bubble_radius_data = bubble_radius / data_to_pixel_ratio
+        # Convert to pixels (assuming 72 DPI for points-to-pixels)
+        target_size_px = int(target_size_points)
         
-        # Get logo dimensions
+        # Apply maximum size constraint
+        max_logo_size_px = 60  # Maximum logo size in pixels
+        target_size_px = min(target_size_px, max_logo_size_px)
+        
+        # Resize logo to fixed size maintaining aspect ratio
         logo_width, logo_height = logo.size
-        logo_aspect_ratio = logo_width / logo_height
+        aspect_ratio = logo_width / logo_height
         
-        # Calculate target size based on bubble diameter (use 70% of bubble diameter for padding)
-        target_diameter_data = bubble_radius_data * 2 * 0.25
+        if aspect_ratio > 1:
+            # Wider than tall
+            new_width = target_size_px
+            new_height = int(target_size_px / aspect_ratio)
+        else:
+            # Taller than wide
+            new_height = target_size_px
+            new_width = int(target_size_px * aspect_ratio)
         
-        # Determine which dimension (width or height) is the limiting factor
-        if logo_aspect_ratio > 1:  # Logo is wider than tall
-            # Width is the limiting factor
-            target_width_data = target_diameter_data
-            target_height_data = target_width_data / logo_aspect_ratio
-        else:  # Logo is taller than wide (or square)
-            # Height is the limiting factor
-            target_height_data = target_diameter_data
-            target_width_data = target_height_data * logo_aspect_ratio
+        # Resize the logo
+        logo_resized = logo.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
         
-        # Convert target size back to pixels and calculate zoom
-        target_width_pixels = target_width_data * data_to_pixel_ratio * (bbox.width / x_data_range)
-        zoom = target_width_pixels / logo_width
-        
-        img_box = OffsetImage(logo, zoom=zoom)
+        img_box = OffsetImage(logo_resized, zoom=1.0)  # zoom=1 since we already resized
         
         ab = AnnotationBbox(
             img_box,

@@ -68,12 +68,12 @@ jugadores = sorted(df_players['JUGADOR'].dropna().unique().tolist())
 # --- Widgets ---
 st.subheader("Opciones de filtrado")
 
-# Crear dos columnas para los widgets
+# Crear dos columnas para los widgets principales
 col1, col2 = st.columns(2)
 
 with col1:
     sel_equipo = st.selectbox(
-        "Equipo:", 
+        "🏀 Equipo:", 
         options=[""] + equipos, 
         index=0,
         placeholder="Selecciona un equipo"
@@ -81,10 +81,78 @@ with col1:
 
 with col2:
     sel_jugadores = st.multiselect(
-        "Jugadores específicos:", 
+        "👥 Jugadores específicos:", 
         options=jugadores, 
         placeholder="Selecciona jugadores específicos (opcional)"
     )
+
+# --- Filtros de localía ---
+st.subheader("📍 Filtros de localía")
+
+col_home1, col_home2 = st.columns(2)
+
+with col_home1:
+    home_away_filter = st.radio(
+        "🏠 Filtro general de localía:",
+        options=["Todos", "Local", "Visitante"],
+        index=0,
+        help="Filtra todos los partidos del equipo según donde jugó (afecta estadísticas generales)",
+        horizontal=True
+    )
+
+with col_home2:
+    home_away_filter_display = {
+        "Todos": "🌍 Todos los partidos",
+        "Local": "🏠 Solo partidos como local",
+        "Visitante": "✈️ Solo partidos como visitante"
+    }
+    st.info(f"**Filtro activo:** {home_away_filter_display[home_away_filter]}")
+
+# --- Head to Head Configuration ---
+st.subheader("🆚 Configuración Head-to-Head (opcional)")
+
+col_h2h1, col_h2h2 = st.columns([2, 1])
+
+with col_h2h1:
+    # Obtener lista de equipos disponibles para H2H (excluyendo el equipo seleccionado)
+    equipos_disponibles_h2h = [eq for eq in equipos if eq != sel_equipo] if sel_equipo else equipos
+    
+    # Buscar "GRUPO EGIDO PINTOBASKET" como equipo por defecto
+    default_rival_idx = 0  # Fallback al primero
+    default_rival_name = "GRUPO EGIDO PINTOBASKET"
+    
+    if default_rival_name in equipos_disponibles_h2h:
+        default_rival_idx = equipos_disponibles_h2h.index(default_rival_name)
+    elif equipos_disponibles_h2h:
+        default_rival_idx = 0
+    else:
+        default_rival_idx = None
+    
+    rival_team = st.selectbox(
+        "🏆 Equipo rival para comparación:",
+        options=equipos_disponibles_h2h,
+        index=default_rival_idx,
+        help="Este equipo aparecerá en la página de comparación head-to-head del informe"
+    )
+
+with col_h2h2:
+    h2h_home_away_filter = st.radio(
+        "📍 Localía H2H:",
+        options=["Todos", "Local", "Visitante"],
+        index=0,
+        help="Filtra los enfrentamientos directos según donde jugó tu equipo"
+    )
+
+# Información sobre H2H
+if rival_team:
+    h2h_info_display = {
+        "Todos": "todos los enfrentamientos",
+        "Local": "solo enfrentamientos como local",
+        "Visitante": "solo enfrentamientos como visitante"
+    }
+    st.info(f"🆚 Se generará comparación H2H con **{rival_team}** ({h2h_info_display[h2h_home_away_filter]})")
+else:
+    st.warning("⚠️ No se generará página H2H (no hay rival seleccionado)")
 
 # --- Configuración de filtros mínimos ---
 st.subheader("⚙️ Configuración de filtros mínimos")
@@ -167,6 +235,9 @@ with col_btn1:
                             teams_file=str(teams_file),
                             clutch_lineups_file=str(clutch_lineups_file),
                             assists_file=str(assists_file) if assists_file else None,
+                            rival_team=rival_team if rival_team else None,
+                            home_away_filter=home_away_filter,
+                            h2h_home_away_filter=h2h_home_away_filter,
                             min_games=min_games,
                             min_minutes=min_minutes,
                             min_shots=min_shots
@@ -181,6 +252,9 @@ with col_btn1:
                             teams_file=str(teams_file),
                             clutch_lineups_file=str(clutch_lineups_file),
                             assists_file=str(assists_file) if assists_file else None,
+                            rival_team=rival_team if rival_team else None,
+                            home_away_filter=home_away_filter,
+                            h2h_home_away_filter=h2h_home_away_filter,
                             min_games=min_games,
                             min_minutes=min_minutes,
                             min_shots=min_shots
@@ -254,6 +328,9 @@ with col_btn2:
                             teams_file=str(teams_file),
                             clutch_lineups_file=str(clutch_lineups_file),
                             assists_file=str(assists_file) if assists_file else None,
+                            rival_team=None,  # No usar rival en generación masiva
+                            home_away_filter=home_away_filter,
+                            h2h_home_away_filter="Todos",  # Todos por defecto en masivo
                             min_games=min_games,
                             min_minutes=min_minutes,
                             min_shots=min_shots

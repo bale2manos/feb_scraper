@@ -44,6 +44,11 @@ def plot_offensive_efficiency(
     df['PLAYS'] = compute_plays(df)
     df['PPP'] = compute_ppp(df)
     
+    # Quiero que aqui para debugger imprimas el PPP del jugador que en al apellido tenga "RUEDA"
+    for index, row in df.iterrows():
+        if "RUEDA" in row['JUGADOR'].upper():
+            print(f"DEBUG: Jugador con 'RUEDA' encontrado: {row['JUGADOR']} - PPP: {row['PPP']}")
+    
     # 3) take top-20 by PPP
     df = df.nlargest(20, 'PPP').reset_index(drop=True)
 
@@ -57,6 +62,8 @@ def plot_offensive_efficiency(
     
     # Format player names using the utility function
     formatted_names = [format_player_name(name, dorsal) for name, dorsal in zip(names, dorsals)]
+
+
 
     # 5) extract colors per row (cache by team)
     color_map = {}

@@ -213,7 +213,14 @@ def compute_advanced_stats(stats_base, teams_file=None):
     result['Plays'] = Plays
     
     # Points per play
-    result['PPP'] = Puntos_avg / Plays if Plays > 0 else 0
+    # Prefer computing PPP from TOTALS (to match phase-report behavior):
+    # PPP_total = total_points / total_plays (where total_plays = T1I*0.44 + T2I + T3I + TOV)
+    total_plays = T1I * 0.44 + T2I + T3I + TOV
+    if total_plays > 0:
+        result['PPP'] = Puntos / total_plays
+    else:
+        # Fallback to per-game PPP if totals are not available
+        result['PPP'] = Puntos_avg / Plays if Plays > 0 else 0
     
     # Estadísticas por partido (promedios)
     result['RT'] = RO_avg + RD_avg  # Total rebounds
@@ -485,6 +492,10 @@ def generate_report(player_name, data_file=None, teams_file=None, clutch_file=No
         "PPP": f"{stats.get('PPP', 0):.2f}",
         "USG %": f"{stats.get('USG %', 0):.2f}%",
     }
+    
+    # DEBUG
+    print("Player name:", player_name)
+    print("PPP computed:", stats.get('PPP', 0))
 
     tbl1 = plot_stats_table_simple(stats_line_1, width_px=200, height_px=25)
     base.paste(tbl1, (COORDS['table_start'][0], COORDS['table_start'][1]), tbl1)

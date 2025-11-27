@@ -34,6 +34,7 @@ def draw_ppp_quadrant(
     mean_ppp     = agg['PPP'].mean()
     mean_ppp_opp = agg['PPP OPP'].mean()
 
+
     # 4) Lienzo y medias - BIGGER CANVAS
     fig, ax = plt.subplots(figsize=(10, 10), dpi=150)
     

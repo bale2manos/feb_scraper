@@ -231,17 +231,19 @@ class JornadaConsolidator:
                     'PPP', 'PPP OPP',          # Points per possession
                     'OFFRTG', 'DEFRTG', 'NETRTG',  # Ratings
                     'TS%', 'EFG%',             # Shooting percentages
-                    'TOV%',                    # Turnover percentage
+                    'TOV%',                    # Turnover percentage (rate stat, always averaged)
                     '%AST',                    # Assist percentage
                     'USG%',                    # Usage percentage
                     'FG%', '2P%', '3P%', 'FT%',  # Field goal percentages
                     'ORB%', 'DRB%', 'TRB%',   # Additional rebound percentages
-                    'AST%', 'STL%', 'BLK%',   # Additional stat percentages
+                    'AST%', 'STL%', 'BLK%',   # Stat percentages (rates, always averaged)
                     'PER',                     # Player Efficiency Rating
                     'PACE',                    # Pace factor
-                    # WARNING: These are ONLY included because we assume per-game average format
-                    'PERDIDAS', 'TOV',         # Turnovers (per-game averages in aranjuez format)
-                    'RECUPEROS', 'ROB', 'STL'  # Steals (per-game averages in aranjuez format)
+                    # WARNING: The following are ONLY included because we assume per-game average format
+                    # Note: TOV%/STL% above are percentage rates (always averaged)
+                    #       TOV/STL below are raw counts (format-dependent)
+                    'PERDIDAS', 'TOV',         # Turnover count (per-game avg in aranjuez format)
+                    'RECUPEROS', 'ROB', 'STL'  # Steal count (per-game avg in aranjuez format)
                 ]
                 
                 # Identify numeric columns to sum or average

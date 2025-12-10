@@ -216,10 +216,16 @@ class JornadaConsolidator:
                     # DORSAL no se usa como clave de agrupación, se tomará el último
                 
                 # Define columns that should be averaged instead of summed
-                # NOTE: PERDIDAS and RECUPEROS handling depends on source file format:
-                # - If source uses aranjuez_aggregate.py: these are per-game averages → should AVERAGE
-                # - If source uses aggregate_players_integrated.py: these are totals → should SUM
-                # Current implementation assumes they are per-game averages (aranjuez format)
+                # 
+                # IMPORTANT: PERDIDAS and RECUPEROS handling depends on source file format:
+                # - aranjuez_aggregate.py: outputs per-game averages → MUST average when consolidating
+                # - aggregate_players_integrated.py: outputs totals → MUST sum when consolidating
+                # 
+                # CURRENT IMPLEMENTATION: Assumes per-game averages (aranjuez format)
+                # 
+                # TODO: Add runtime detection or configuration parameter to handle both formats
+                # For now, if consolidating files from aggregate_players_integrated.py,
+                # remove PERDIDAS/TOV/RECUPEROS/ROB/STL from this list before consolidating.
                 average_cols = [
                     '%REB', '%OREB', '%DREB',  # Rebound percentages
                     'PPP', 'PPP OPP',          # Points per possession
@@ -233,8 +239,9 @@ class JornadaConsolidator:
                     'AST%', 'STL%', 'BLK%',   # Additional stat percentages
                     'PER',                     # Player Efficiency Rating
                     'PACE',                    # Pace factor
-                    'PERDIDAS', 'TOV',         # Turnovers (averaged if source has per-game values)
-                    'RECUPEROS', 'ROB', 'STL'  # Steals (averaged if source has per-game values)
+                    # WARNING: These are ONLY included because we assume per-game average format
+                    'PERDIDAS', 'TOV',         # Turnovers (per-game averages in aranjuez format)
+                    'RECUPEROS', 'ROB', 'STL'  # Steals (per-game averages in aranjuez format)
                 ]
                 
                 # Identify numeric columns to sum or average
@@ -247,8 +254,8 @@ class JornadaConsolidator:
                     agg_dict = {}
                     
                     for col in numeric_cols:
-                        # Check if this column should be averaged
-                        should_average = any(avg_pattern in col for avg_pattern in average_cols)
+                        # Check if this column should be averaged (exact match only)
+                        should_average = col in average_cols
                         if should_average:
                             agg_dict[col] = 'mean'
                         else:

@@ -22,6 +22,8 @@ STATS_NAME_MAPPING = {
     'AST': 'ASISTENCIAS',
     'ROB': 'RECUPEROS',
     'TOV': 'PERDIDAS',
+    'FC': 'FaltasCOMETIDAS',
+    'FR': 'FaltasRECIBIDAS',
 }
 
 def make_discrete_cmap(n: int, anchor_hexes: list[str]):
@@ -71,7 +73,8 @@ def generate_team_heatmap(
         'T3C', 'T3I',
         'T2C', 'T2I',
         'T1C', 'T1I',
-        'TOV', 'ROB', 'OREB', 'DREB',  'AST'
+        'TOV', 'ROB', 'OREB', 'DREB', 'AST',
+        'FC', 'FR'
     ]
     
     
@@ -110,12 +113,17 @@ def generate_team_heatmap(
     team_stats['TCC'] = team_stats['T2C'] + team_stats['T3C']
     team_stats['TCI'] = team_stats['T2I'] + team_stats['T3I']
 
+    # Porcentajes: triples y tiros libres
+    team_stats['T3 %'] = np.where(team_stats['T3I'] > 0, team_stats['T3C'] / team_stats['T3I'] * 100, 0)
+    team_stats['TL %'] = np.where(team_stats['T1I'] > 0, team_stats['T1C'] / team_stats['T1I'] * 100, 0)
+
     # Ordenar columnas
     team_stats = team_stats[['PUNTOS +', 'PPP', 'PUNTOS -', 'PPP OPP',
                              'TCC', 'TCI',
-                             'T3C', 'T3I',
-                             'T1C', 'T1I',
-                             'TOV', 'ROB', 'OREB', 'DREB',  'AST'
+                             'T3C', 'T3I', 'T3 %',
+                             'T1C', 'T1I', 'TL %',
+                             'TOV', 'ROB', 'OREB', 'DREB', 'AST',
+                             'FC', 'FR'
                              ]]
 
     # 4) Calcular ranking con lógica específica por métrica

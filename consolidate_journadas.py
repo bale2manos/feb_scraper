@@ -228,7 +228,9 @@ class JornadaConsolidator:
                     'ORB%', 'DRB%', 'TRB%',   # Additional rebound percentages
                     'AST%', 'STL%', 'BLK%',   # Additional stat percentages
                     'PER',                     # Player Efficiency Rating
-                    'PACE'                     # Pace factor
+                    'PACE',                    # Pace factor
+                    'PERDIDAS', 'TOV',         # Turnovers (already averaged per game in source files)
+                    'RECUPEROS', 'ROB', 'STL'  # Steals (already averaged per game in source files)
                 ]
                 
                 # Identify numeric columns to sum or average

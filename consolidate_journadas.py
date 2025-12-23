@@ -248,9 +248,33 @@ class JornadaConsolidator:
                         else:
                             agg_dict[col] = 'sum'
                     
-                    # For DORSAL, take the last value (from the highest jornada)
+                    # Sort by JORNADA before aggregation to ensure 'last' means latest jornada
+                    if 'JORNADA' in combined_df.columns:
+                        combined_df = combined_df.sort_values('JORNADA')
+                    
+                    # For DORSAL, take the last two unique values only if different in recent games
                     if 'DORSAL' in combined_df.columns and 'DORSAL' not in group_cols:
-                        agg_dict['DORSAL'] = 'last'
+                        def get_last_two_dorsals(series):
+                            # Take last 5 values (most recent games)
+                            recent_dorsals = series.dropna().tail(5)
+                            if len(recent_dorsals) == 0:
+                                return ''
+                            
+                            # Get unique dorsals in last 5 games
+                            unique_recent = recent_dorsals.unique()
+                            
+                            # If only one dorsal in last 5 games, return just that one
+                            if len(unique_recent) == 1:
+                                return str(unique_recent[-1])
+                            
+                            # If multiple dorsals in last 5 games, get last two unique from full series
+                            all_unique_dorsals = series.dropna().unique()
+                            if len(all_unique_dorsals) <= 1:
+                                return str(all_unique_dorsals[-1]) if len(all_unique_dorsals) > 0 else ''
+                            else:
+                                # Return last two in format: most_recent/second_most_recent
+                                return f"{all_unique_dorsals[-1]}/{all_unique_dorsals[-2]}"
+                        agg_dict['DORSAL'] = get_last_two_dorsals
                     
                     # For non-numeric, non-group columns, take first value
                     other_cols = [col for col in combined_df.columns 

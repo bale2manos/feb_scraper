@@ -174,14 +174,18 @@ def compute_advanced_stats(stats_base):
 
 
 
-def format_player_name(jugador: str, dorsal: int) -> str:
+def format_player_name(jugador: str, dorsal: str | int) -> str:
     """
     Format player name from 'SURNAMES, NAME' or 'I. SURNAMES' to 'DORSAL - NAME FIRST_SURNAME'
     If there are 3+ names, show only the first two.
+    Handles dorsal in 'recent/previous' format (e.g., '15/16') by using the first number.
     """
-    # Remove decimal part of dorsal if present
-    dorsal = int(dorsal) if isinstance(dorsal, (int, float)) else dorsal
-    dorsal = dorsal.replace('.0', '') if isinstance(dorsal, str) else dorsal
+    # Convert dorsal to string and extract first number if in 'recent/previous' format
+    dorsal_str = str(dorsal)
+    if '/' in dorsal_str:
+        dorsal_str = dorsal_str.split('/')[0]
+    # Remove decimal part if present
+    dorsal_str = dorsal_str.replace('.0', '')
     
     if ', ' in jugador:
         # Format: SURNAMES, NAME
@@ -192,19 +196,19 @@ def format_player_name(jugador: str, dorsal: int) -> str:
         name_parts = name.split()
         if len(name_parts) >= 2:
             name = ' '.join(name_parts[:2])
-        return f"{dorsal} - {name} {first_surname}"
+        return f"{dorsal_str} - {name} {first_surname}"
     elif '. ' in jugador and len(jugador.split('. ')[0]) == 1:
         # Format: I. SURNAMES (initial and surnames)
         initial, surnames = jugador.split('. ', 1)
         # Take only the first surname if there are multiple
         first_surname = surnames.split()[0]
-        return f"{dorsal} - {initial}. {first_surname}"
+        return f"{dorsal_str} - {initial}. {first_surname}"
     else:
         # Fallback for other formats - limit to first two words
         parts = jugador.split()
         if len(parts) >= 2:
             jugador = ' '.join(parts[:2])
-        return f"{dorsal} - {jugador}"
+        return f"{dorsal_str} - {jugador}"
 
 
 def lighten_color(hex_color: str, factor: float = 0.3) -> str:

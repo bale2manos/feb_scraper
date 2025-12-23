@@ -218,7 +218,7 @@ def plot_annotation_hierarchy(
             puntos = series.loc[player_idx, 'PUNTOS']
             
             selected_players.append({
-                'name': format_player_name(jugador, int(dorsal)),
+                'name': format_player_name(jugador, dorsal),
                 'points': puntos,
                 'original_idx': idx
             })

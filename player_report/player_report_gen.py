@@ -182,8 +182,7 @@ def compute_advanced_stats(stats_base, teams_file=None):
     result['PJ'] = G  # Games played
     
     # CONVERTIR ESTADÍSTICAS A PROMEDIOS POR PARTIDO
-    # NOTA: RECUPEROS y PERDIDAS ya vienen promediados del archivo aggregated
-    # El resto vienen como TOTALES y hay que dividir por PJ
+    # Todas las estadísticas vienen como TOTALES y hay que dividir por PJ
     if G > 0:
         Min_avg = Min / G
         Puntos_avg = Puntos / G
@@ -196,8 +195,8 @@ def compute_advanced_stats(stats_base, teams_file=None):
         RO_avg = RO / G
         RD_avg = RD / G
         AS_avg = AS / G
-        ROB_avg = ROB  # Ya es promedio
-        TOV_avg = TOV  # Ya es promedio
+        ROB_avg = ROB / G  # Dividir por PJ
+        TOV_avg = TOV / G  # Dividir por PJ
         FC_avg = FC / G
         FR_avg = FR / G
     else:

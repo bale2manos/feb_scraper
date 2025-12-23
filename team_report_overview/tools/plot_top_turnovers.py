@@ -57,8 +57,8 @@ min_games: int = None
     
     # Filtrar jugadores del equipo con al menos el mínimo de partidos especificado
     df_team = df[(df['EQUIPO'] == equipo) & (df['PJ'] >= min_partidos)].copy()
-    # PERDIDAS ya viene ponderada (promedio por partido) en el archivo aggregated
-    df_team['TOV_PJ'] = df_team['PERDIDAS']
+    # PERDIDAS son totales, dividir por PJ para obtener promedio por partido
+    df_team['TOV_PJ'] = df_team['PERDIDAS'] / df_team['PJ']
     top = df_team.sort_values('TOV_PJ', ascending=False).head(4)
 
     # Calcular el ancho necesario para el nombre más largo

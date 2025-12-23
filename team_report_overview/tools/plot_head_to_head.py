@@ -182,14 +182,15 @@ def generate_head_to_head_comparison(
         'rival_extra': f"({rival_dreb_avg:.1f} rebotes)"
     })
     
-    # %TOV (promedio) - Las PERDIDAS en el Excel ya están promediadas por partido
-    main_tov_avg = main_stats['PERDIDAS']  # Ya es por partido
-    rival_tov_avg = rival_stats['PERDIDAS']  # Ya es por partido
+    # %TOV (promedio) - Las PERDIDAS son totales, dividir por PJ
+    main_tov_avg = main_stats['PERDIDAS'] / main_stats['PJ']  # Dividir por PJ para obtener promedio
+    rival_tov_avg = rival_stats['PERDIDAS'] / rival_stats['PJ']  # Dividir por PJ para obtener promedio
     
     # DEBUG - Pérdidas
     print(f"\n🔍 DEBUG %TOV - {main_team_name}:")
-    print(f"  PERDIDAS/partido (del Excel): {main_stats['PERDIDAS']}")
+    print(f"  PERDIDAS totales: {main_stats['PERDIDAS']}")
     print(f"  PJ: {main_stats['PJ']}")
+    print(f"  PERDIDAS/partido: {main_tov_avg:.2f}")
     print(f"  T2 intentados totales: {main_stats['T2 INTENTADO']}")
     print(f"  T3 intentados totales: {main_stats['T3 INTENTADO']}")
     print(f"  TL intentados totales: {main_stats['TL INTENTADOS']}")
@@ -206,8 +207,9 @@ def generate_head_to_head_comparison(
     print(f"  %TOV: {main_tov_pct:.2f}%")
     
     print(f"\n🔍 DEBUG %TOV - {rival_team_name}:")
-    print(f"  PERDIDAS/partido (del Excel): {rival_stats['PERDIDAS']}")
+    print(f"  PERDIDAS totales: {rival_stats['PERDIDAS']}")
     print(f"  PJ: {rival_stats['PJ']}")
+    print(f"  PERDIDAS/partido: {rival_tov_avg:.2f}")
     print(f"  T2 intentados totales: {rival_stats['T2 INTENTADO']}")
     print(f"  T3 intentados totales: {rival_stats['T3 INTENTADO']}")
     print(f"  TL intentados totales: {rival_stats['TL INTENTADOS']}")

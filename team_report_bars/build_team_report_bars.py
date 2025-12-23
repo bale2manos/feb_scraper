@@ -31,11 +31,12 @@ def compute_advanced_stats_bars(stats_base):
     T3C = stats.get('T3 CONVERTIDO', 0)         # 3-point field goals made
     T3I = stats.get('T3 INTENTADO', 0)          # 3-point field goals attempted
     
-    # IMPORTANTE: PERDIDAS ya está promediado por partido en teams_aggregated.xlsx
-    TOV = stats.get('PERDIDAS', 0)               # Turnovers (ya por partido)
+    # PERDIDAS son totales, dividir por PJ para obtener promedio por partido
+    TOV_total = stats.get('PERDIDAS', 0)         # Turnovers totales
     PJ = stats.get('PJ', 1)                      # Partidos jugados
+    TOV = TOV_total / PJ if PJ > 0 else 0        # Turnovers por partido
     
-    # Calcular Plays promediado por partido para mantener consistencia con TOV
+    # Calcular Plays promediado por partido
     Plays = (T1I * 0.44 + T2I + T3I) / PJ + TOV if PJ > 0 else 0
 
     # --- BASIC CALCULATED STATS ---

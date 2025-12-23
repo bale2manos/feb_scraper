@@ -209,3 +209,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+team_assists_pdf_direct.png
+.gitignore
+.gitignore
+team_overview_pdf_direct.png
+team_overview_test.png
+team_clutch_pdf_direct.png
+team_bars_pdf_direct.png
+team_head_to_head_pdf_direct.png

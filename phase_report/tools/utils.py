@@ -180,12 +180,12 @@ def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: 
     df['TCC'] = T2C + T3C  # Total field goals made
     df['TCI'] = T2I + T3I  # Total field goals
 
-    # Normalizar intentos de tiro por partido jugado (TOV ya está promediado en este dataset)
+    # Normalizar intentos de tiro y pérdidas por partido jugado
     PJ = df.get('PJ', 1)
     T1I_per_game = T1I / PJ
     T2I_per_game = T2I / PJ
     T3I_per_game = T3I / PJ
-    TOV_per_game = TOV  # TOV ya está promediado por partido en este dataset
+    TOV_per_game = TOV / PJ  # TOV son totales, dividir por PJ para obtener promedio
     
     # Recalcular Plays por partido para consistencia
     Plays_per_game = T1I_per_game * 0.44 + T2I_per_game + T3I_per_game + TOV_per_game
@@ -204,12 +204,12 @@ def compute_team_stats(df: pd.DataFrame, teams: list[str] | None = None, phase: 
         print(f"{'='*80}")
         print(f"PJ: {df.loc[idx, 'PJ']}")
         print(f"T1I total: {df.loc[idx, 'T1I']}, T2I total: {df.loc[idx, 'T2I']}, T3I total: {df.loc[idx, 'T3I']}")
-        print(f"TOV (ya promediado): {df.loc[idx, 'TOV']}")
+        print(f"TOV total: {df.loc[idx, 'TOV']}")
         print(f"\nValores por partido:")
         print(f"  T1I_per_game: {T1I_per_game.iloc[0]:.2f}")
         print(f"  T2I_per_game: {T2I_per_game.iloc[0]:.2f}")
         print(f"  T3I_per_game: {T3I_per_game.iloc[0]:.2f}")
-        print(f"  TOV_per_game (sin dividir): {TOV_per_game.iloc[0]:.2f}")
+        print(f"  TOV_per_game (dividido por PJ): {TOV_per_game.iloc[0]:.2f}")
         print(f"\nPlays calculadas por partido: {Plays_per_game.iloc[0]:.2f}")
         print(f"  = {T1I_per_game.iloc[0]:.2f} * 0.44 + {T2I_per_game.iloc[0]:.2f} + {T3I_per_game.iloc[0]:.2f} + {TOV_per_game.iloc[0]:.2f}")
         print(f"\nPorcentajes calculados:")

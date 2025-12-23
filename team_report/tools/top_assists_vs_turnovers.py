@@ -35,7 +35,7 @@ def plot_top_assists_vs_turnovers(
     
     # Calculate per-game averages
     df['AST_per_game'] = df['ASISTENCIAS'] / df['PJ']
-    df['TOV_per_game'] = df['PERDIDAS']  # Ya está promediado
+    df['TOV_per_game'] = df['PERDIDAS'] / df['PJ']  # Dividir por PJ para obtener promedio
     
     # 4) prepare data arrays
     x = df['AST_per_game'].to_numpy()

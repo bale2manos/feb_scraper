@@ -216,7 +216,13 @@ class JornadaConsolidator:
                     # DORSAL no se usa como clave de agrupación, se tomará el último
                 
                 # Define columns that should be averaged instead of summed
-                average_cols = [
+                # NOTE: Use exact column names to avoid partial matches (e.g., 'PER' in 'PERDIDAS', 'RECUPEROS')
+                average_cols_exact = [
+                    'PER',                     # Player Efficiency Rating (exact match only)
+                    'PACE'                     # Pace factor (exact match only)
+                ]
+                
+                average_cols_contains = [
                     '%REB', '%OREB', '%DREB',  # Rebound percentages
                     'PPP', 'PPP OPP',          # Points per possession
                     'OFFRTG', 'DEFRTG', 'NETRTG',  # Ratings
@@ -227,8 +233,6 @@ class JornadaConsolidator:
                     'FG%', '2P%', '3P%', 'FT%',  # Field goal percentages
                     'ORB%', 'DRB%', 'TRB%',   # Additional rebound percentages
                     'AST%', 'STL%', 'BLK%',   # Additional stat percentages
-                    'PER',                     # Player Efficiency Rating
-                    'PACE'                     # Pace factor
                 ]
                 
                 # Identify numeric columns to sum or average
@@ -242,7 +246,9 @@ class JornadaConsolidator:
                     
                     for col in numeric_cols:
                         # Check if this column should be averaged
-                        should_average = any(avg_pattern in col for avg_pattern in average_cols)
+                        # First check exact matches, then check if pattern is contained in column name
+                        should_average = (col in average_cols_exact or 
+                                        any(pattern in col for pattern in average_cols_contains))
                         if should_average:
                             agg_dict[col] = 'mean'
                         else:

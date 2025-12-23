@@ -85,7 +85,7 @@ def compute_advanced_stats(stats_base):
     result['RO'] = RO / G if G > 0 else 0  # Offensive rebounds
     result['AS'] = AS / G if G > 0 else 0  # Assists
     result['ROB'] = ROB / G if G > 0 else 0  # Steals
-    result['TOV'] = TOV
+    result['TOV'] = TOV / G if G > 0 else 0  # Turnovers per game
     result['TOV %'] = per100(TOV, Plays)
     result['FC'] = FC / G if G > 0 else 0  # Fouls committed
     result['FR'] = FR / G if G > 0 else 0  # Fouls received

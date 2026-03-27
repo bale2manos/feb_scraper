@@ -62,13 +62,13 @@ BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # OUTPUT_PDF will be dynamically generated in build_phase_report() based on filters
 
 # Convert matplotlib Figure to PNG buffer with optimization
-def fig_to_png_buffer(fig, dpi=180):
+def fig_to_png_buffer(fig, dpi=120):
     """Convert matplotlib figure to optimized PNG buffer."""
     fig.set_tight_layout(True)
     FigureCanvas(fig).draw()
     buf = io.BytesIO()
     
-    # Slightly higher DPI for better quality
+    # Moderate DPI – optimize_png_buffer resizes to max_width anyway
     fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight', 
                 transparent=False, facecolor='white', edgecolor='none')
     plt.close(fig)
@@ -92,15 +92,25 @@ def optimize_png_buffer(buf, max_width=1400):
     optimized_buf.seek(0)
     return optimized_buf
 
-def build_phase_report(teams=None, phase=None, teams_file: str | None = None, players_file: str | None = None, min_games: int = 5, min_minutes: int = 50, min_shots: int = 20):
+def build_phase_report(
+    teams=None,
+    phase=None,
+    teams_file: str | None = None,
+    players_file: str | None = None,
+    min_games: int = 5,
+    min_minutes: int = 50,
+    min_shots: int = 20,
+    teams_df: pd.DataFrame | None = None,
+    players_df: pd.DataFrame | None = None,
+):
     # Setup fonts
     setup_montserrat_pdf_fonts()
     
     # 1) Load data - allow overriding files via parameters
     team_path = Path(teams_file) if teams_file else TEAM_FILE
     players_path = Path(players_file) if players_file else PLAYERS_FILE
-    df_teams   = pd.read_excel(team_path)
-    df_players = pd.read_excel(players_path)
+    df_teams = pd.read_excel(team_path) if teams_df is None else teams_df.copy()
+    df_players = pd.read_excel(players_path) if players_df is None else players_df.copy()
     
     # 1.1) Generate dynamic filename based on phase and jornada
     timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
@@ -203,7 +213,7 @@ def build_phase_report(teams=None, phase=None, teams_file: str | None = None, pl
         c.rect(chart_x0-3, chart_y0-3, chart_w+6, chart_h+6, stroke=1, fill=0)
 
         # e) draw chart with optimized PNG
-        buf = fig_to_png_buffer(fig, dpi=180)  # Balanced DPI for quality/size
+        buf = fig_to_png_buffer(fig, dpi=120)  # Lower DPI to avoid memory issues; optimize_png_buffer handles final sizing
         optimized_buf = optimize_png_buffer(buf, max_width=1400)
         img = ImageReader(optimized_buf)
         c.drawImage(

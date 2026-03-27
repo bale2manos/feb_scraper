@@ -22,12 +22,13 @@ def plot_top_shooters(
     df: pd.DataFrame,
     MIN_SHOTS: int = 150,
     teams: list[str] | None = None,
-    phase: str | None = None
+    phase: str | None = None,
+    top_n: int = 30
 ):
     """
-    TOP-20 Offensive Efficiency: scatter PPP vs Plays, bubble size ~ minutes,
+    TOP-N Offensive Efficiency: scatter TS% vs eFG%, bubble size ~ TCC,
     color = team's main logo color, median reference lines.
-    Filters: PJ>2, MINUTOS JUGADOS>10.
+    Shows top N players by TS% - eFG% ratio.
     """
     # 0) load + Montserrat
     setup_montserrat_font()
@@ -45,6 +46,10 @@ def plot_top_shooters(
     df['EFG %'] = np.where(TCI > 0, (TCC + 0.5 * df['T3 CONVERTIDO']) / TCI * 100, 0)
     TSA = TCI + 0.44 * df['TL INTENTADOS']  # Total shots attempted (including free throws)
     df['TS %'] = np.where(TSA > 0, df['PUNTOS'] / (2*TSA) * 100, 0)
+    
+    # Calculate TS% - eFG% ratio and sort by it, keep top N
+    df['TS_EFG_DIFF'] = df['TS %'] - df['EFG %']
+    df = df.nlargest(top_n, 'TS_EFG_DIFF').reset_index(drop=True)
 
     # 4) prepare data arrays
     x = df['TS %'].to_numpy()
@@ -299,7 +304,7 @@ def plot_top_shooters(
     ax.set_ylabel('EFG %', fontsize=14)
     # Main title and subtitle, both centered
     fig.suptitle(
-        'TOP SHOOTERS - Eficiencia de Tiro',
+        f'Top {top_n} Jugadores por Ratio TS% - eFG%',
         fontsize=20,
         weight='bold',
         x=0.5,      # center horizontally

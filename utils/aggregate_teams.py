@@ -26,7 +26,8 @@ def aggregate_games(path='./data/jugadores_per_game.xlsx'):
         'RECUPEROS',
         'PERDIDAS',
         'FaltasCOMETIDAS',
-        'FaltasRECIBIDAS'
+        'FaltasRECIBIDAS',
+        'TAPONES'
     ]
     
     # Agrupar por Fase, Jornada, Equipo Local y Rival, sumar las columnas especificadas y el primer resultado de PTS_RIVAL

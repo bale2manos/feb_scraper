@@ -127,17 +127,19 @@ def _canon_key(name: str) -> str:
     return s
 
 
-def _load_roster(roster_path: str, team_name: str):
+def _load_roster(roster_path: str | None, team_name: str, roster_df: pd.DataFrame | None = None):
     """
     Devuelve (valid_keys, dorsal_lookup)
       valid_keys: set de claves canónicas de jugadores del equipo
       dorsal_lookup: dict {clave_canónica -> dorsal}
     """
-    if not os.path.exists(roster_path):
-        print(f"⚠️ No se encontró {roster_path}. No se validará roster ni dorsales.")
-        return set(), {}
-
-    df_r = pd.read_excel(roster_path)
+    if roster_df is None:
+        if not roster_path or not os.path.exists(roster_path):
+            print(f"⚠️ No se encontró {roster_path}. No se validará roster ni dorsales.")
+            return set(), {}
+        df_r = pd.read_excel(roster_path)
+    else:
+        df_r = roster_df.copy()
     if 'JUGADOR' not in df_r.columns:
         print("⚠️ jugadores_aggregated_24_25.xlsx sin columna 'JUGADOR'.")
         return set(), {}
@@ -176,6 +178,7 @@ def build_team_report_assists(
     dpi: int = 180,
     edge_threshold: int = 2,
     roster_path: str = str(JUGADORES_AGGREGATED_FILE),
+    roster_df: pd.DataFrame | None = None,
     fig_width: float = 13.5,  # más ancho que A4 para ganar aire (A4≈11.69)
     fig_height: float = 8.27,
     pct_cell_threshold: float = 0.05  # Mostrar % solo si ≥ 5%
@@ -196,7 +199,7 @@ def build_team_report_assists(
     team_name = df_assists_team['EQUIPO'].iloc[0] if 'EQUIPO' in df_assists_team.columns and not df_assists_team['EQUIPO'].isna().all() else "Equipo"
 
     # --- Roster
-    valid_keys, dorsal_lookup = _load_roster(roster_path, team_name)
+    valid_keys, dorsal_lookup = _load_roster(roster_path, team_name, roster_df=roster_df)
 
     # --- Limpieza / validación de filas
     df = df_assists_team[df_assists_team['PASADOR'] != df_assists_team['ANOTADOR']].copy()

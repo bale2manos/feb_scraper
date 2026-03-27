@@ -124,7 +124,7 @@ def aggregate_players_stats(input_file_path, progress_callback=None):
         'MINUTOS JUGADOS', 'PUNTOS', 'T2 CONVERTIDO', 'T2 INTENTADO', 
         'T3 CONVERTIDO', 'T3 INTENTADO', 'TL CONVERTIDOS', 'TL INTENTADOS',
         'REB OFFENSIVO', 'REB DEFENSIVO', 'ASISTENCIAS', 'RECUPEROS', 
-        'PERDIDAS', 'FaltasCOMETIDAS', 'FaltasRECIBIDAS'
+        'PERDIDAS', 'FaltasCOMETIDAS', 'FaltasRECIBIDAS', 'TAPONES'
     ]
     
     # Define columns to get first occurrence
@@ -231,6 +231,7 @@ def aggregate_players_stats(input_file_path, progress_callback=None):
 def save_aggregated_players(df, output_path, progress_callback=None):
     """
     Save the aggregated player data to an Excel file.
+    If file exists, combine with existing data and remove duplicates.
     
     Args:
         df (pandas.DataFrame): Aggregated data
@@ -241,6 +242,30 @@ def save_aggregated_players(df, output_path, progress_callback=None):
         progress_callback("info", f"💾 Guardando datos agregados de jugadores: {Path(output_path).name}")
     
     try:
+        # Si el archivo existe, cargar y combinar datos
+        if os.path.exists(output_path):
+            try:
+                existing_df = pd.read_excel(output_path)
+                if progress_callback:
+                    progress_callback("info", f"📥 Cargando jugadores existentes: {len(existing_df)} registros")
+                
+                # Combinar datos
+                combined_df = pd.concat([existing_df, df], ignore_index=True)
+                
+                # Eliminar duplicados basados en IdJugador (priorizar datos nuevos)
+                if 'IdJugador' in combined_df.columns:
+                    combined_df = combined_df.drop_duplicates(subset=['IdJugador'], keep='last')
+                    if progress_callback:
+                        progress_callback("info", f"🔄 Combinando jugadores: {len(existing_df)} existentes + {len(df)} nuevos = {len(combined_df)} finales")
+                else:
+                    if progress_callback:
+                        progress_callback("warning", "⚠️ No se pudo identificar columna 'IdJugador' para deduplicación")
+                
+                df = combined_df
+            except Exception as e:
+                if progress_callback:
+                    progress_callback("warning", f"⚠️ No se pudieron cargar jugadores existentes: {str(e)}. Sobrescribiendo...")
+        
         df.to_excel(output_path, index=False)
         if progress_callback:
             progress_callback("success", f"✅ Archivo de jugadores guardado: {Path(output_path).name}")

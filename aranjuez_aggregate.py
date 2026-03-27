@@ -12,6 +12,7 @@ import pandas as pd
 from pathlib import Path
 import logging
 from typing import Dict, List
+import unicodedata
 
 # Setup logging
 logging.basicConfig(
@@ -25,10 +26,46 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def normalize_player_name(name):
+    """Normaliza nombres de jugadores eliminando tildes y acentos.
+    
+    Convierte "José" -> "Jose", "María" -> "Maria", etc.
+    """
+    if pd.isna(name):
+        return name
+    
+    name_str = str(name).strip()
+    
+    # Usar NFKD para descomponer caracteres acentuados
+    # Luego filtrar solo caracteres ASCII
+    normalized = ''.join(
+        c for c in unicodedata.normalize('NFKD', name_str)
+        if not unicodedata.combining(c)
+    )
+    
+    return normalized
+
+
+def canonicalize_player_name(name):
+    """Devuelve el nombre canónico usado para agrupar jugadores."""
+    normalized_name = normalize_player_name(name)
+
+    if pd.isna(normalized_name):
+        return normalized_name
+
+    alias_map = {
+        'rodri': 'Rodrigo',
+        'rodrigo': 'Rodrigo',
+    }
+
+    return alias_map.get(str(normalized_name).strip().lower(), normalized_name)
+
+
 class BasketAranjuezAggregator:
     def __init__(self, data_dir: str = './data/BasketAranjuez'):
         self.data_dir = Path(data_dir)
         self.output_file = self.data_dir / 'basket_aranjuez.xlsx'
+        self.excluded_players = {'raul', 'jorge', 'feylin'}
         
         # Columnas que deben SUMARSE (totales acumulados)
         # Las herramientas de reporte dividirán por PJ para obtener promedios
@@ -40,8 +77,10 @@ class BasketAranjuezAggregator:
             'OREB', 'DREB', 'REB OFFENSIVO', 'REB DEFENSIVO',
             'AST', 'ASISTENCIAS',
             'ROB', 'RECUPEROS', 'STL',
+            'TOV', 'PERDIDAS',  # PERDIDAS también se suman como el resto
             'FaltasCOMETIDAS', 'FaltasRECIBIDAS',
-            'PLAYS', 'POSS', 'BLK',
+            'TAPONES', 'BLK',
+            'PLAYS', 'POSS',
             # Nombres alternativos (BasketAranjuez)
             'MIN', 'PTS',
             '2PM', '2PA', '3PM', '3PA',
@@ -50,10 +89,8 @@ class BasketAranjuezAggregator:
             'FP', 'FC', 'FD'
         ]
         
-        # Columnas que deben PROMEDIARSE (excepciones y porcentajes)
-        # PERDIDAS es una excepción: se promedia directamente
+        # Columnas que deben PROMEDIARSE (solo porcentajes y ratings)
         self.avg_columns = [
-            'TOV', 'PERDIDAS',  # Excepción: se promedian
             # Porcentajes y ratings (siempre se promedian)
             'PPP', 'OFFRTG', 'TS%', 'EFG%', 
             'FG%', '2P%', '3P%', 'FT%',
@@ -67,8 +104,11 @@ class BasketAranjuezAggregator:
         """Encuentra todos los archivos Excel en la carpeta BasketAranjuez."""
         excel_files = list(self.data_dir.glob('*.xlsx')) + list(self.data_dir.glob('*.xls'))
         
-        # Excluir el archivo de salida si ya existe
-        excel_files = [f for f in excel_files if f.name != 'basket_aranjuez.xlsx']
+        # Excluir el archivo de salida y bloqueos temporales de Excel.
+        excel_files = [
+            f for f in excel_files
+            if f.name != 'basket_aranjuez.xlsx' and not f.name.startswith('~$')
+        ]
         
         logger.info(f"Encontrados {len(excel_files)} archivos Excel en {self.data_dir}")
         for f in excel_files:
@@ -89,18 +129,26 @@ class BasketAranjuezAggregator:
                         # Verificar si tiene formato MM:SS
                         if cleaned.str.contains(':', na=False).any():
                             def time_to_minutes(time_str):
-                                """Convierte formato MM:SS a minutos decimales."""
+                                """Convierte formato MM:SS a minutos decimales.
+                                Si hay error, retorna 0.0
+                                """
                                 try:
                                     if pd.isna(time_str) or time_str == 'nan':
-                                        return pd.NA
+                                        return 0.0
                                     parts = str(time_str).split(':')
                                     if len(parts) == 2:
-                                        mins = float(parts[0])
-                                        secs = float(parts[1])
-                                        return mins + (secs / 60)
-                                    return pd.NA
-                                except:
-                                    return pd.NA
+                                        mins = int(parts[0])
+                                        secs = int(parts[1])
+                                        # Validar rangos válidos
+                                        if 0 <= mins <= 999 and 0 <= secs <= 59:
+                                            return mins + (secs / 60)
+                                        else:
+                                            logger.warning(f"Valores de tiempo inválidos: {time_str}, usando 0.0")
+                                            return 0.0
+                                    return 0.0
+                                except Exception as e:
+                                    logger.warning(f"Error convirtiendo tiempo {time_str}: {e}, usando 0.0")
+                                    return 0.0
                             
                             df[col] = cleaned.apply(time_to_minutes)
                             logger.debug(f"Columna '{col}' convertida de MM:SS a minutos decimales")
@@ -214,6 +262,7 @@ class BasketAranjuezAggregator:
         - La mayoría de las columnas se SUMAN (totales acumulados)
         - PERDIDAS y porcentajes se PROMEDIAN
         - Las herramientas de reporte dividirán por PJ para obtener promedios
+        - Los nombres de jugadores se normalizan (sin tildes) para agrupar correctamente
         """
         
         # Identificar columnas numéricas disponibles
@@ -238,9 +287,22 @@ class BasketAranjuezAggregator:
             raise ValueError("No se encontró columna de identificación del jugador")
         
         logger.info(f"Usando columna '{player_col}' como identificador de jugador")
+
+        df = df.copy()
         
-        # Columnas de agrupación: SOLO nombre del jugador (sin dorsal)
-        group_cols = [player_col]
+        # Normalizar y canonizar nombres antes de agrupar.
+        df['_JUGADOR_CANONICAL'] = df[player_col].apply(canonicalize_player_name)
+        logger.info("Nombres de jugadores normalizados y canonizados")
+
+        excluded_mask = df['_JUGADOR_CANONICAL'].astype(str).str.strip().str.lower().isin(self.excluded_players)
+        excluded_rows = int(excluded_mask.sum())
+        if excluded_rows:
+            excluded_names = sorted(df.loc[excluded_mask, '_JUGADOR_CANONICAL'].dropna().astype(str).unique())
+            logger.info(f"Excluyendo del output {excluded_rows} filas de jugadores: {', '.join(excluded_names)}")
+            df = df.loc[~excluded_mask].copy()
+        
+        # Columnas de agrupación: usar el nombre canónico
+        group_cols = ['_JUGADOR_CANONICAL']
         
         # Añadir EQUIPO si existe (pero NO el dorsal)
         for col in ['EQUIPO', 'EQUIPO LOCAL', 'Equipo']:
@@ -258,6 +320,9 @@ class BasketAranjuezAggregator:
         for col in available_avg_cols:
             agg_dict[col] = 'mean'
         
+        # Guardar en el output el nombre canónico agrupado.
+        agg_dict[player_col] = 'first'
+        
         # Para el dorsal (Nº), tomar el ÚLTIMO (más reciente)
         if 'Nº' in df.columns:
             agg_dict['Nº'] = 'last'
@@ -267,6 +332,8 @@ class BasketAranjuezAggregator:
         # Contar partidos jugados
         df['PJ'] = 1
         agg_dict['PJ'] = 'sum'
+
+        df[player_col] = df['_JUGADOR_CANONICAL']
         
         # Si hay columnas de fase o jornada, tomar las primeras
         for col in ['FASE', 'JORNADA', 'Fase', 'Jornada']:
@@ -275,6 +342,10 @@ class BasketAranjuezAggregator:
         
         # Agregar
         aggregated = df.groupby(group_cols, as_index=False).agg(agg_dict)
+        
+        # Eliminar la columna temporal de normalización
+        if '_JUGADOR_CANONICAL' in aggregated.columns:
+            aggregated = aggregated.drop('_JUGADOR_CANONICAL', axis=1)
         
         logger.info(f"Jugadores agregados: {len(aggregated)}")
         
@@ -372,6 +443,9 @@ class BasketAranjuezAggregator:
             logger.info(f"   - {len(df)} jugadores")
             logger.info(f"   - {len(df.columns)} columnas de jugadores")
             logger.info(f"   - Estadísticas del rival incluidas")
+        except PermissionError as e:
+            logger.error(f"[ERROR] Cierra el archivo de salida si está abierto y vuelve a ejecutar: {self.output_file}")
+            raise
         except Exception as e:
             logger.error(f"[ERROR] Error al guardar archivo: {e}")
             raise

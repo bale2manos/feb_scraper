@@ -77,9 +77,12 @@ FONT_BIG       = 36
 FONT_MED       = 28
 FONT_SMALL     = 20
 
-def compute_usg(team_name, minutes, t1_attempts, t2_attempts, t3_attempts, turnovers, teams_file=None):
-    teams_path = teams_file if teams_file else TEAMS_DATA_PATH
-    df_teams = pd.read_excel(teams_path)
+def compute_usg(team_name, minutes, t1_attempts, t2_attempts, t3_attempts, turnovers, teams_file=None, teams_df=None):
+    if teams_df is None:
+        teams_path = teams_file if teams_file else TEAMS_DATA_PATH
+        df_teams = pd.read_excel(teams_path)
+    else:
+        df_teams = teams_df.copy()
     team_totals = df_teams.rename(columns={
         "MINUTOS JUGADOS": "team_MP",
         "T2 INTENTADO":    "team_T2I",
@@ -111,7 +114,7 @@ def compute_usg(team_name, minutes, t1_attempts, t2_attempts, t3_attempts, turno
     return round(usg * 100, 2)  # Devuelve en porcentaje
     
 
-def compute_advanced_stats(stats_base, teams_file=None):
+def compute_advanced_stats(stats_base, teams_file=None, teams_df=None):
     """
     Compute advanced basketball statistics from base stats.
     
@@ -290,7 +293,7 @@ def compute_advanced_stats(stats_base, teams_file=None):
     
     # Additional calculated stats for the report
     # USG usa TOTALES, no promedios
-    result['USG %'] = compute_usg(result['EQUIPO'], Min, T1I, T2I, T3I, TOV, teams_file)
+    result['USG %'] = compute_usg(result['EQUIPO'], Min, T1I, T2I, T3I, TOV, teams_file, teams_df=teams_df)
     
     # PS%: Possession Scoring percentage (using the provided formula) - usar promedios
     if TCC_avg > 0 and T1I_avg > 0:
@@ -345,10 +348,14 @@ def fit_font_size(text, font_path, base_size, max_width):
 
     return font
 
-def generate_report(player_name, data_file=None, teams_file=None, clutch_file=None, output_dir=REPORT_DIR, overwrite=False):
+def generate_report(player_name, data_file=None, teams_file=None, clutch_file=None, output_dir=REPORT_DIR, overwrite=False, data_df=None, teams_df=None, clutch_df=None):
     # cargar datos
-    data_path = data_file if data_file else DATA_PATH
-    df = pd.read_excel(data_path)
+    if data_df is None:
+        data_path = data_file if data_file else DATA_PATH
+        df = pd.read_excel(data_path)
+    else:
+        data_path = data_file if data_file else "<dataframe>"
+        df = data_df.copy()
     
     print(f"🔍 Generando informe para {player_name}...")
     print(f"📄 Usando archivo de jugadores: {data_path}")
@@ -359,7 +366,7 @@ def generate_report(player_name, data_file=None, teams_file=None, clutch_file=No
         
     stats_base = df[df[COL_NAME] == player_name].iloc[0]
     
-    stats = compute_advanced_stats(stats_base, teams_file)
+    stats = compute_advanced_stats(stats_base, teams_file, teams_df=teams_df)
     
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     
@@ -536,7 +543,15 @@ def generate_report(player_name, data_file=None, teams_file=None, clutch_file=No
         "TSI": 0
     }
     
-    bars = plot_media_pct_with_clutch(bars_stats, bars_attempts, player_name_roster=player_name, clutch_file=clutch_file, width_px=3000, resize_px=690)
+    bars = plot_media_pct_with_clutch(
+        bars_stats,
+        bars_attempts,
+        player_name_roster=player_name,
+        clutch_df=clutch_df,
+        clutch_file=clutch_file,
+        width_px=3000,
+        resize_px=690,
+    )
     base.paste(bars, (COORDS['bars_start'][0], COORDS['bars_start'][1]), bars)
 
     # --- PPT INDICATORS ---

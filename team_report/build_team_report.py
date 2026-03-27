@@ -152,7 +152,24 @@ def _apply_home_away_filter(df_team, prefix):
     
     return df_result
 
-def build_team_report(team_filter=None, player_filter:list=None, players_file=None, teams_file=None, assists_file=None, clutch_lineups_file=None, rival_team=None, home_away_filter="Todos", h2h_home_away_filter="Todos", min_games=5, min_minutes=50, min_shots=20):
+def build_team_report(
+    team_filter=None,
+    player_filter: list = None,
+    players_file=None,
+    teams_file=None,
+    assists_file=None,
+    clutch_lineups_file=None,
+    rival_team=None,
+    home_away_filter="Todos",
+    h2h_home_away_filter="Todos",
+    min_games=5,
+    min_minutes=50,
+    min_shots=20,
+    players_df: pd.DataFrame | None = None,
+    teams_df: pd.DataFrame | None = None,
+    assists_df: pd.DataFrame | None = None,
+    clutch_lineups_df: pd.DataFrame | None = None,
+):
     # Setup fonts
     setup_montserrat_pdf_fonts()
 
@@ -160,8 +177,8 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
     players_path = Path(players_file) if players_file else PLAYERS_FILE
     teams_path = Path(teams_file) if teams_file else TEAM_FILE
     
-    df_players = pd.read_excel(players_path)
-    df_team_raw = pd.read_excel(teams_path)
+    df_players = pd.read_excel(players_path) if players_df is None else players_df.copy()
+    df_team_raw = pd.read_excel(teams_path) if teams_df is None else teams_df.copy()
     
     # Aplicar filtro de local/visitante a df_team
     if home_away_filter == "Local":
@@ -193,7 +210,9 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         print(f"[DEBUG] ════════════════════════════════════════\n")
     
     # === NUEVO: cargar asistencias ===
-    if assists_file:
+    if assists_df is not None:
+        df_assists = assists_df.copy()
+    elif assists_file:
         try:
             df_assists = pd.read_excel(assists_file)
         except Exception as e:
@@ -340,7 +359,14 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         
         print(f"[DEBUG] df_advanced shape: {df_advanced.shape}")
         print(f"[DEBUG] team name: {team_name}")
-        overview_fig = build_team_report_overview(team_name, df_advanced, dpi=180, players_file=str(players_path), min_games=min_games)
+        overview_fig = build_team_report_overview(
+            team_name,
+            df_advanced,
+            dpi=180,
+            players_file=str(players_path),
+            players_df=df_players,
+            min_games=min_games,
+        )
         print("[DEBUG] Saving image to ./team_overview_test.png")
         overview_fig.savefig("./team_overview_test.png", dpi=180, bbox_inches=None, facecolor='white', edgecolor='none')
         
@@ -494,11 +520,11 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
         else:
             try:
                 # lookups
-                image_lookup, dorsal_lookup = load_roster_lookup(players_path, team_filter)
+                image_lookup, dorsal_lookup = load_roster_lookup(str(players_path), team_filter, roster_df=df_players)
                 # lineups - usar archivo dinámico o default
                 clutch_lineups_path = clutch_lineups_file if clutch_lineups_file else "./data/clutch_lineups.xlsx"
                 print(f"[DEBUG] Loading clutch lineups from: {clutch_lineups_path}")
-                df_team = load_lineups_for_team(clutch_lineups_path, team_filter)
+                df_team = load_lineups_for_team(clutch_lineups_path, team_filter, lineups_df=clutch_lineups_df)
                 print(f"[DEBUG] Found {len(df_team)} clutch lineups for team '{team_filter}'")
                 clutch_fig = build_top3_card(df_team, team_filter, image_lookup, dorsal_lookup)
                 print("[DEBUG] clutch_fig created successfully")
@@ -523,6 +549,7 @@ def build_team_report(team_filter=None, player_filter:list=None, players_file=No
                     dpi=180,
                     edge_threshold=2,
                     roster_path=str(players_path),
+                    roster_df=df_players,
                     fig_width=13.5,
                     fig_height=8.27,
                     pct_cell_threshold=0.05

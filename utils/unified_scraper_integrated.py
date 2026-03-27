@@ -105,6 +105,7 @@ def scrape_one_game_unified(game_meta: Tuple) -> Tuple[List[Dict], List[Dict], L
                 # Procesar asistencias
                 for row in compute_synergies(raw_pbp):
                     assists_records.append({
+                        "IdPartido": pid,
                         "FASE": phase,
                         "JORNADA": jornada,
                         "GAME": game_str,
@@ -141,6 +142,7 @@ def scrape_one_game_unified(game_meta: Tuple) -> Tuple[List[Dict], List[Dict], L
         if not clutch_df.empty:
             for _, row in clutch_df.iterrows():
                 clutch_data_records.append({
+                    "IdPartido": pid,
                     "FASE": phase,
                     "JORNADA": jornada,
                     "GAME": game_str,
@@ -186,6 +188,7 @@ def scrape_one_game_unified(game_meta: Tuple) -> Tuple[List[Dict], List[Dict], L
             lineups_df['JORNADA'] = jornada
             lineups_df['GAME'] = game_str
             lineups_df['PARTIDO_ID'] = pid
+            lineups_df['IdPartido'] = pid
             
             clutch_lineups_df = lineups_df
         
@@ -333,6 +336,32 @@ def main_unified_scraper(
     
     if all_boxscore_data:
         boxscores_df = pd.DataFrame(all_boxscore_data)
+        
+        # Si el archivo existe, cargar datos existentes y combinar
+        if os.path.exists(boxscores_output):
+            try:
+                existing_df = pd.read_excel(boxscores_output)
+                progress_callback("info", f"📥 Cargando datos existentes: {len(existing_df)} registros")
+                logger.info(f"Loading existing boxscores: {len(existing_df)} records")
+                
+                # Combinar datos existentes con nuevos
+                combined_df = pd.concat([existing_df, boxscores_df], ignore_index=True)
+                
+                # Eliminar duplicados basado en columnas clave (IdPartido, IdJugador)
+                # Priorizar datos nuevos en caso de duplicados
+                if 'IdPartido' in combined_df.columns and 'IdJugador' in combined_df.columns:
+                    combined_df = combined_df.drop_duplicates(subset=['IdPartido', 'IdJugador'], keep='last')
+                    progress_callback("info", f"🔄 Combinando datos: {len(existing_df)} existentes + {len(boxscores_df)} nuevos = {len(combined_df)} finales (sin duplicados)")
+                    logger.info(f"Combined boxscores: {len(existing_df)} existing + {len(boxscores_df)} new = {len(combined_df)} final")
+                else:
+                    progress_callback("warning", "⚠️ No se pudieron identificar columnas clave para eliminar duplicados")
+                    logger.warning("Could not identify key columns for deduplication")
+                
+                boxscores_df = combined_df
+            except Exception as e:
+                progress_callback("warning", f"⚠️ No se pudieron cargar datos existentes: {str(e)}. Sobrescribiendo...")
+                logger.warning(f"Could not load existing data: {str(e)}. Overwriting...")
+        
         boxscores_df.to_excel(boxscores_output, index=False)
         logger.info(f"Boxscores saved: {len(boxscores_df)} records -> {boxscores_output}")
         progress_callback("success", f"✅ Boxscores: {len(boxscores_df)} registros guardados")
@@ -345,6 +374,31 @@ def main_unified_scraper(
     
     if all_assists_data:
         assists_df = pd.DataFrame(all_assists_data)
+        
+        # Si el archivo existe, cargar datos existentes y combinar
+        if os.path.exists(assists_output):
+            try:
+                existing_df = pd.read_excel(assists_output)
+                progress_callback("info", f"📥 Cargando asistencias existentes: {len(existing_df)} registros")
+                logger.info(f"Loading existing assists: {len(existing_df)} records")
+                
+                # Combinar datos existentes con nuevos
+                combined_df = pd.concat([existing_df, assists_df], ignore_index=True)
+                
+                # Eliminar duplicados basado en columnas clave
+                if 'IdPartido' in combined_df.columns and 'IdAsistente' in combined_df.columns and 'IdAnotador' in combined_df.columns:
+                    combined_df = combined_df.drop_duplicates(subset=['IdPartido', 'IdAsistente', 'IdAnotador'], keep='last')
+                    progress_callback("info", f"🔄 Combinando asistencias: {len(existing_df)} existentes + {len(assists_df)} nuevas = {len(combined_df)} finales")
+                    logger.info(f"Combined assists: {len(existing_df)} existing + {len(assists_df)} new = {len(combined_df)} final")
+                else:
+                    progress_callback("warning", "⚠️ No se pudieron identificar columnas clave para eliminar duplicados de asistencias")
+                    logger.warning("Could not identify key columns for assists deduplication")
+                
+                assists_df = combined_df
+            except Exception as e:
+                progress_callback("warning", f"⚠️ No se pudieron cargar asistencias existentes: {str(e)}. Sobrescribiendo...")
+                logger.warning(f"Could not load existing assists: {str(e)}. Overwriting...")
+        
         assists_df.to_excel(assists_output, index=False)
         logger.info(f"Assists saved: {len(assists_df)} records -> {assists_output}")
         progress_callback("success", f"✅ Asistencias: {len(assists_df)} registros guardados")
@@ -357,6 +411,31 @@ def main_unified_scraper(
     
     if all_clutch_data:
         clutch_data_df = pd.DataFrame(all_clutch_data)
+        
+        # Si el archivo existe, cargar datos existentes y combinar
+        if os.path.exists(clutch_data_output):
+            try:
+                existing_df = pd.read_excel(clutch_data_output)
+                progress_callback("info", f"📥 Cargando clutch data existente: {len(existing_df)} registros")
+                logger.info(f"Loading existing clutch data: {len(existing_df)} records")
+                
+                # Combinar datos existentes con nuevos
+                combined_df = pd.concat([existing_df, clutch_data_df], ignore_index=True)
+                
+                # Eliminar duplicados basado en columnas clave
+                if 'IdPartido' in combined_df.columns and 'IdJugador' in combined_df.columns:
+                    combined_df = combined_df.drop_duplicates(subset=['IdPartido', 'IdJugador'], keep='last')
+                    progress_callback("info", f"🔄 Combinando clutch data: {len(existing_df)} existentes + {len(clutch_data_df)} nuevos = {len(combined_df)} finales")
+                    logger.info(f"Combined clutch data: {len(existing_df)} existing + {len(clutch_data_df)} new = {len(combined_df)} final")
+                else:
+                    progress_callback("warning", "⚠️ No se pudieron identificar columnas clave para eliminar duplicados de clutch data")
+                    logger.warning("Could not identify key columns for clutch data deduplication")
+                
+                clutch_data_df = combined_df
+            except Exception as e:
+                progress_callback("warning", f"⚠️ No se pudieron cargar clutch data existente: {str(e)}. Sobrescribiendo...")
+                logger.warning(f"Could not load existing clutch data: {str(e)}. Overwriting...")
+        
         clutch_data_df.to_excel(clutch_data_output, index=False)
         logger.info(f"Clutch data saved: {len(clutch_data_df)} records -> {clutch_data_output}")
         progress_callback("success", f"✅ Clutch data: {len(clutch_data_df)} registros guardados")
@@ -369,6 +448,37 @@ def main_unified_scraper(
     
     if all_clutch_lineups:
         clutch_lineups_df = pd.concat(all_clutch_lineups, ignore_index=True)
+        
+        # Si el archivo existe, cargar datos existentes y combinar
+        if os.path.exists(clutch_lineups_output):
+            try:
+                existing_df = pd.read_excel(clutch_lineups_output)
+                progress_callback("info", f"📥 Cargando clutch lineups existentes: {len(existing_df)} registros")
+                logger.info(f"Loading existing clutch lineups: {len(existing_df)} records")
+                
+                # Combinar datos existentes con nuevos
+                combined_df = pd.concat([existing_df, clutch_lineups_df], ignore_index=True)
+                
+                # Eliminar duplicados basado en columnas clave
+                # Para lineups, usar IdPartido + jugadores de la quintet
+                key_cols = ['IdPartido']
+                for col in combined_df.columns:
+                    if col.startswith('Player') and col.endswith('Id'):
+                        key_cols.append(col)
+                
+                if len(key_cols) > 1:
+                    combined_df = combined_df.drop_duplicates(subset=key_cols, keep='last')
+                    progress_callback("info", f"🔄 Combinando clutch lineups: {len(existing_df)} existentes + {len(clutch_lineups_df)} nuevos = {len(combined_df)} finales")
+                    logger.info(f"Combined clutch lineups: {len(existing_df)} existing + {len(clutch_lineups_df)} new = {len(combined_df)} final")
+                else:
+                    progress_callback("warning", "⚠️ No se pudieron identificar columnas clave para eliminar duplicados de clutch lineups")
+                    logger.warning("Could not identify key columns for clutch lineups deduplication")
+                
+                clutch_lineups_df = combined_df
+            except Exception as e:
+                progress_callback("warning", f"⚠️ No se pudieron cargar clutch lineups existentes: {str(e)}. Sobrescribiendo...")
+                logger.warning(f"Could not load existing clutch lineups: {str(e)}. Overwriting...")
+        
         clutch_lineups_df.to_excel(clutch_lineups_output, index=False)
         logger.info(f"Clutch lineups saved: {len(clutch_lineups_df)} lineups -> {clutch_lineups_output}")
         progress_callback("success", f"✅ Clutch lineups: {len(clutch_lineups_df)} lineups guardados")

@@ -224,7 +224,7 @@ def convert_aranjuez_to_standard_format(df_aranjuez, is_aggregated=False):
         'MINUTOS JUGADOS', 'PUNTOS', 'T2 CONVERTIDO', 'T2 INTENTADO', 
         'T3 CONVERTIDO', 'T3 INTENTADO', 'TL CONVERTIDOS', 'TL INTENTADOS',
         'REB OFFENSIVO', 'REB DEFENSIVO', 'ASISTENCIAS', 'RECUPEROS', 
-        'PERDIDAS', 'FaltasCOMETIDAS', 'FaltasRECIBIDAS', 'FECHA NACIMIENTO',
+        'PERDIDAS', 'FaltasCOMETIDAS', 'FaltasRECIBIDAS', 'TAPONES', 'FECHA NACIMIENTO',
         'NACIONALIDAD', 'URL JUGADOR'
     ]
     
@@ -300,6 +300,7 @@ def create_team_stats_for_aranjuez(df_players, team_stats_data, is_aggregated=Fa
         'PERDIDAS': df_players['PERDIDAS'].sum(),
         'FaltasCOMETIDAS': df_players['FaltasCOMETIDAS'].sum(),
         'FaltasRECIBIDAS': df_players['FaltasRECIBIDAS'].sum(),
+        'TAPONES': df_players['TAPONES'].sum() if 'TAPONES' in df_players.columns else 0,
         'MINUTOS JUGADOS': df_players['MINUTOS JUGADOS'].sum(),
         
         # Métricas avanzadas calculadas
@@ -332,9 +333,29 @@ def main():
     print("🏀 GENERADOR DE REPORTE - BASKET ARANJUEZ")
     print("=" * 50)
     
+    # Opciones de generación de reportes
+    print("\n¿Qué reportes deseas generar?")
+    print("1. Solo reporte de equipo")
+    print("2. Solo reportes individuales de jugadores")
+    print("3. Ambos (equipo + jugadores individuales)")
+    
+    while True:
+        opcion = input("\nSelecciona una opción (1-3): ").strip()
+        if opcion in ['1', '2', '3']:
+            break
+        print("❌ Opción inválida. Por favor, selecciona 1, 2 o 3.")
+    
+    generar_reporte_equipo = opcion in ['1', '3']
+    generar_reportes_jugadores = opcion in ['2', '3']
+    
+    print(f"\n✅ Configuración seleccionada:")
+    print(f"   • Reporte de equipo: {'Sí' if generar_reporte_equipo else 'No'}")
+    print(f"   • Reportes de jugadores: {'Sí' if generar_reportes_jugadores else 'No'}")
+    print("=" * 50)
+    
     # 1. Leer datos de BasketAranjuez
     #aranjuez_file = Path("data/BasketAranjuez/basket_aranjuez.xlsx")
-    aranjuez_file = Path("data/BasketAranjuez/stats_basket_aranjuez_vs_valcude_30-11-25.xlsx")
+    aranjuez_file = Path("data/BasketAranjuez/stats_basket_aranjuez_vs_liceo_francés__24-3-26.xls")  # Archivo de partido individual (sin hoja Stats_Rival)
     if not aranjuez_file.exists():
         print(f"❌ Error: No se encontró el archivo {aranjuez_file}")
         print("   Asegúrate de que el archivo existe en la carpeta data/BasketAranjuez/")
@@ -375,56 +396,79 @@ def main():
     
     print(f"💾 Archivos temporales creados")
     
-    # 5. Generar informes individuales de jugadores
-    print("\n" + "=" * 50)
-    print("👤 GENERANDO INFORMES INDIVIDUALES DE JUGADORES")
-    print("=" * 50)
-    
+    # 5. Generar informes individuales de jugadores (si está habilitado)
     player_reports_generated = []
     player_reports_failed = []
     
-    # Obtener lista de jugadores
-    player_col = 'JUGADOR'
-    if player_col in df_players_converted.columns:
-        players_list = df_players_converted[player_col].dropna().unique().tolist()
-        print(f"📋 Jugadores a procesar: {len(players_list)}")
+    if generar_reportes_jugadores:
+        print("\n" + "=" * 50)
+        print("👤 GENERANDO INFORMES INDIVIDUALES DE JUGADORES")
+        print("=" * 50)
         
-        for idx, player_name in enumerate(players_list, 1):
-            try:
-                print(f"\n  [{idx}/{len(players_list)}] Generando informe para: {player_name}")
-                report_path = generate_report(
-                    player_name=player_name,
-                    data_file=str(temp_players_file),
-                    teams_file=str(temp_teams_file),
-                    overwrite=True
-                )
-                player_reports_generated.append((player_name, report_path))
-                print(f"      ✅ Generado: {report_path.name}")
-            except Exception as e:
-                player_reports_failed.append((player_name, str(e)))
-                print(f"      ❌ Error: {e}")
+        # Obtener lista de jugadores
+        player_col = 'JUGADOR'
+        if player_col in df_players_converted.columns:
+            players_list = df_players_converted[player_col].dropna().unique().tolist()
+            print(f"📋 Jugadores a procesar: {len(players_list)}")
+            
+            for idx, player_name in enumerate(players_list, 1):
+                try:
+                    print(f"\n  [{idx}/{len(players_list)}] Generando informe para: {player_name}")
+                    report_path = generate_report(
+                        player_name=player_name,
+                        data_file=str(temp_players_file),
+                        teams_file=str(temp_teams_file),
+                        overwrite=True
+                    )
+                    player_reports_generated.append((player_name, report_path))
+                    print(f"      ✅ Generado: {report_path.name}")
+                except Exception as e:
+                    player_reports_failed.append((player_name, str(e)))
+                    print(f"      ❌ Error: {e}")
+        else:
+            print("⚠️  No se encontró la columna 'JUGADOR' en los datos")
     else:
-        print("⚠️  No se encontró la columna 'JUGADOR' en los datos")
+        print("\n⏭️  Omitiendo generación de reportes de jugadores (no seleccionado)")
     
-    # 6. Generar reporte de equipo usando build_team_report
-    print("\n" + "=" * 50)
-    print("📑 GENERANDO REPORTE DE EQUIPO")
-    print("=" * 50)
-    try:
-        output_pdf = build_team_report(
+    # 6. Generar reporte de equipo usando build_team_report (si está habilitado)
+    output_pdf = None
+    if generar_reporte_equipo:
+        print("\n" + "=" * 50)
+        print("📑 GENERANDO REPORTE DE EQUIPO")
+        print("=" * 50)
+        try:
+            output_pdf = build_team_report(
             team_filter="BASKET ARANJUEZ",
             players_file=str(temp_players_file),
             teams_file=str(temp_teams_file),
             min_games=0,  # Solo tenemos 1 partido
-            min_minutes=0,  # Incluir todos los jugadores
-            min_shots=0   # Incluir todos los jugadores
-        )
-        
-        print("\n" + "=" * 50)
-        print("✅ ¡REPORTES GENERADOS EXITOSAMENTE!")
-        print("=" * 50)
-        
-        # Resumen de informes de jugadores
+                min_minutes=0,  # Incluir todos los jugadores
+                min_shots=0   # Incluir todos los jugadores
+            )
+            
+            print("\n" + "=" * 50)
+            print("✅ ¡REPORTE DE EQUIPO GENERADO EXITOSAMENTE!")
+            print("=" * 50)
+            print(f"📄 Archivo: {output_pdf}")
+            print(f"📁 Ubicación: {output_pdf.absolute()}")
+            
+        except Exception as e:
+            print("=" * 50)
+            print(f"❌ ERROR AL GENERAR EL REPORTE DE EQUIPO:")
+            print(f"   {e}")
+            print("\n🔍 DETALLES DEL ERROR:")
+            import traceback
+            traceback.print_exc()
+    else:
+        print("\n⏭️  Omitiendo generación de reporte de equipo (no seleccionado)")
+    
+    # Mostrar resumen final
+    print("\n" + "=" * 50)
+    print("✅ ¡PROCESO COMPLETADO!")
+    print("=" * 50)
+    
+    # Resumen de informes de jugadores
+    if generar_reportes_jugadores:
         print("\n👤 INFORMES INDIVIDUALES:")
         print(f"   ✅ Generados exitosamente: {len(player_reports_generated)}")
         if player_reports_failed:
@@ -438,44 +482,36 @@ def main():
                 print(f"   • {report_path.name}")
             if len(player_reports_generated) > 3:
                 print(f"   ... y {len(player_reports_generated) - 3} más")
-        
-        # Reporte de equipo
+    
+    # Reporte de equipo
+    if generar_reporte_equipo and output_pdf:
         print(f"\n📊 REPORTE DE EQUIPO:")
         print(f"   📄 Archivo: {output_pdf}")
         print(f"   📁 Ubicación: {output_pdf.absolute()}")
-        
-        # Mostrar resumen de datos procesados
-        print("\n📊 RESUMEN DE DATOS:")
-        print(f"   • Jugadores procesados: {df_aranjuez.shape[0]}")
-        print(f"   • Puntos totales equipo: {df_team_converted['PUNTOS +'].iloc[0]}")
-        print(f"   • Puntos del oponente: {df_team_converted['PUNTOS -'].iloc[0]}")
-        print(f"   • Rebotes totales: {df_team_converted['REB OFFENSIVO'].iloc[0] + df_team_converted['REB DEFENSIVO'].iloc[0]}")
-        print(f"   • % Rebotes: {df_team_converted['%REB'].iloc[0] * 100:.2f}%")
-        print(f"   • % Rebotes ofensivos: {df_team_converted['%OREB'].iloc[0] * 100:.2f}%")
-        print(f"   • % Rebotes defensivos: {df_team_converted['%DREB'].iloc[0] * 100:.2f}%")
-        print(f"   • Asistencias totales: {df_team_converted['ASISTENCIAS'].iloc[0]}")
-        print(f"   • PPP (Puntos por posesión): {df_team_converted['PPP'].iloc[0]}")
-        
-    except Exception as e:
-        print("=" * 50)
-        print(f"❌ ERROR AL GENERAR EL REPORTE:")
-        print(f"   {e}")
-        print("\n🔍 DETALLES DEL ERROR:")
-        import traceback
-        traceback.print_exc()
     
-    finally:
-        # Limpiar archivos temporales
-        try:
-            if temp_players_file.exists():
-                temp_players_file.unlink()
-            if temp_teams_file.exists():
-                temp_teams_file.unlink()
-            print("🧹 Archivos temporales eliminados")
-        except Exception as e:
-            print(f"⚠️  Error al limpiar archivos temporales: {e}")
-        
-        print("=" * 50)
+    # Mostrar resumen de datos procesados
+    print("\n📊 RESUMEN DE DATOS:")
+    print(f"   • Jugadores procesados: {df_aranjuez.shape[0]}")
+    print(f"   • Puntos totales equipo: {df_team_converted['PUNTOS +'].iloc[0]}")
+    print(f"   • Puntos del oponente: {df_team_converted['PUNTOS -'].iloc[0]}")
+    print(f"   • Rebotes totales: {df_team_converted['REB OFFENSIVO'].iloc[0] + df_team_converted['REB DEFENSIVO'].iloc[0]}")
+    print(f"   • % Rebotes: {df_team_converted['%REB'].iloc[0] * 100:.2f}%")
+    print(f"   • % Rebotes ofensivos: {df_team_converted['%OREB'].iloc[0] * 100:.2f}%")
+    print(f"   • % Rebotes defensivos: {df_team_converted['%DREB'].iloc[0] * 100:.2f}%")
+    print(f"   • Asistencias totales: {df_team_converted['ASISTENCIAS'].iloc[0]}")
+    print(f"   • PPP (Puntos por posesión): {df_team_converted['PPP'].iloc[0]}")
+    
+    # Limpiar archivos temporales
+    try:
+        if temp_players_file.exists():
+            temp_players_file.unlink()
+        if temp_teams_file.exists():
+            temp_teams_file.unlink()
+        print("\n🧹 Archivos temporales eliminados")
+    except Exception as e:
+        print(f"⚠️  Error al limpiar archivos temporales: {e}")
+    
+    print("=" * 50)
 
 if __name__ == "__main__":
     main()

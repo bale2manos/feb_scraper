@@ -79,10 +79,13 @@ def short_label(original_name: str) -> str:
     return " ".join(parts[:2]) if len(parts) >= 2 else s
 
 # ------------------- Carga roster (fotos y dorsales) ------------
-def load_roster_lookup(roster_xlsx: str, team: str):
-    if not os.path.exists(roster_xlsx):
-        raise FileNotFoundError(f"No existe roster: {roster_xlsx}")
-    df = pd.read_excel(roster_xlsx)
+def load_roster_lookup(roster_xlsx: str | None, team: str, roster_df: pd.DataFrame | None = None):
+    if roster_df is None:
+        if not roster_xlsx or not os.path.exists(roster_xlsx):
+            raise FileNotFoundError(f"No existe roster: {roster_xlsx}")
+        df = pd.read_excel(roster_xlsx)
+    else:
+        df = roster_df.copy()
 
     if "JUGADOR" not in df.columns:
         raise ValueError("El roster no contiene columna 'JUGADOR'.")
@@ -109,20 +112,25 @@ def mmss_from_minutes(m: float) -> str:
     mm, ss = divmod(s, 60)
     return f"{mm:02d}:{ss:02d}"
 
-def load_lineups_for_team(lineups_xlsx: str, team: str) -> pd.DataFrame:
-    if not os.path.exists(lineups_xlsx):
-        raise FileNotFoundError(f"No existe lineups: {lineups_xlsx}")
+def load_lineups_for_team(lineups_xlsx: str | None, team: str, lineups_df: pd.DataFrame | None = None) -> pd.DataFrame:
+    if lineups_df is None:
+        if not lineups_xlsx or not os.path.exists(lineups_xlsx):
+            raise FileNotFoundError(f"No existe lineups: {lineups_xlsx}")
 
-    xls = pd.ExcelFile(lineups_xlsx)
-    frames = []
-    for sh in xls.sheet_names:
-        df = pd.read_excel(xls, sheet_name=sh)
-        if "EQUIPO" in df.columns:
-            frames.append(df)
-    if not frames:
-        raise ValueError("No se encontraron hojas con columna 'EQUIPO'.")
+        xls = pd.ExcelFile(lineups_xlsx)
+        frames = []
+        for sh in xls.sheet_names:
+            df = pd.read_excel(xls, sheet_name=sh)
+            if "EQUIPO" in df.columns:
+                frames.append(df)
+        if not frames:
+            raise ValueError("No se encontraron hojas con columna 'EQUIPO'.")
+        all_df = pd.concat(frames, ignore_index=True)
+    else:
+        all_df = lineups_df.copy()
+        if "EQUIPO" not in all_df.columns:
+            raise ValueError("Los lineups no contienen columna 'EQUIPO'.")
 
-    all_df = pd.concat(frames, ignore_index=True)
     df_team = all_df[all_df["EQUIPO"].astype(str).str.strip().str.upper() == team.strip().upper()].copy()
     if df_team.empty:
         raise SystemExit(f"⚠️ No hay quintetos para el equipo: {team}")

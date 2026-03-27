@@ -1,0 +1,51 @@
+{
+  "revalidate_window": 2,
+  "publish": true,
+  "targets": [
+    {
+      "season": "2025/2026",
+      "league": "Primera FEB",
+      "phases": [
+        "Liga Regular Único"
+      ],
+      "jornadas": [],
+      "enabled": true
+    },
+    {
+      "season": "2025/2026",
+      "league": "Segunda FEB",
+      "phases": [
+        "Liga Regular \"ESTE\""
+      ],
+      "jornadas": [],
+      "enabled": true
+    },
+    {
+      "season": "2025/2026",
+      "league": "Segunda FEB",
+      "phases": [
+        "Liga Regular \"OESTE\""
+      ],
+      "jornadas": [],
+      "enabled": true
+    },
+    {
+      "season": "2025/2026",
+      "league": "Tercera FEB",
+      "phases": [
+        "Liga Regular \"B-A\""
+      ],
+      "jornadas": [],
+      "enabled": true
+    },
+    {
+      "season": "2025/2026",
+      "league": "Tercera FEB",
+      "phases": [
+        "Liga Regular \"B-B\""
+      ],
+      "jornadas": [],
+      "enabled": true
+    }
+  ]
+}

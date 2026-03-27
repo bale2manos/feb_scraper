@@ -195,6 +195,26 @@ def aggregate_clutch_from_file(
         # Agregar por jugador
         by_player = aggregate_by_team_player(df)
         
+        # Si el archivo existe, cargar y combinar datos
+        if os.path.exists(output_path):
+            try:
+                existing_df = pd.read_excel(output_path, sheet_name="by_player")
+                progress_callback("info", f"📥 Cargando clutch agregado existente: {len(existing_df)} registros")
+                
+                # Combinar datos existentes con nuevos
+                combined_df = pd.concat([existing_df, by_player], ignore_index=True)
+                
+                # Eliminar duplicados basados en IdEquipo e IdJugador (priorizar datos nuevos)
+                if 'IdEquipo' in combined_df.columns and 'IdJugador' in combined_df.columns:
+                    combined_df = combined_df.drop_duplicates(subset=['IdEquipo', 'IdJugador'], keep='last')
+                    progress_callback("info", f"🔄 Combinando clutch: {len(existing_df)} existentes + {len(by_player)} nuevos = {len(combined_df)} finales")
+                else:
+                    progress_callback("warning", "⚠️ No se pudieron identificar columnas clave para deduplicación de clutch agregado")
+                
+                by_player = combined_df
+            except Exception as e:
+                progress_callback("warning", f"⚠️ No se pudo cargar clutch agregado existente: {str(e)}. Sobrescribiendo...")
+        
         # Guardar archivo
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         with pd.ExcelWriter(output_path, engine="openpyxl") as xw:

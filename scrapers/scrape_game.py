@@ -4,7 +4,6 @@
 import os
 import sys
 import re
-import time
 import pandas as pd
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
@@ -14,7 +13,7 @@ from selenium.webdriver.support import expected_conditions as EC
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.web_scraping import init_driver, accept_cookies
-from config import BASE_PLAY_URL
+from config import BASE_PLAY_URL, SAVE_GAME_HTML_DEBUG, WEBDRIVER_TIMEOUT
 
 # --- Configuración: cambia aquí el ID de partido ---
 PARTIDO_ID     = "2413725"
@@ -34,6 +33,26 @@ def parse_frac(frac: str) -> tuple[int, int]:
         return int(m.group(1)), int(m.group(2))
     return 0, 0
 
+
+def _boxscore_ready(driver) -> bool:
+    try:
+        local_score = driver.find_element(By.CSS_SELECTOR, ".box-marcador .columna.equipo.local .resultado").text.strip()
+        away_score = driver.find_element(By.CSS_SELECTOR, ".box-marcador .columna.equipo.visitante .resultado").text.strip()
+        if not local_score or not away_score:
+            return False
+
+        rows = driver.find_elements(By.CSS_SELECTOR, "h1.titulo-modulo + .responsive-scroll table tbody tr")
+        player_rows = [row for row in rows if row.find_elements(By.CSS_SELECTOR, "td.nombre a")]
+        if len(player_rows) < 10:
+            return False
+
+        sample_row = player_rows[0]
+        player_name = sample_row.find_element(By.CSS_SELECTOR, "td.nombre a").text.strip()
+        minutes = sample_row.find_element(By.CSS_SELECTOR, "td.minutos").text.strip()
+        return bool(player_name) and bool(minutes)
+    except Exception:
+        return False
+
 def scrape_boxscore(driver, partido_id: str, phase: str = None, jornada: int = None) -> list[dict]:
     url = BASE_PLAY_URL.format(partido_id)
     driver.get(url)
@@ -45,7 +64,7 @@ def scrape_boxscore(driver, partido_id: str, phase: str = None, jornada: int = N
         if(o) o.remove();
     """)
 
-    wait = WebDriverWait(driver, 15)
+    wait = WebDriverWait(driver, WEBDRIVER_TIMEOUT)
     # clicar pestaña "Ficha" (boxscore)
     ficha_tab = wait.until(EC.element_to_be_clickable(
         (By.CSS_SELECTOR, "a.btn-tab[data-action='boxscore']")
@@ -56,18 +75,16 @@ def scrape_boxscore(driver, partido_id: str, phase: str = None, jornada: int = N
     wait.until(EC.presence_of_element_located(
         (By.CSS_SELECTOR, "h1.titulo-modulo + .responsive-scroll table tbody tr")
     ))
-    
-    # Esperar un poco para que se cargue completamente
-    time.sleep(10)
+    wait.until(lambda current_driver: _boxscore_ready(current_driver))
 
     # Tomar snapshot del HTML
     html = driver.page_source
-    
-    # Save it for debugging
-    out_dir = "./data/jugadores_per_game"
-    os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, f"{partido_id}.html"), "w", encoding="utf-8") as f:
-        f.write(html)
+
+    if SAVE_GAME_HTML_DEBUG:
+        out_dir = "./data/jugadores_per_game"
+        os.makedirs(out_dir, exist_ok=True)
+        with open(os.path.join(out_dir, f"{partido_id}.html"), "w", encoding="utf-8") as f:
+            f.write(html)
 
     soup = BeautifulSoup(html, 'html.parser')
 
@@ -142,8 +159,10 @@ def scrape_boxscore(driver, partido_id: str, phase: str = None, jornada: int = N
             perd        = safe_int(tr.select_one("td.perdidas").text)
             falt_com    = safe_int(tr.select_one("td.faltas.cometidas").text)
             falt_rec    = safe_int(tr.select_one("td.faltas.recibidas").text)
+            tapones     = safe_int(tr.select_one("td.tapones.favor").text)
 
             registros.append({
+                "IdPartido":          partido_id,
                 "FASE":              phase,
                 "JORNADA":           jornada,
                 "EQUIPO LOCAL":       equipo,
@@ -169,6 +188,7 @@ def scrape_boxscore(driver, partido_id: str, phase: str = None, jornada: int = N
                 "PERDIDAS":           perd,
                 "FaltasCOMETIDAS":    falt_com,
                 "FaltasRECIBIDAS":    falt_rec,
+                "TAPONES":            tapones,
                 "IMAGEN":             imagen,
                 "URL JUGADOR":        url_jug
             })

@@ -55,13 +55,15 @@ def _to_pct_0_100(series: pd.Series) -> pd.Series:
     s = pd.to_numeric(series, errors="coerce").fillna(0.0)
     return (s * 100.0) if s.max() <= 1.5 else s
 
-def _read_clutch_for_player(player_name_roster: str, clutch_file: str = None) -> dict | None:
-    clutch_path = clutch_file if clutch_file else CLUTCH_XLSX_PATH
-    
-    try:
-        clutch_df = pd.read_excel(clutch_path)
-    except Exception as e:
-        return None
+def _read_clutch_for_player(player_name_roster: str, clutch_file: str = None, clutch_df: pd.DataFrame = None) -> dict | None:
+    if clutch_df is None:
+        clutch_path = clutch_file if clutch_file else CLUTCH_XLSX_PATH
+        try:
+            clutch_df = pd.read_excel(clutch_path)
+        except Exception:
+            return None
+    else:
+        clutch_df = clutch_df.copy()
 
     name_col = None
     for c in clutch_df.columns:
@@ -124,13 +126,15 @@ def _read_clutch_for_player(player_name_roster: str, clutch_file: str = None) ->
     
     return {"T1 %": T1, "T2 %": T2, "T3 %": T3, "EFG %": EFG, "TS %": TS}
 
-def _read_clutch_attempts(player_name_roster: str, clutch_file: str = None) -> dict:
-    clutch_path = clutch_file if clutch_file else CLUTCH_XLSX_PATH
-    
-    try:
-        clutch_df = pd.read_excel(clutch_path)
-    except Exception as e:
-        return {}
+def _read_clutch_attempts(player_name_roster: str, clutch_file: str = None, clutch_df: pd.DataFrame = None) -> dict:
+    if clutch_df is None:
+        clutch_path = clutch_file if clutch_file else CLUTCH_XLSX_PATH
+        try:
+            clutch_df = pd.read_excel(clutch_path)
+        except Exception:
+            return {}
+    else:
+        clutch_df = clutch_df.copy()
 
     name_col = None
     for c in clutch_df.columns:
@@ -184,6 +188,7 @@ def plot_media_pct_with_clutch(stats: dict,
                                attempts: dict = None,
                                clutch_attempts: dict = None,  # Added clutch_attempts
                                player_name_roster: str | None = None,
+                               clutch_df: pd.DataFrame = None,
                                clutch_file: str = None,  # Added clutch_file parameter
                                out_png: str = None,
                                width_px: int = 2000,
@@ -197,7 +202,7 @@ def plot_media_pct_with_clutch(stats: dict,
     clutch_vals = None
     if player_name_roster:
         try:
-            c = _read_clutch_for_player(player_name_roster, clutch_file)
+            c = _read_clutch_for_player(player_name_roster, clutch_file, clutch_df=clutch_df)
             if c:
                 clutch_vals = [float(c.get(k, 0.0) or 0.0) for k in labels]
         except Exception:
@@ -290,7 +295,7 @@ def plot_media_pct_with_clutch(stats: dict,
     clutch_attempts = None
     if player_name_roster:
         try:
-            clutch_attempts = _read_clutch_attempts(player_name_roster, clutch_file)
+            clutch_attempts = _read_clutch_attempts(player_name_roster, clutch_file, clutch_df=clutch_df)
         except Exception:
             clutch_attempts = {}
 

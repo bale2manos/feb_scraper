@@ -323,6 +323,10 @@ def main():
     **🎯 OPTIMIZACIÓN:** 1 acceso por partido (3x más rápido)  
     **📅 JORNADAS:** Filtrado opcional por jornadas específicas  
     **📝 ARCHIVOS:** Nombres automáticos con sufijo de jornadas (jX_Y_Z)  
+    **🔄 MODO INCREMENTAL:** Los datos se agregan a archivos existentes (no se sobrescriben)
+    
+    > **💡 Ideal para Tercera y Segunda FEB:** Scrapea diferentes grupos y los datos se combinarán automáticamente 
+    en los mismos archivos, eliminando duplicados.
     
     Todos los datos se procesan automáticamente y se generan **6 archivos Excel** listos para análisis.
     """)
@@ -510,10 +514,12 @@ def main():
         1. **📊 Extracción unificada:** Boxscores + Asistencias + Clutch + Lineups (1 acceso por partido)
         2. **🧑‍🤝‍🧑 Jugadores:** Agregación con biografías
         3. **🏀 Equipos:** Métricas avanzadas por equipo
+        4. **🔄 Modo incremental:** Datos se agregan (no sobrescriben)
         
         - Genera **6 archivos Excel** automáticamente
         - **3x más rápido** que versiones anteriores  
         - **Filtro opcional de jornadas** con sufijo automático (jX_Y_Z)
+        - **Perfecto para múltiples grupos** de Tercera/Segunda FEB
         - El proceso puede tardar varios minutos
         - Se mostrará el progreso en tiempo real
         - Los archivos se descargarán automáticamente

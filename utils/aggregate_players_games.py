@@ -94,7 +94,7 @@ def aggregate_players_stats(file_path='./data/jugadores_per_game.xlsx'):
         'MINUTOS JUGADOS', 'PUNTOS', 'T2 CONVERTIDO', 'T2 INTENTADO', 
         'T3 CONVERTIDO', 'T3 INTENTADO', 'TL CONVERTIDOS', 'TL INTENTADOS',
         'REB OFFENSIVO', 'REB DEFENSIVO', 'ASISTENCIAS', 'RECUPEROS', 
-        'PERDIDAS', 'FaltasCOMETIDAS', 'FaltasRECIBIDAS'
+        'PERDIDAS', 'FaltasCOMETIDAS', 'FaltasRECIBIDAS', 'TAPONES'
     ]
     
     # Define columns to get first occurrence

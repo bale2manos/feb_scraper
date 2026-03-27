@@ -108,6 +108,7 @@ COOKIE_BTN_XPATH = (
 # Configuración del driver
 DRIVER_PATH = None  # None = usar PATH del sistema
 WEBDRIVER_TIMEOUT = 15  # segundos
+SAVE_GAME_HTML_DEBUG = False
 
 # Configuración de scraping paralelo
 MAX_WORKERS = 2  # Threads para procesamiento paralelo (reducido para evitar errores de conexión)
@@ -119,6 +120,43 @@ MAX_WORKERS_BIO = 3  # Threads para biografías de jugadores (reducido para esta
 
 # Directorio base de datos
 DATA_DIR = Path("./data")
+SQLITE_DB_FILE = DATA_DIR / "feb.sqlite"
+
+# Modos de la app unificada
+APP_MODE_ENV_VAR = "FEB_APP_MODE"
+APP_MODE_LOCAL = "local"
+APP_MODE_CLOUD = "cloud"
+
+# Programación por defecto del sync automático
+DEFAULT_SYNC_DAY = "SUN"
+DEFAULT_SYNC_TIME = "23:30"
+DEFAULT_SYNC_TASK_NAME = "feb-sunday-sync"
+AUTO_SYNC_TARGETS_FILE = DATA_DIR / "auto_sync_targets.json"
+SYNC_RUNTIME_STATUS_FILE = DATA_DIR / "sync_runtime_status.json"
+SYNC_RUNTIME_LOCK_FILE = DATA_DIR / "sync_runtime.lock"
+DEFAULT_AUTO_SYNC_TARGETS = [
+    {
+        "season": "2025/2026",
+        "league": "Primera FEB",
+        "phases": ["Liga Regular Único"],
+        "jornadas": [],
+        "enabled": True,
+    },
+    {
+        "season": "2025/2026",
+        "league": "Segunda FEB",
+        "phases": ['Liga Regular "ESTE"', 'Liga Regular "OESTE"'],
+        "jornadas": [],
+        "enabled": True,
+    },
+    {
+        "season": "2025/2026",
+        "league": "Tercera FEB",
+        "phases": ['Liga Regular "B-A"', 'Liga Regular "B-B"'],
+        "jornadas": [],
+        "enabled": True,
+    },
+]
 
 # Archivos de datos principales
 JUGADORES_AGGREGATED_FILE = DATA_DIR / f"jugadores_aggregated_{TEMPORADA_CORTA}.xlsx"

@@ -2,10 +2,13 @@
 import streamlit as st
 from pathlib import Path
 import pandas as pd
+import os
+import re
 from phase_report.build_phase_report import build_phase_report
 
 # Import file configuration utilities
 from utils.file_config_ui import render_file_config_ui, validate_files
+from config import DATA_DIR
 
 # --- Página ---
 st.set_page_config(page_title="🏀 Generador de Informe de Fase", layout="wide")
@@ -17,37 +20,219 @@ Genera informes por fases de competición con análisis detallado de equipos.
 - ✨ **Filtrado por jornadas:** Analiza rendimiento por fases en jornadas específicas
 - 📊 **Análisis temporal:** Compara diferentes momentos de cada fase
 - 🎯 **Segmentación avanzada:** Combina filtros de fase y jornada para análisis precisos
+- 🌐 **Modo multi-fuente:** Combina equipos de diferentes temporadas, fases y grupos
 """)
 
-# Configuración de archivos con soporte para jornadas: necesitamos equipos y jugadores agregados
-file_paths = render_file_config_ui(
-    file_types=['teams_aggregated', 'jugadores_aggregated'],
-    key_prefix="phase_report"
+# --- MODO AVANZADO: Múltiples fuentes ---
+st.subheader("⚙️ Modo de Selección de Datos")
+advanced_mode = st.checkbox(
+    "🌐 Activar Modo Multi-fuente",
+    help="Combina equipos de diferentes temporadas, ligas y grupos en un solo informe"
 )
 
-# Validar archivos antes de continuar
-if not validate_files(file_paths):
-    st.error("❌ **No se pueden cargar los archivos necesarios.** Por favor, verifica la configuración anterior.")
-    st.stop()
 
-# Obtener ruta de archivo de equipos y jugadores
-teams_file = file_paths.get('teams_aggregated')
-players_file = file_paths.get('jugadores_aggregated')
+def scan_data_sources():
+    """Escanea data/ y devuelve lista de fuentes disponibles con sus archivos."""
+    data_dir = Path(DATA_DIR)
+    sources = []
 
-# --- Carga datos para multiselect ---
-try:
-    df_teams = pd.read_excel(teams_file)
-    st.success(f"✅ Datos cargados: {df_teams.shape[0]} equipos encontrados")
-except Exception as e:
-    st.error(f"❌ Error cargando datos: {str(e)}")
-    st.stop()
+    if not data_dir.exists():
+        return sources
 
-equipos = sorted(df_teams['EQUIPO'].dropna().unique().tolist())
-fases   = sorted(df_teams['FASE'].dropna().unique().tolist())
+    LIGA_NAMES = {'1FEB': 'Primera FEB', '2FEB': 'Segunda FEB', '3FEB': 'Tercera FEB'}
+
+    for folder in sorted(data_dir.iterdir()):
+        if not folder.is_dir():
+            continue
+
+        # Detectar archivos de teams y players
+        teams_file = None
+        players_file = None
+        for f in folder.glob("teams_*.xlsx"):
+            teams_file = f
+        for f in folder.glob("players_*.xlsx"):
+            # Excluir players_*_games.xlsx
+            if '_games' not in f.name:
+                players_file = f
+
+        if not teams_file:
+            continue
+
+        # Parsear nombre de carpeta para extraer metadatos
+        name = folder.name
+        # Patrón: XFEB_YY_ZZ o XFEB_YY_ZZ_jN_M o XFEB_YY_ZZ_aa_bb
+        m = re.match(r'^(\dFEB)_(\d{2}_\d{2})(.*)?$', name)
+        if not m:
+            continue
+
+        liga_code = m.group(1)
+        season = m.group(2)
+        suffix = m.group(3) or ''
+
+        liga_name = LIGA_NAMES.get(liga_code, liga_code)
+        season_display = f"20{season.replace('_', '/')}"
+
+        # Determinar descripción del sufijo
+        if not suffix:
+            detail = "Todas las jornadas"
+        elif suffix.startswith('_j'):
+            jornadas = suffix[2:].split('_')
+            detail = f"Jornadas {', '.join(jornadas)}"
+        elif suffix == '_old':
+            detail = "Datos antiguos"
+        else:
+            detail = f"Grupo {suffix.lstrip('_').upper()}"
+
+        label = f"{liga_name} {season_display} — {detail}"
+
+        sources.append({
+            'label': label,
+            'folder': folder,
+            'liga': liga_name,
+            'liga_code': liga_code,
+            'season': season,
+            'detail': detail,
+            'teams_file': teams_file,
+            'players_file': players_file,
+        })
+
+    return sources
+
+
+if advanced_mode:
+    st.info("🌐 **Modo Multi-fuente:** Selecciona varias fuentes de datos y combina equipos de diferentes orígenes.")
+
+    all_sources = scan_data_sources()
+
+    if not all_sources:
+        st.error("❌ No se encontraron carpetas con datos en `data/`")
+        st.stop()
+
+    # Agrupar por liga para mejor visualización
+    sources_by_liga = {}
+    for src in all_sources:
+        sources_by_liga.setdefault(src['liga'], []).append(src)
+
+    # Selector de fuentes
+    st.write("**📁 Fuentes de datos disponibles:**")
+
+    source_labels = [s['label'] for s in all_sources]
+    selected_labels = st.multiselect(
+        "Selecciona las fuentes a combinar:",
+        options=source_labels,
+        help="Puedes seleccionar varias temporadas, ligas y grupos a la vez",
+        placeholder="Ej: Segunda FEB 2025/26, Tercera FEB 2025/26..."
+    )
+
+    if not selected_labels:
+        # Mostrar resumen de lo disponible
+        for liga, sources in sources_by_liga.items():
+            with st.expander(f"🏀 {liga} ({len(sources)} fuentes)"):
+                for src in sources:
+                    has_players = "✅" if src['players_file'] else "❌"
+                    st.write(f"  • **{src['detail']}** — `{src['folder'].name}/` (equipos ✅ | jugadores {has_players})")
+        st.warning("⚠️ Selecciona al menos una fuente para continuar")
+        st.stop()
+
+    # Cargar datos de las fuentes seleccionadas
+    selected_sources = [s for s in all_sources if s['label'] in selected_labels]
+
+    all_teams_dfs = []
+    all_players_dfs = []
+
+    for src in selected_sources:
+        try:
+            df_t = pd.read_excel(src['teams_file'])
+            df_t['_SOURCE'] = src['label']
+            all_teams_dfs.append(df_t)
+        except Exception as e:
+            st.error(f"❌ Error cargando equipos de {src['label']}: {e}")
+
+        if src['players_file']:
+            try:
+                df_p = pd.read_excel(src['players_file'])
+                df_p['_SOURCE'] = src['label']
+                all_players_dfs.append(df_p)
+            except Exception as e:
+                st.warning(f"⚠️ Error cargando jugadores de {src['label']}: {e}")
+
+    if not all_teams_dfs:
+        st.error("❌ No se pudieron cargar datos de equipos")
+        st.stop()
+
+    df_teams = pd.concat(all_teams_dfs, ignore_index=True)
+    df_players = pd.concat(all_players_dfs, ignore_index=True) if all_players_dfs else pd.DataFrame()
+
+    st.success(f"✅ **{len(df_teams)} registros** de equipos combinados de **{len(selected_sources)} fuente(s)**")
+
+    # Mostrar resumen
+    with st.expander("📊 Detalle de fuentes cargadas", expanded=False):
+        for src in selected_sources:
+            n_teams = len([d for d in all_teams_dfs if d['_SOURCE'].iloc[0] == src['label']])
+            st.write(f"  • **{src['label']}** — `{src['folder'].name}/`")
+
+    # Guardar a archivos temporales para compatibilidad
+    teams_file = Path(DATA_DIR) / "_temp_combined_teams.xlsx"
+    players_file = Path(DATA_DIR) / "_temp_combined_players.xlsx" if not df_players.empty else None
+
+    df_teams.to_excel(teams_file, index=False)
+    if players_file and not df_players.empty:
+        df_players.to_excel(players_file, index=False)
+
+else:
+    # Modo normal — un solo archivo (flujo original)
+    file_paths = render_file_config_ui(
+        file_types=['teams_aggregated', 'jugadores_aggregated'],
+        key_prefix="phase_report"
+    )
+
+    if not validate_files(file_paths):
+        st.error("❌ **No se pueden cargar los archivos necesarios.** Por favor, verifica la configuración anterior.")
+        st.stop()
+
+    teams_file = file_paths.get('teams_aggregated')
+    players_file = file_paths.get('jugadores_aggregated')
+
+    try:
+        df_teams = pd.read_excel(teams_file)
+        st.success(f"✅ Datos cargados: {df_teams.shape[0]} equipos encontrados")
+    except Exception as e:
+        st.error(f"❌ Error cargando datos: {str(e)}")
+        st.stop()
+
+# --- Preparar opciones de selección ---
+equipos_list = sorted(df_teams['EQUIPO'].dropna().unique().tolist())
+fases = sorted(df_teams['FASE'].dropna().unique().tolist())
+
+if advanced_mode and '_SOURCE' in df_teams.columns:
+    # En modo multi-fuente, mostrar equipos con su origen
+    equipos_with_source = df_teams[['EQUIPO', '_SOURCE']].drop_duplicates().sort_values(['_SOURCE', 'EQUIPO'])
+    equipos_options = [
+        f"{row['EQUIPO']}  ⸱  {row['_SOURCE']}"
+        for _, row in equipos_with_source.iterrows()
+    ]
+    equipos_map = {
+        f"{row['EQUIPO']}  ⸱  {row['_SOURCE']}": row['EQUIPO']
+        for _, row in equipos_with_source.iterrows()
+    }
+    st.info("💡 Los equipos muestran su fuente de origen para distinguir entre ligas/temporadas")
+else:
+    equipos_options = equipos_list
+    equipos_map = {e: e for e in equipos_options}
 
 # --- Widgets ---
-sel_equipos = st.multiselect("Equipo(s):", options=equipos, placeholder="Selecciona equipos si es necesario")
-sel_fases   = st.multiselect("Fase(s):",   options=fases,  placeholder="Selecciona fases si es necesario")
+sel_equipos_display = st.multiselect(
+    "Equipo(s):",
+    options=equipos_options,
+    placeholder="Selecciona equipos si es necesario"
+)
+sel_equipos = [equipos_map[e] for e in sel_equipos_display]
+
+sel_fases = st.multiselect(
+    "Fase(s):",
+    options=fases,
+    placeholder="Selecciona fases si es necesario"
+)
 
 # --- Configuración de filtros mínimos ---
 st.subheader("⚙️ Configuración de filtros mínimos")
@@ -149,9 +334,26 @@ if 'pdf_data' in st.session_state and 'pdf_name' in st.session_state:
 # --- Pie de página ---
 st.markdown("---")
 
-st.subheader("ℹ️ Información sobre el Análisis Temporal")
+with st.expander("🌐 Modo Multi-fuente"):
+    st.write("""
+    **🌐 Combina datos de múltiples fuentes automáticamente:**
+    
+    El sistema escanea la carpeta `data/` y detecta todas las fuentes disponibles:
+    
+    **📁 Detección automática:**
+    - Temporadas (24/25, 25/26, etc.)
+    - Ligas (Primera, Segunda, Tercera FEB)
+    - Grupos (AA, BA, BB, etc.)
+    - Jornadas específicas (j1, j2, j1_2_3, etc.)
+    
+    **🎯 Casos de uso:**
+    - Comparar equipos de diferentes grupos de una misma liga
+    - Analizar equipos de diferentes temporadas
+    - Mezclar datos de Primera, Segunda y Tercera FEB
+    - Combinar datos completos con datos de jornadas específicas
+    """)
 
-with st.expander("📊 Contenido del informe"):
+with st.expander("ℹ️ Información sobre el Análisis Temporal"):
     st.write("""
     El informe de fase incluye los siguientes análisis:
     

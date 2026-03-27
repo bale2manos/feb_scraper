@@ -1,5 +1,9 @@
 *.csv
 output/
+data/sync_runtime_status.json
+data/sync_runtime.lock
+data/feb.sqlite-wal
+data/feb.sqlite-shm
 
 
 # Byte-compiled / optimized / DLL files

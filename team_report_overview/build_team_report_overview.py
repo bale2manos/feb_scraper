@@ -51,6 +51,7 @@ def build_team_report_overview(
     output_path: str = None,
     dpi: int = 180,  # Usar mismo DPI que build_team_report.py para consistencia
     players_file: str = None,  # Nuevo parámetro para archivo de jugadores
+    players_df: pd.DataFrame | None = None,
     min_games: int = 1  # Nuevo parámetro para filtro mínimo de partidos
 ) -> plt.Figure:
     """
@@ -82,8 +83,11 @@ def build_team_report_overview(
     
     # 3b. Añadir máximos anotadores en la esquina superior derecha
     # Usar el archivo de jugadores pasado como parámetro o usar default
-    jugadores_file = players_file if players_file else './data/jugadores_aggregated_24_25.xlsx'
-    df_jugadores = pd.read_excel(jugadores_file)
+    if players_df is None:
+        jugadores_file = players_file if players_file else './data/jugadores_aggregated_24_25.xlsx'
+        df_jugadores = pd.read_excel(jugadores_file)
+    else:
+        df_jugadores = players_df.copy()
     
     # Fijar tamaño constante para las figuras de los módulos de jugadores
     fixed_figsize = (4, 3.5)

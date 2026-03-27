@@ -52,7 +52,8 @@ def aggregate_games(input_file_path, progress_callback=None):
         'RECUPEROS',
         'PERDIDAS',
         'FaltasCOMETIDAS',
-        'FaltasRECIBIDAS'
+        'FaltasRECIBIDAS',
+        'TAPONES'
     ]
     
     # Verificar columnas faltantes
@@ -190,6 +191,7 @@ def aggregate_teams(games_df, progress_callback=None):
 def save_aggregated_teams(games_df, teams_df, games_output_path, teams_output_path, progress_callback=None):
     """
     Save both aggregated DataFrames to Excel files.
+    If files exist, combine with existing data and remove duplicates.
     
     Args:
         games_df: DataFrame with games aggregated data
@@ -199,12 +201,58 @@ def save_aggregated_teams(games_df, teams_df, games_output_path, teams_output_pa
         progress_callback: Function to call with progress updates
     """
     try:
+        # === GUARDAR GAMES ===
         if progress_callback:
             progress_callback("info", f"💾 Guardando agregación de partidos: {Path(games_output_path).name}")
+        
+        # Si el archivo de games existe, cargar y combinar
+        if os.path.exists(games_output_path):
+            try:
+                existing_games = pd.read_excel(games_output_path)
+                if progress_callback:
+                    progress_callback("info", f"📥 Cargando partidos existentes: {len(existing_games)} registros")
+                
+                # Combinar datos
+                combined_games = pd.concat([existing_games, games_df], ignore_index=True)
+                
+                # Eliminar duplicados basados en IdPartido
+                if 'IdPartido' in combined_games.columns:
+                    combined_games = combined_games.drop_duplicates(subset=['IdPartido'], keep='last')
+                    if progress_callback:
+                        progress_callback("info", f"🔄 Combinando partidos: {len(existing_games)} existentes + {len(games_df)} nuevos = {len(combined_games)} finales")
+                
+                games_df = combined_games
+            except Exception as e:
+                if progress_callback:
+                    progress_callback("warning", f"⚠️ No se pudieron cargar partidos existentes: {str(e)}. Sobrescribiendo...")
+        
         games_df.to_excel(games_output_path, index=False)
         
+        # === GUARDAR TEAMS ===
         if progress_callback:
             progress_callback("info", f"💾 Guardando agregación de equipos: {Path(teams_output_path).name}")
+        
+        # Si el archivo de teams existe, cargar y combinar
+        if os.path.exists(teams_output_path):
+            try:
+                existing_teams = pd.read_excel(teams_output_path)
+                if progress_callback:
+                    progress_callback("info", f"📥 Cargando equipos existentes: {len(existing_teams)} registros")
+                
+                # Combinar datos
+                combined_teams = pd.concat([existing_teams, teams_df], ignore_index=True)
+                
+                # Eliminar duplicados basados en IdEquipo
+                if 'IdEquipo' in combined_teams.columns:
+                    combined_teams = combined_teams.drop_duplicates(subset=['IdEquipo'], keep='last')
+                    if progress_callback:
+                        progress_callback("info", f"🔄 Combinando equipos: {len(existing_teams)} existentes + {len(teams_df)} nuevos = {len(combined_teams)} finales")
+                
+                teams_df = combined_teams
+            except Exception as e:
+                if progress_callback:
+                    progress_callback("warning", f"⚠️ No se pudieron cargar equipos existentes: {str(e)}. Sobrescribiendo...")
+        
         teams_df.to_excel(teams_output_path, index=False)
         
         if progress_callback:

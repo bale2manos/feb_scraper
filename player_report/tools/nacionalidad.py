@@ -17,7 +17,6 @@ import json
 import io
 import pandas as pd
 import requests
-import cairosvg
 from pathlib import Path
 from PIL import Image
 
@@ -27,6 +26,34 @@ FLAGS_CACHE_PATH = Path("images/flags_cache/")
 
 # Crear directorio de caché si no existe
 FLAGS_CACHE_PATH.mkdir(parents=True, exist_ok=True)
+
+_CAIROSVG_IMPORT_ERROR = None
+
+
+def _get_cairosvg():
+    """Import CairoSVG lazily so missing system libs do not break app startup."""
+    global _CAIROSVG_IMPORT_ERROR
+    try:
+        import cairosvg  # type: ignore
+        return cairosvg
+    except Exception as exc:
+        _CAIROSVG_IMPORT_ERROR = exc
+        return None
+
+
+def _load_cached_flag(cache_path, size):
+    """Load an exact cached PNG or resize another cached PNG for the same country."""
+    if cache_path.exists():
+        return Image.open(cache_path).convert('RGBA')
+
+    country_prefix = cache_path.stem.split('_')[0]
+    for existing_cache in FLAGS_CACHE_PATH.glob(f"{country_prefix}_*.png"):
+        try:
+            return Image.open(existing_cache).convert('RGBA').resize(size)
+        except Exception:
+            continue
+
+    return None
 
 
 def load_countries_data():
@@ -131,10 +158,18 @@ def download_and_convert_flag_svg(flag_url, size=(50, 40), country_code=""):
         # Check if cached version exists
         cache_filename = f"{country_code.lower()}_{size[0]}x{size[1]}.png"
         cache_path = FLAGS_CACHE_PATH / cache_filename
-        
-        if cache_path.exists():
-            # Load from cache
-            return Image.open(cache_path).convert('RGBA')
+
+        cached_flag = _load_cached_flag(cache_path, size)
+        if cached_flag is not None:
+            return cached_flag
+
+        cairosvg = _get_cairosvg()
+        if cairosvg is None:
+            print(
+                f"Flag conversion unavailable for {country_code or flag_url}: "
+                f"{_CAIROSVG_IMPORT_ERROR}"
+            )
+            return None
         
         # Download SVG
         print(f"📥 Downloading flag from {flag_url}")

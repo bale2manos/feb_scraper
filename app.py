@@ -55,6 +55,7 @@ GM_SCOPE_LEAGUE_KEY = "gm_scope_league"
 GM_SCOPE_PHASES_KEY = "gm_scope_phases"
 GM_SCOPE_JORNADAS_KEY = "gm_scope_jornadas"
 GM_MODE_KEY = "gm_mode"
+APP_PAGE_KEY = "app_active_page"
 GM_NATIONALITIES_KEY = "gm_nationalities"
 GM_BIRTH_RANGE_KEY = "gm_birth_range"
 GM_SELECTED_PLAYER_KEY = "gm_selected_player"
@@ -1307,34 +1308,45 @@ def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
         st.info("No hay datos suficientes para construir la vista GM.")
         return
 
-    _ensure_select_state(GM_SCOPE_SEASON_KEY, seasons)
-    season = st.selectbox("Temporada GM", seasons, key=GM_SCOPE_SEASON_KEY)
-
-    leagues = load_available_leagues(db_signature, season)
-    _ensure_select_state(GM_SCOPE_LEAGUE_KEY, leagues)
-    league = st.selectbox("Liga GM", leagues, key=GM_SCOPE_LEAGUE_KEY)
-
-    available_phases = load_available_phases(db_signature, season, league)
-    _ensure_multiselect_state(GM_SCOPE_PHASES_KEY, available_phases)
-    selected_phases = st.multiselect(
-        "Fases GM",
-        options=available_phases,
-        key=GM_SCOPE_PHASES_KEY,
-        placeholder="Vacio = todas las fases",
-    )
-
-    available_jornadas = load_available_jornadas(db_signature, season, league, tuple(selected_phases))
-    _ensure_multiselect_state(GM_SCOPE_JORNADAS_KEY, available_jornadas)
-    selected_jornadas = st.multiselect(
-        "Jornadas GM",
-        options=available_jornadas,
-        key=GM_SCOPE_JORNADAS_KEY,
-        placeholder="Vacio = todas las jornadas",
-    )
-
     if GM_MODE_KEY not in st.session_state:
         st.session_state[GM_MODE_KEY] = "Promedios"
-    mode = st.radio("Modo de estadisticas", ["Totales", "Promedios"], horizontal=True, key=GM_MODE_KEY)
+
+    st.markdown("---")
+    with st.form("gm_scope_form", clear_on_submit=False):
+        scope_apply_row = st.columns([1.4, 4.6])
+        scope_apply_row[0].form_submit_button("Aplicar scope GM", use_container_width=True)
+        scope_apply_row[1].caption(
+            "Los cambios de temporada, liga, fases, jornadas y modo se aplican al pulsar Enter o `Aplicar scope GM`."
+        )
+
+        scope_top_cols = st.columns(2)
+        _ensure_select_state(GM_SCOPE_SEASON_KEY, seasons)
+        season = scope_top_cols[0].selectbox("Temporada GM", seasons, key=GM_SCOPE_SEASON_KEY)
+
+        leagues = load_available_leagues(db_signature, season)
+        _ensure_select_state(GM_SCOPE_LEAGUE_KEY, leagues)
+        league = scope_top_cols[1].selectbox("Liga GM", leagues, key=GM_SCOPE_LEAGUE_KEY)
+
+        available_phases = load_available_phases(db_signature, season, league)
+        _ensure_multiselect_state(GM_SCOPE_PHASES_KEY, available_phases)
+        selected_phases = st.multiselect(
+            "Fases GM",
+            options=available_phases,
+            key=GM_SCOPE_PHASES_KEY,
+            placeholder="Vacio = todas las fases",
+        )
+
+        available_jornadas = load_available_jornadas(db_signature, season, league, tuple(selected_phases))
+        _ensure_multiselect_state(GM_SCOPE_JORNADAS_KEY, available_jornadas)
+        selected_jornadas = st.multiselect(
+            "Jornadas GM",
+            options=available_jornadas,
+            key=GM_SCOPE_JORNADAS_KEY,
+            placeholder="Vacio = todas las jornadas",
+        )
+
+        mode = st.radio("Modo de estadisticas", ["Totales", "Promedios"], horizontal=True, key=GM_MODE_KEY)
+
     gm_df, clutch_lookup = load_gm_view_data(
         db_signature,
         season,
@@ -1398,7 +1410,6 @@ def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
                 "Año nacimiento",
                 min_value=min_year,
                 max_value=max_year,
-                value=st.session_state[GM_BIRTH_RANGE_KEY],
                 key=GM_BIRTH_RANGE_KEY,
             )
 
@@ -2049,12 +2060,22 @@ def main() -> None:
     st.caption(f"Modo activo: `{app_mode}`. Base principal: `{SQLITE_DB_FILE}`.")
     render_feedback()
 
-    has_data = render_db_status(store)
     db_signature = get_db_signature()
+    has_data = load_db_summary(db_signature)["games"] > 0
+
+    page_names = ["Base de datos", "GM", "Jugador", "Equipo", "Fase"]
+    if not cloud_mode:
+        page_names.append("Scraper")
+
+    with st.sidebar:
+        st.header("Vista")
+        _ensure_select_state(APP_PAGE_KEY, page_names)
+        active_page = st.radio("Vista activa", page_names, key=APP_PAGE_KEY, label_visibility="collapsed")
 
     filters: ReportFilters | None = None
     bundle = empty_bundle()
-    if has_data:
+    report_pages = {"Jugador", "Equipo", "Fase"}
+    if has_data and active_page in report_pages:
         filters, _, _ = build_common_filters(db_signature)
         if filters is not None:
             bundle = load_report_bundle(
@@ -2069,33 +2090,29 @@ def main() -> None:
                 st.write(f"**Partidos filtrados:** {bundle.games_df.shape[0]}")
                 st.write(f"**Jugadores filtrados:** {bundle.players_df.shape[0]}")
                 st.write(f"**Equipos filtrados:** {bundle.teams_df.shape[0]}")
-    else:
+    elif active_page in report_pages:
         with st.sidebar:
             st.header("Filtros de informes")
             st.info("Cuando la base tenga datos, aqui apareceran los filtros de temporada, liga, fase y jornada.")
 
     if cloud_mode:
         with st.sidebar:
-            st.info("Modo cloud: la pestana `Scraper` esta oculta y la app funciona en solo lectura.")
+            st.info("Modo cloud: la pestaña `Scraper` está oculta y la app funciona en solo lectura.")
 
-    tab_names = ["Base de datos", "GM", "Jugador", "Equipo", "Fase"]
-    if not cloud_mode:
-        tab_names.append("Scraper")
-
-    tabs = st.tabs(tab_names)
-    with tabs[0]:
+    if active_page == "Base de datos":
+        render_db_status(store)
+        st.markdown("---")
         render_database_tab(db_signature)
-    with tabs[1]:
+    elif active_page == "GM":
         render_gm_tab(db_signature)
-    with tabs[2]:
+    elif active_page == "Jugador":
         render_player_tab(bundle)
-    with tabs[3]:
+    elif active_page == "Equipo":
         render_team_tab(bundle)
-    with tabs[4]:
+    elif active_page == "Fase":
         render_phase_tab(bundle, filters)
-    if not cloud_mode:
-        with tabs[5]:
-            render_scraper_tab(store)
+    elif active_page == "Scraper" and not cloud_mode:
+        render_scraper_tab(store)
 
 
 if __name__ == "__main__":

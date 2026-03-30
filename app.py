@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -11,6 +12,7 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+from unidecode import unidecode
 
 for stream_name in ("stdout", "stderr"):
     stream = getattr(sys, stream_name, None)
@@ -33,10 +35,7 @@ from config import (
     TEMPORADAS_DISPONIBLES,
     get_liga_fases,
 )
-from phase_report.build_phase_report import build_phase_report
-from player_report.player_report_gen import generate_report
 from storage import DataStore, ReportBundle, ReportFilters, SyncSummary
-from team_report.build_team_report import build_team_report
 from utils.auto_sync import expand_targets_by_phase, iter_enabled_targets, load_auto_sync_config, save_auto_sync_config, target_label
 from utils.sync_runtime import (
     SyncAlreadyRunningError,
@@ -50,6 +49,113 @@ from utils.sync_runtime import (
 
 
 REPO_ROOT = Path(__file__).resolve().parent
+
+GM_SCOPE_SEASON_KEY = "gm_scope_season"
+GM_SCOPE_LEAGUE_KEY = "gm_scope_league"
+GM_SCOPE_PHASES_KEY = "gm_scope_phases"
+GM_SCOPE_JORNADAS_KEY = "gm_scope_jornadas"
+GM_MODE_KEY = "gm_mode"
+GM_NATIONALITIES_KEY = "gm_nationalities"
+GM_BIRTH_RANGE_KEY = "gm_birth_range"
+GM_SELECTED_PLAYER_KEY = "gm_selected_player"
+GM_REPORT_PATH_KEY = "gm_player_report_path"
+GM_RULE_IDS_KEY = "gm_rule_ids"
+GM_RULE_NEXT_ID_KEY = "gm_rule_next_id"
+GM_VISIBLE_COLUMNS_KEY = "gm_visible_columns"
+GM_SORT_COLUMN_KEY = "gm_sort_column"
+GM_BIRTH_YEAR_COLUMN = "AÑO NACIMIENTO"
+GM_LEGACY_BIRTH_YEAR_COLUMNS = ("ANO NACIMIENTO",)
+
+GM_COUNT_COLUMNS = [
+    "MINUTOS JUGADOS",
+    "PUNTOS",
+    "TL CONVERTIDOS",
+    "TL INTENTADOS",
+    "T2 CONVERTIDO",
+    "T2 INTENTADO",
+    "T3 CONVERTIDO",
+    "T3 INTENTADO",
+    "REB OFFENSIVO",
+    "REB DEFENSIVO",
+    "ASISTENCIAS",
+    "RECUPEROS",
+    "PERDIDAS",
+    "FaltasCOMETIDAS",
+    "FaltasRECIBIDAS",
+    "TAPONES",
+]
+GM_COUNT_DERIVED_COLUMNS = ["FGM", "FGA", "PLAYS", "REB TOTALES"]
+GM_RATE_COLUMNS = ["T1%", "T2%", "T3%", "eFG%", "TS%", "PPP", "AST/TO", "TOV%", "USG%"]
+GM_RULE_METRICS = [
+    "PJ",
+    "MINUTOS JUGADOS",
+    "PUNTOS",
+    "FGM",
+    "FGA",
+    "PLAYS",
+    "REB TOTALES",
+    "REB OFFENSIVO",
+    "REB DEFENSIVO",
+    "ASISTENCIAS",
+    "RECUPEROS",
+    "PERDIDAS",
+    "TAPONES",
+    "FaltasCOMETIDAS",
+    "FaltasRECIBIDAS",
+    "TL CONVERTIDOS",
+    "TL INTENTADOS",
+    "T2 CONVERTIDO",
+    "T2 INTENTADO",
+    "T3 CONVERTIDO",
+    "T3 INTENTADO",
+    "AST/TO",
+    "TOV%",
+    "USG%",
+    "T1%",
+    "T2%",
+    "T3%",
+    "eFG%",
+    "TS%",
+    "PPP",
+]
+GM_DEFAULT_RULE_SEQUENCE = ["PUNTOS", "REB TOTALES", "ASISTENCIAS"]
+GM_DEFAULT_TABLE_COLUMNS = [
+    "JUGADOR",
+    "EQUIPO",
+    "PJ",
+    "NACIONALIDAD",
+    GM_BIRTH_YEAR_COLUMN,
+    "PUNTOS",
+    "REB TOTALES",
+    "ASISTENCIAS",
+    "MINUTOS JUGADOS",
+    "AST/TO",
+    "USG%",
+    "PPP",
+    "TS%",
+    "eFG%",
+]
+GM_DEFAULT_VISIBLE_COLUMNS = [
+    "JUGADOR",
+    "EQUIPO",
+    "PJ",
+    "NACIONALIDAD",
+    GM_BIRTH_YEAR_COLUMN,
+    "PUNTOS",
+    "REB TOTALES",
+    "ASISTENCIAS",
+    "MINUTOS JUGADOS",
+    "AST/TO",
+    "USG%",
+    "PPP",
+]
+GM_EXPORT_COLUMNS = [
+    "JUGADOR",
+    "EQUIPO",
+    "NACIONALIDAD",
+    GM_BIRTH_YEAR_COLUMN,
+    *GM_RULE_METRICS,
+]
 
 
 def get_app_mode() -> str:
@@ -102,6 +208,27 @@ def parse_jornadas_text(value: str) -> list[int]:
 @st.cache_resource
 def get_store() -> DataStore:
     return DataStore(SQLITE_DB_FILE)
+
+
+@st.cache_resource
+def get_generate_report_fn():
+    from player_report.player_report_gen import generate_report
+
+    return generate_report
+
+
+@st.cache_resource
+def get_build_team_report_fn():
+    from team_report.build_team_report import build_team_report
+
+    return build_team_report
+
+
+@st.cache_resource
+def get_build_phase_report_fn():
+    from phase_report.build_phase_report import build_phase_report
+
+    return build_phase_report
 
 
 def get_db_signature() -> tuple[tuple[str, int, int], ...]:
@@ -430,6 +557,474 @@ def load_report_bundle(
     return store.load_report_bundle(filters)
 
 
+@st.cache_data(show_spinner=False)
+def load_gm_view_data(
+    _db_signature: float,
+    season: str,
+    league: str,
+    phases: tuple[str, ...],
+    jornadas: tuple[int, ...],
+    mode: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    bundle = load_report_bundle(_db_signature, season, league, phases, jornadas)
+    gm_df = _normalize_gm_view_columns(build_gm_players_view(bundle.players_df, mode, bundle.teams_df))
+    clutch_lookup = _gm_build_clutch_lookup(bundle.clutch_df)
+    return gm_df, clutch_lookup
+
+
+def _gm_numeric_series(df: pd.DataFrame, column: str) -> pd.Series:
+    if column not in df.columns:
+        return pd.Series(0.0, index=df.index, dtype=float)
+    return pd.to_numeric(df[column], errors="coerce").fillna(0.0)
+
+
+def _gm_safe_ratio(numerator: pd.Series, denominator: pd.Series, scale: float = 1.0) -> pd.Series:
+    ratio = numerator.div(denominator.replace(0, pd.NA)).mul(scale)
+    return pd.to_numeric(ratio, errors="coerce").fillna(0.0)
+
+
+def _extract_birth_year(value: Any) -> int | None:
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    year = text.split("/")[-1].strip()
+    if len(year) == 4 and year.isdigit():
+        return int(year)
+    return None
+
+
+def _display_or_dash(value: Any) -> str:
+    if value is None or pd.isna(value):
+        return "-"
+    text = str(value).strip()
+    return text or "-"
+
+
+def _normalize_gm_view_columns(gm_df: pd.DataFrame) -> pd.DataFrame:
+    if gm_df.empty:
+        if GM_BIRTH_YEAR_COLUMN not in gm_df.columns:
+            gm_df = gm_df.copy()
+            gm_df[GM_BIRTH_YEAR_COLUMN] = pd.Series(dtype="Int64")
+        return gm_df
+
+    normalized = gm_df.copy()
+    for legacy_name in GM_LEGACY_BIRTH_YEAR_COLUMNS:
+        if GM_BIRTH_YEAR_COLUMN not in normalized.columns and legacy_name in normalized.columns:
+            normalized = normalized.rename(columns={legacy_name: GM_BIRTH_YEAR_COLUMN})
+
+    if GM_BIRTH_YEAR_COLUMN not in normalized.columns:
+        normalized[GM_BIRTH_YEAR_COLUMN] = pd.Series(pd.NA, index=normalized.index, dtype="Int64")
+
+    return normalized
+
+
+def _ensure_select_state(key: str, options: list[Any], default_index: int = 0) -> None:
+    if not options:
+        st.session_state.pop(key, None)
+        return
+    if st.session_state.get(key) not in options:
+        st.session_state[key] = options[min(default_index, len(options) - 1)]
+
+
+def _ensure_multiselect_state(key: str, options: list[Any]) -> None:
+    current = st.session_state.get(key)
+    if current is None:
+        st.session_state[key] = []
+        return
+    st.session_state[key] = [value for value in current if value in options]
+
+
+def _ensure_multiselect_default_state(key: str, options: list[Any], default_values: list[Any]) -> None:
+    valid_defaults = [value for value in default_values if value in options]
+    current = st.session_state.get(key)
+    if not current:
+        st.session_state[key] = valid_defaults
+        return
+    filtered_current = [value for value in current if value in options]
+    st.session_state[key] = filtered_current or valid_defaults
+
+
+def _init_gm_rule_state() -> list[int]:
+    rule_ids = st.session_state.get(GM_RULE_IDS_KEY)
+    if not rule_ids:
+        st.session_state[GM_RULE_IDS_KEY] = [0]
+        st.session_state[GM_RULE_NEXT_ID_KEY] = 1
+        return [0]
+    if GM_RULE_NEXT_ID_KEY not in st.session_state:
+        st.session_state[GM_RULE_NEXT_ID_KEY] = max(rule_ids) + 1
+    return list(rule_ids)
+
+
+def _clear_gm_rule_state(rule_id: int) -> None:
+    for suffix in ("metric", "min", "max"):
+        st.session_state.pop(f"gm_rule_{suffix}_{rule_id}", None)
+
+
+def _default_gm_metric(position: int) -> str:
+    if position < len(GM_DEFAULT_RULE_SEQUENCE):
+        return GM_DEFAULT_RULE_SEQUENCE[position]
+    return GM_DEFAULT_RULE_SEQUENCE[-1]
+
+
+def _parse_optional_float(value: Any) -> tuple[float | None, str | None]:
+    text = str(value or "").strip().replace(",", ".")
+    if not text:
+        return None, None
+    try:
+        return float(text), None
+    except ValueError:
+        return None, f"`{value}` no es un numero valido."
+
+
+def _gm_normalize_text(value: Any) -> str:
+    text = str(value or "")
+    return re.sub(r"\s+", " ", unidecode(text).upper()).strip()
+
+
+def _gm_format_name_to_clutch(roster_name: str) -> str:
+    name = _gm_normalize_text(roster_name)
+    if not name:
+        return ""
+    if re.match(r"^[A-Z]\.\s", name):
+        return name
+    if "," in name:
+        surnames, names = [part.strip() for part in name.split(",", 1)]
+        initial = names.split()[0][0] if names else ""
+        return f"{initial}. {surnames}".strip()
+    parts = name.split()
+    if len(parts) == 1:
+        return f"{parts[0][0]}. {parts[0]}"
+    initial = parts[0][0]
+    surnames = " ".join(parts[1:])
+    return f"{initial}. {surnames}"
+
+
+def _gm_ast_to_ratio(assists: pd.Series, turnovers: pd.Series) -> pd.Series:
+    ratio = assists.div(turnovers.replace(0, pd.NA))
+    fallback = assists.where((turnovers == 0) & (assists > 0), 0.0)
+    return pd.to_numeric(ratio, errors="coerce").fillna(fallback).round(2)
+
+
+def _gm_build_team_totals_lookup(teams_df: pd.DataFrame) -> pd.DataFrame:
+    if teams_df.empty:
+        return pd.DataFrame(columns=["EQUIPO", "team_MP", "team_FGA", "team_FTA", "team_TOV"])
+    lookup = teams_df.copy()
+    lookup["team_MP"] = pd.to_numeric(lookup.get("MINUTOS JUGADOS", 0), errors="coerce").fillna(0.0)
+    lookup["team_T2I"] = pd.to_numeric(lookup.get("T2 INTENTADO", 0), errors="coerce").fillna(0.0)
+    lookup["team_T3I"] = pd.to_numeric(lookup.get("T3 INTENTADO", 0), errors="coerce").fillna(0.0)
+    lookup["team_FTA"] = pd.to_numeric(lookup.get("TL INTENTADOS", 0), errors="coerce").fillna(0.0)
+    lookup["team_TOV"] = pd.to_numeric(lookup.get("PERDIDAS", 0), errors="coerce").fillna(0.0)
+    lookup["team_FGA"] = lookup["team_T2I"] + lookup["team_T3I"]
+    return lookup[["EQUIPO", "team_MP", "team_FGA", "team_FTA", "team_TOV"]].copy()
+
+
+def _gm_compute_usg(
+    teams: pd.Series,
+    minutes: pd.Series,
+    t1_attempts: pd.Series,
+    t2_attempts: pd.Series,
+    t3_attempts: pd.Series,
+    turnovers: pd.Series,
+    teams_df: pd.DataFrame,
+) -> pd.Series:
+    if teams_df.empty:
+        return pd.Series(0.0, index=teams.index, dtype=float)
+    team_lookup = _gm_build_team_totals_lookup(teams_df).set_index("EQUIPO")
+    team_mp = teams.map(team_lookup["team_MP"]).fillna(0.0)
+    team_fga = teams.map(team_lookup["team_FGA"]).fillna(0.0)
+    team_fta = teams.map(team_lookup["team_FTA"]).fillna(0.0)
+    team_tov = teams.map(team_lookup["team_TOV"]).fillna(0.0)
+    player_fga = t2_attempts + t3_attempts
+    numerator = (player_fga + 0.44 * t1_attempts + turnovers) * (team_mp / 5.0)
+    denominator = minutes * (team_fga + 0.44 * team_fta + team_tov)
+    return pd.to_numeric(numerator.div(denominator.replace(0, pd.NA)) * 100.0, errors="coerce").fillna(0.0)
+
+
+def _gm_build_clutch_lookup(clutch_df: pd.DataFrame) -> pd.DataFrame:
+    if clutch_df.empty:
+        return pd.DataFrame()
+    lookup = clutch_df.copy()
+    lookup["__team_norm"] = lookup["EQUIPO"].map(_gm_normalize_text)
+    lookup["__name_norm"] = lookup["JUGADOR"].map(_gm_normalize_text)
+    return lookup
+
+
+def _gm_match_player_to_clutch(player_name: str, team_name: str, clutch_lookup: pd.DataFrame) -> dict[str, Any]:
+    expected_name = _gm_format_name_to_clutch(player_name)
+    result: dict[str, Any] = {
+        "status": "missing",
+        "expected_name": expected_name,
+        "confidence": 0.0,
+        "row": None,
+    }
+    if clutch_lookup.empty or not expected_name:
+        return result
+
+    expected_name_norm = _gm_normalize_text(expected_name)
+    team_norm = _gm_normalize_text(team_name)
+    exact_match = clutch_lookup[
+        (clutch_lookup["__team_norm"] == team_norm)
+        & (clutch_lookup["__name_norm"] == expected_name_norm)
+    ]
+    if not exact_match.empty:
+        result.update(
+            {
+                "status": "exact",
+                "confidence": 1.0,
+                "row": exact_match.iloc[0].to_dict(),
+            }
+        )
+        return result
+
+    loose_match = clutch_lookup[clutch_lookup["__name_norm"] == expected_name_norm]
+    if len(loose_match) == 1:
+        result.update(
+            {
+                "status": "loose",
+                "confidence": 0.55,
+                "row": loose_match.iloc[0].to_dict(),
+            }
+        )
+    return result
+
+
+def _gm_count_clutch_matches(gm_df: pd.DataFrame, clutch_lookup: pd.DataFrame) -> dict[str, int]:
+    if gm_df.empty or clutch_lookup.empty:
+        return {"exact": 0, "loose": 0}
+    exact = 0
+    loose = 0
+    unique_players = gm_df[["PLAYER_KEY", "JUGADOR", "EQUIPO"]].drop_duplicates(subset=["PLAYER_KEY"])
+    for _, row in unique_players.iterrows():
+        match = _gm_match_player_to_clutch(str(row["JUGADOR"]), str(row["EQUIPO"]), clutch_lookup)
+        if match["status"] == "exact":
+            exact += 1
+        elif match["status"] == "loose":
+            loose += 1
+    return {"exact": exact, "loose": loose}
+
+
+def _gm_rule_summary(rule: dict[str, Any]) -> str:
+    metric = rule["metric"]
+    minimum = rule.get("min")
+    maximum = rule.get("max")
+    if minimum is not None and maximum is not None:
+        return f"{metric}: {minimum:g} a {maximum:g}"
+    if minimum is not None:
+        return f"{metric} >= {minimum:g}"
+    if maximum is not None:
+        return f"{metric} <= {maximum:g}"
+    return metric
+
+
+def build_gm_players_view(players_df: pd.DataFrame, mode: str, teams_df: pd.DataFrame | None = None) -> pd.DataFrame:
+    columns = ["PLAYER_KEY", *GM_EXPORT_COLUMNS]
+    if players_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    df = players_df.copy()
+    numeric_values = {column: _gm_numeric_series(df, column) for column in GM_COUNT_COLUMNS}
+    player_keys = df["PLAYER_KEY"].astype(str) if "PLAYER_KEY" in df.columns else df.index.astype(str)
+    player_names = df["JUGADOR"].fillna("").astype(str) if "JUGADOR" in df.columns else pd.Series("", index=df.index, dtype=str)
+    teams = df["EQUIPO"].fillna("").astype(str) if "EQUIPO" in df.columns else pd.Series("", index=df.index, dtype=str)
+    nationalities = df["NACIONALIDAD"].fillna("").astype(str) if "NACIONALIDAD" in df.columns else pd.Series("", index=df.index, dtype=str)
+    birth_dates = df["FECHA NACIMIENTO"] if "FECHA NACIMIENTO" in df.columns else pd.Series([None] * len(df), index=df.index)
+    games_played = pd.to_numeric(df["PJ"], errors="coerce").fillna(0) if "PJ" in df.columns else pd.Series(0, index=df.index, dtype=float)
+    games_divisor = games_played.replace(0, pd.NA)
+    minutes_total = numeric_values["MINUTOS JUGADOS"]
+
+    rebounds_total = numeric_values["REB OFFENSIVO"] + numeric_values["REB DEFENSIVO"]
+    field_goals_att = numeric_values["T2 INTENTADO"] + numeric_values["T3 INTENTADO"]
+    field_goals_made = numeric_values["T2 CONVERTIDO"] + numeric_values["T3 CONVERTIDO"]
+    plays_total = field_goals_att + 0.44 * numeric_values["TL INTENTADOS"] + numeric_values["PERDIDAS"]
+
+    gm_df = pd.DataFrame(index=df.index)
+    gm_df["PLAYER_KEY"] = player_keys
+    gm_df["JUGADOR"] = player_names
+    gm_df["EQUIPO"] = teams
+    gm_df["NACIONALIDAD"] = nationalities
+    gm_df[GM_BIRTH_YEAR_COLUMN] = birth_dates.apply(_extract_birth_year).astype("Int64")
+    gm_df["PJ"] = games_played.round(0).astype("Int64")
+
+    if mode == "Promedios":
+        for column in GM_COUNT_COLUMNS:
+            gm_df[column] = numeric_values[column].div(games_divisor).fillna(0.0)
+        gm_df["REB TOTALES"] = rebounds_total.div(games_divisor).fillna(0.0)
+        gm_df["FGM"] = field_goals_made.div(games_divisor).fillna(0.0)
+        gm_df["FGA"] = field_goals_att.div(games_divisor).fillna(0.0)
+        gm_df["PLAYS"] = plays_total.div(games_divisor).fillna(0.0)
+        average_columns = [*GM_COUNT_COLUMNS, *GM_COUNT_DERIVED_COLUMNS]
+        gm_df[average_columns] = gm_df[average_columns].apply(pd.to_numeric, errors="coerce").round(2)
+    else:
+        for column in GM_COUNT_COLUMNS:
+            gm_df[column] = numeric_values[column]
+        gm_df["REB TOTALES"] = rebounds_total
+        gm_df["FGM"] = field_goals_made
+        gm_df["FGA"] = field_goals_att
+        gm_df["PLAYS"] = plays_total
+        integer_columns = [column for column in [*GM_COUNT_COLUMNS, *GM_COUNT_DERIVED_COLUMNS] if column != "MINUTOS JUGADOS"]
+        gm_df[integer_columns] = gm_df[integer_columns].apply(pd.to_numeric, errors="coerce").round(0).astype("Int64")
+        gm_df["MINUTOS JUGADOS"] = pd.to_numeric(gm_df["MINUTOS JUGADOS"], errors="coerce").round(2)
+
+    gm_df["T1%"] = _gm_safe_ratio(numeric_values["TL CONVERTIDOS"], numeric_values["TL INTENTADOS"], 100.0).round(2)
+    gm_df["T2%"] = _gm_safe_ratio(numeric_values["T2 CONVERTIDO"], numeric_values["T2 INTENTADO"], 100.0).round(2)
+    gm_df["T3%"] = _gm_safe_ratio(numeric_values["T3 CONVERTIDO"], numeric_values["T3 INTENTADO"], 100.0).round(2)
+    gm_df["eFG%"] = _gm_safe_ratio(field_goals_made + 0.5 * numeric_values["T3 CONVERTIDO"], field_goals_att, 100.0).round(2)
+    gm_df["TS%"] = _gm_safe_ratio(numeric_values["PUNTOS"], 2 * (field_goals_att + 0.44 * numeric_values["TL INTENTADOS"]), 100.0).round(2)
+    gm_df["PPP"] = _gm_safe_ratio(numeric_values["PUNTOS"], plays_total, 1.0).round(3)
+    gm_df["AST/TO"] = _gm_ast_to_ratio(numeric_values["ASISTENCIAS"], numeric_values["PERDIDAS"])
+    gm_df["TOV%"] = _gm_safe_ratio(numeric_values["PERDIDAS"], plays_total, 100.0).round(2)
+    gm_df["USG%"] = _gm_compute_usg(
+        teams,
+        minutes_total,
+        numeric_values["TL INTENTADOS"],
+        numeric_values["T2 INTENTADO"],
+        numeric_values["T3 INTENTADO"],
+        numeric_values["PERDIDAS"],
+        teams_df if teams_df is not None else pd.DataFrame(),
+    ).round(2)
+
+    export_columns = [column for column in columns if column in gm_df.columns]
+    return gm_df[export_columns]
+
+
+def apply_gm_filters(
+    gm_df: pd.DataFrame,
+    *,
+    nationalities: list[str],
+    birth_year_range: tuple[int, int] | None,
+    rules: list[dict[str, Any]],
+) -> pd.DataFrame:
+    filtered_df = gm_df.copy()
+    if nationalities:
+        filtered_df = filtered_df[filtered_df["NACIONALIDAD"].isin(nationalities)]
+
+    if birth_year_range is not None:
+        min_year, max_year = birth_year_range
+        birth_years = pd.to_numeric(filtered_df[GM_BIRTH_YEAR_COLUMN], errors="coerce")
+        filtered_df = filtered_df[(birth_years >= min_year) & (birth_years <= max_year)]
+
+    for rule in rules:
+        minimum = rule.get("min")
+        maximum = rule.get("max")
+        if minimum is None and maximum is None:
+            continue
+        metric = rule["metric"]
+        metric_values = pd.to_numeric(filtered_df[metric], errors="coerce")
+        if minimum is not None:
+            filtered_df = filtered_df[metric_values >= minimum]
+            metric_values = pd.to_numeric(filtered_df[metric], errors="coerce")
+        if maximum is not None:
+            filtered_df = filtered_df[metric_values <= maximum]
+    return filtered_df
+
+
+def serialize_gm_csv(filtered_df: pd.DataFrame) -> bytes:
+    export_columns = [column for column in GM_EXPORT_COLUMNS if column in filtered_df.columns]
+    export_df = filtered_df[export_columns].copy()
+    return export_df.to_csv(index=False, na_rep="").encode("utf-8-sig")
+
+
+def render_gm_rule_builder(*, inside_form: bool = False) -> tuple[list[dict[str, Any]], list[str], bool, int | None]:
+    st.write("**Reglas numéricas**")
+    st.caption(
+        "`T1%`, `T2%` y `T3%` son porcentajes de acierto. Si más adelante añadimos reparto de finalización, "
+        "se mostrará como `%Plays T1`, `%Plays T2` y `%Plays T3`."
+    )
+    header_cols = st.columns([2.2, 1.2, 1.2, 0.7])
+    header_cols[0].caption("Métrica")
+    header_cols[1].caption("Min")
+    header_cols[2].caption("Max")
+    header_cols[3].caption(" ")
+
+    rule_ids = _init_gm_rule_state()
+    remove_rule_id: int | None = None
+    add_rule_clicked = False
+    rules: list[dict[str, Any]] = []
+    errors: list[str] = []
+
+    for position, rule_id in enumerate(rule_ids):
+        metric_key = f"gm_rule_metric_{rule_id}"
+        min_key = f"gm_rule_min_{rule_id}"
+        max_key = f"gm_rule_max_{rule_id}"
+
+        if st.session_state.get(metric_key) not in GM_RULE_METRICS:
+            st.session_state[metric_key] = _default_gm_metric(position)
+        if min_key not in st.session_state:
+            st.session_state[min_key] = ""
+        if max_key not in st.session_state:
+            st.session_state[max_key] = ""
+
+        row_cols = st.columns([2.2, 1.2, 1.2, 0.7])
+        metric = row_cols[0].selectbox(
+            f"Métrica {position + 1}",
+            options=GM_RULE_METRICS,
+            key=metric_key,
+            label_visibility="collapsed",
+        )
+        min_value_raw = row_cols[1].text_input(
+            f"Mínimo {position + 1}",
+            key=min_key,
+            placeholder="sin mín",
+            label_visibility="collapsed",
+        )
+        max_value_raw = row_cols[2].text_input(
+            f"Máximo {position + 1}",
+            key=max_key,
+            placeholder="sin máx",
+            label_visibility="collapsed",
+        )
+        remove_disabled = len(rule_ids) == 1
+        if inside_form:
+            remove_clicked = row_cols[3].form_submit_button(
+                f"Quitar {position + 1}",
+                disabled=remove_disabled,
+                use_container_width=True,
+            )
+        else:
+            remove_clicked = row_cols[3].button(
+                "Quitar",
+                key=f"gm_rule_remove_{rule_id}",
+                disabled=remove_disabled,
+                use_container_width=True,
+            )
+        if remove_clicked:
+            remove_rule_id = rule_id
+
+        minimum, min_error = _parse_optional_float(min_value_raw)
+        maximum, max_error = _parse_optional_float(max_value_raw)
+        if min_error:
+            errors.append(f"Regla {position + 1}: {min_error}")
+        if max_error:
+            errors.append(f"Regla {position + 1}: {max_error}")
+        if minimum is not None and maximum is not None and minimum > maximum:
+            errors.append(f"Regla {position + 1}: el mínimo no puede ser mayor que el máximo.")
+
+        rules.append({"metric": metric, "min": minimum, "max": maximum})
+
+    actions_cols = st.columns([1.2, 4])
+    if inside_form:
+        add_rule_clicked = actions_cols[0].form_submit_button("Añadir regla", use_container_width=True)
+    else:
+        add_rule_clicked = actions_cols[0].button("Añadir regla", key="gm_rule_add", use_container_width=True)
+        if add_rule_clicked:
+            next_rule_id = int(st.session_state.get(GM_RULE_NEXT_ID_KEY, 0))
+            st.session_state[GM_RULE_IDS_KEY] = [*rule_ids, next_rule_id]
+            st.session_state[GM_RULE_NEXT_ID_KEY] = next_rule_id + 1
+            st.rerun()
+
+        if remove_rule_id is not None:
+            remaining_ids = [rule_id for rule_id in rule_ids if rule_id != remove_rule_id]
+            _clear_gm_rule_state(remove_rule_id)
+            st.session_state[GM_RULE_IDS_KEY] = remaining_ids or [int(st.session_state.get(GM_RULE_NEXT_ID_KEY, 0))]
+            if not remaining_ids:
+                st.session_state[GM_RULE_NEXT_ID_KEY] = int(st.session_state.get(GM_RULE_NEXT_ID_KEY, 0)) + 1
+            st.rerun()
+
+    return rules, errors, add_rule_clicked, remove_rule_id
+
+
 def capture_logs(action) -> tuple[Any, list[dict[str, str]]]:
     logs: list[dict[str, str]] = []
 
@@ -703,6 +1298,303 @@ def render_database_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
         st.info("Todavia no hay objetivos guardados para el autosync semanal.")
 
 
+def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
+    st.subheader("Vista GM")
+    st.write("Búsqueda global de jugadores con filtros propios de temporada, liga, fases y jornadas.")
+
+    seasons = load_available_seasons(db_signature)
+    if not seasons:
+        st.info("No hay datos suficientes para construir la vista GM.")
+        return
+
+    _ensure_select_state(GM_SCOPE_SEASON_KEY, seasons)
+    season = st.selectbox("Temporada GM", seasons, key=GM_SCOPE_SEASON_KEY)
+
+    leagues = load_available_leagues(db_signature, season)
+    _ensure_select_state(GM_SCOPE_LEAGUE_KEY, leagues)
+    league = st.selectbox("Liga GM", leagues, key=GM_SCOPE_LEAGUE_KEY)
+
+    available_phases = load_available_phases(db_signature, season, league)
+    _ensure_multiselect_state(GM_SCOPE_PHASES_KEY, available_phases)
+    selected_phases = st.multiselect(
+        "Fases GM",
+        options=available_phases,
+        key=GM_SCOPE_PHASES_KEY,
+        placeholder="Vacio = todas las fases",
+    )
+
+    available_jornadas = load_available_jornadas(db_signature, season, league, tuple(selected_phases))
+    _ensure_multiselect_state(GM_SCOPE_JORNADAS_KEY, available_jornadas)
+    selected_jornadas = st.multiselect(
+        "Jornadas GM",
+        options=available_jornadas,
+        key=GM_SCOPE_JORNADAS_KEY,
+        placeholder="Vacio = todas las jornadas",
+    )
+
+    if GM_MODE_KEY not in st.session_state:
+        st.session_state[GM_MODE_KEY] = "Promedios"
+    mode = st.radio("Modo de estadisticas", ["Totales", "Promedios"], horizontal=True, key=GM_MODE_KEY)
+    gm_df, clutch_lookup = load_gm_view_data(
+        db_signature,
+        season,
+        league,
+        tuple(selected_phases),
+        tuple(selected_jornadas),
+        mode,
+    )
+    gm_df = _normalize_gm_view_columns(gm_df)
+    if gm_df.empty:
+        st.info("No hay jugadores disponibles para el scope GM seleccionado.")
+        return
+
+    birth_year_series = pd.to_numeric(gm_df[GM_BIRTH_YEAR_COLUMN], errors="coerce").dropna()
+    birth_year_bounds: tuple[int, int] | None = None
+    if not birth_year_series.empty:
+        birth_year_bounds = (int(birth_year_series.min()), int(birth_year_series.max()))
+
+    st.caption(
+        "Clutch sigue fuera del builder principal, pero esta vista ya prepara matching exacto/relajado para explorar esa capa."
+    )
+
+    nationality_options = sorted(value for value in gm_df["NACIONALIDAD"].dropna().astype(str).unique().tolist() if value)
+    _ensure_multiselect_state(GM_NATIONALITIES_KEY, nationality_options)
+
+    if birth_year_series.empty:
+        st.session_state.pop(GM_BIRTH_RANGE_KEY, None)
+    else:
+        min_year, max_year = birth_year_bounds or (int(birth_year_series.min()), int(birth_year_series.max()))
+        current_birth_range = st.session_state.get(GM_BIRTH_RANGE_KEY)
+        if (
+            not isinstance(current_birth_range, tuple)
+            or len(current_birth_range) != 2
+            or current_birth_range[0] < min_year
+            or current_birth_range[1] > max_year
+            or current_birth_range[0] > current_birth_range[1]
+        ):
+            st.session_state[GM_BIRTH_RANGE_KEY] = (min_year, max_year)
+
+    st.markdown("---")
+    with st.form("gm_filters_form", clear_on_submit=False):
+        apply_row = st.columns([1.2, 4])
+        apply_filters_clicked = apply_row[0].form_submit_button("Aplicar filtros", use_container_width=True)
+        apply_row[1].caption("Los cambios de reglas y bio se aplican al pulsar Enter o `Aplicar filtros`.")
+
+        st.write("**Filtros bio**")
+        bio_cols = st.columns([1.5, 1.5])
+        selected_nationalities = bio_cols[0].multiselect(
+            "Nacionalidad",
+            options=nationality_options,
+            key=GM_NATIONALITIES_KEY,
+            placeholder="Vacio = todas",
+        )
+
+        birth_year_range: tuple[int, int] | None = None
+        if birth_year_series.empty:
+            bio_cols[1].info("No hay años de nacimiento disponibles en este scope.")
+        else:
+            min_year, max_year = birth_year_bounds or (int(birth_year_series.min()), int(birth_year_series.max()))
+            birth_year_range = bio_cols[1].slider(
+                "Año nacimiento",
+                min_value=min_year,
+                max_value=max_year,
+                value=st.session_state[GM_BIRTH_RANGE_KEY],
+                key=GM_BIRTH_RANGE_KEY,
+            )
+
+        st.markdown("---")
+        rules, rule_errors, add_rule_clicked, remove_rule_id = render_gm_rule_builder(inside_form=True)
+
+    if add_rule_clicked:
+        next_rule_id = int(st.session_state.get(GM_RULE_NEXT_ID_KEY, 0))
+        st.session_state[GM_RULE_IDS_KEY] = [*st.session_state.get(GM_RULE_IDS_KEY, []), next_rule_id]
+        st.session_state[GM_RULE_NEXT_ID_KEY] = next_rule_id + 1
+        st.rerun()
+
+    if remove_rule_id is not None:
+        remaining_ids = [rule_id for rule_id in st.session_state.get(GM_RULE_IDS_KEY, []) if rule_id != remove_rule_id]
+        _clear_gm_rule_state(remove_rule_id)
+        st.session_state[GM_RULE_IDS_KEY] = remaining_ids or [int(st.session_state.get(GM_RULE_NEXT_ID_KEY, 0))]
+        if not remaining_ids:
+            st.session_state[GM_RULE_NEXT_ID_KEY] = int(st.session_state.get(GM_RULE_NEXT_ID_KEY, 0)) + 1
+        st.rerun()
+
+    if rule_errors:
+        for message in rule_errors:
+            st.error(message)
+        st.info("Corrige los valores min/max y pulsa Enter o `Aplicar filtros`.")
+        return
+
+    filtered_df = apply_gm_filters(
+        gm_df,
+        nationalities=selected_nationalities,
+        birth_year_range=birth_year_range,
+        rules=rules,
+    )
+
+    active_rule_labels = [_gm_rule_summary(rule) for rule in rules if rule.get("min") is not None or rule.get("max") is not None]
+    phases_summary = ", ".join(selected_phases) if selected_phases else "todas"
+    jornadas_summary = ", ".join(str(value) for value in selected_jornadas) if selected_jornadas else "todas"
+    nationality_summary = ", ".join(selected_nationalities) if selected_nationalities else "todas"
+    birth_summary = (
+        f"{birth_year_range[0]}-{birth_year_range[1]}"
+        if birth_year_range is not None and birth_year_bounds is not None and birth_year_range != birth_year_bounds
+        else "todos"
+    )
+    rules_summary = " | ".join(active_rule_labels) if active_rule_labels else "sin reglas numéricas activas"
+    st.caption(
+        f"Scope: {season} | {league} | Fases: {phases_summary} | Jornadas: {jornadas_summary} | "
+        f"Modo: {mode} | Nacionalidad: {nationality_summary} | Nacimiento: {birth_summary} | Reglas: {rules_summary}"
+    )
+
+    sort_candidates = [column for column in [*GM_RULE_METRICS, *GM_RATE_COLUMNS, GM_BIRTH_YEAR_COLUMN] if column in filtered_df.columns]
+    default_sort = next((rule["metric"] for rule in rules if rule.get("min") is not None or rule.get("max") is not None), "PUNTOS")
+    if sort_candidates:
+        if st.session_state.get(GM_SORT_COLUMN_KEY) not in sort_candidates:
+            st.session_state[GM_SORT_COLUMN_KEY] = default_sort if default_sort in sort_candidates else sort_candidates[0]
+
+    all_display_options = list(dict.fromkeys([column for column in filtered_df.columns if column != "PLAYER_KEY"]))
+    _ensure_multiselect_default_state(GM_VISIBLE_COLUMNS_KEY, all_display_options, GM_DEFAULT_VISIBLE_COLUMNS)
+    selected_columns = st.multiselect(
+        "Columnas visibles",
+        options=all_display_options,
+        key=GM_VISIBLE_COLUMNS_KEY,
+    )
+
+    sort_cols = st.columns([1.5, 4.5])
+    if sort_candidates:
+        sort_column = sort_cols[0].selectbox("Ordenar por", sort_candidates, key=GM_SORT_COLUMN_KEY)
+        sort_cols[1].caption("La tabla se ordena de mayor a menor en la métrica elegida.")
+        if sort_column in filtered_df.columns:
+            sort_by = [sort_column] if sort_column == "PJ" else [sort_column, "PJ"]
+            ascending = [False] * len(sort_by)
+            filtered_df = filtered_df.sort_values(by=sort_by, ascending=ascending, na_position="last")
+
+    st.markdown("---")
+    clutch_counts = _gm_count_clutch_matches(filtered_df if not filtered_df.empty else gm_df, clutch_lookup)
+    current_year = datetime.now().year
+    age_series = (
+        current_year - pd.to_numeric(filtered_df[GM_BIRTH_YEAR_COLUMN], errors="coerce")
+        if not filtered_df.empty
+        else pd.Series(dtype=float)
+    )
+    summary_cols = st.columns(5)
+    summary_cols[0].metric("Jugadores encontrados", int(filtered_df.shape[0]))
+    summary_cols[1].metric("PTS media", f"{filtered_df['PUNTOS'].mean():.2f}" if not filtered_df.empty else "-")
+    summary_cols[2].metric("AST media", f"{filtered_df['ASISTENCIAS'].mean():.2f}" if not filtered_df.empty else "-")
+    summary_cols[3].metric("Edad media", f"{age_series.dropna().mean():.1f}" if not age_series.dropna().empty else "-")
+    summary_cols[4].metric("Clutch exacto", clutch_counts["exact"])
+
+    if filtered_df.empty:
+        st.info("No hay jugadores que cumplan los filtros actuales.")
+        return
+
+    display_columns = selected_columns or [column for column in GM_DEFAULT_VISIBLE_COLUMNS if column in filtered_df.columns]
+    st.dataframe(filtered_df[display_columns], use_container_width=True, hide_index=True)
+    st.download_button(
+        "Descargar CSV GM",
+        data=serialize_gm_csv(filtered_df),
+        file_name=f"gm_players_{season.replace('/', '-')}_{league.replace(' ', '_').lower()}.csv",
+        mime="text/csv",
+        key="gm_download_csv",
+    )
+
+    selectable_players = (
+        filtered_df[["PLAYER_KEY", "JUGADOR", "EQUIPO"]]
+        .drop_duplicates(subset=["PLAYER_KEY"])
+        .sort_values(by=["JUGADOR", "EQUIPO"])
+    )
+    player_keys = selectable_players["PLAYER_KEY"].astype(str).tolist()
+    _ensure_select_state(GM_SELECTED_PLAYER_KEY, player_keys)
+    player_labels = {
+        row["PLAYER_KEY"]: f"{row['JUGADOR']} | {row['EQUIPO']}"
+        for _, row in selectable_players.iterrows()
+    }
+    selected_player_key = st.selectbox(
+        "Jugador para informe GM",
+        options=player_keys,
+        key=GM_SELECTED_PLAYER_KEY,
+        format_func=lambda key: player_labels.get(key, key),
+    )
+
+    selected_row = filtered_df[filtered_df["PLAYER_KEY"].astype(str) == str(selected_player_key)].copy()
+    selected_player_data = selected_row.iloc[0] if not selected_row.empty else None
+    if selected_player_data is not None:
+        st.markdown("---")
+        st.write("**Ficha rapida**")
+        detail_cols = st.columns(4)
+        detail_cols[0].metric("Equipo", _display_or_dash(selected_player_data["EQUIPO"]))
+        detail_cols[1].metric("Nacionalidad", _display_or_dash(selected_player_data["NACIONALIDAD"]))
+        detail_cols[2].metric("Año", _display_or_dash(selected_player_data[GM_BIRTH_YEAR_COLUMN]))
+        detail_cols[3].metric("PJ", _display_or_dash(selected_player_data["PJ"]))
+
+        stat_cols = st.columns(5)
+        stat_cols[0].metric("PTS", f"{float(selected_player_data['PUNTOS']):.2f}")
+        stat_cols[1].metric("REB", f"{float(selected_player_data['REB TOTALES']):.2f}")
+        stat_cols[2].metric("AST", f"{float(selected_player_data['ASISTENCIAS']):.2f}")
+        stat_cols[3].metric("AST/TO", f"{float(selected_player_data['AST/TO']):.2f}")
+        stat_cols[4].metric("USG%", f"{float(selected_player_data['USG%']):.2f}")
+
+        clutch_match = _gm_match_player_to_clutch(
+            str(selected_player_data["JUGADOR"]),
+            str(selected_player_data["EQUIPO"]),
+            clutch_lookup,
+        )
+        if clutch_match["status"] == "exact":
+            st.success(f"Match clutch exacto encontrado para `{clutch_match['expected_name']}`.")
+        elif clutch_match["status"] == "loose":
+            st.warning(
+                f"Match clutch relajado encontrado para `{clutch_match['expected_name']}`. Conviene revisar el equipo antes de usarlo como filtro."
+            )
+        else:
+            st.info(f"Sin match clutch para `{clutch_match['expected_name']}` en este scope.")
+
+        clutch_row = clutch_match.get("row")
+        if clutch_row:
+            clutch_cols = st.columns(5)
+            clutch_cols[0].metric("Clutch games", int(clutch_row.get("GAMES") or 0))
+            clutch_cols[1].metric("Min clutch", f"{float(clutch_row.get('MINUTOS_CLUTCH') or 0.0):.2f}")
+            clutch_cols[2].metric("PTS clutch", f"{float(clutch_row.get('PTS') or 0.0):.2f}")
+            clutch_cols[3].metric("AST clutch", f"{float(clutch_row.get('AST') or 0.0):.2f}")
+            clutch_cols[4].metric("REB clutch", f"{float(clutch_row.get('REB') or 0.0):.2f}")
+
+            clutch_rate_cols = st.columns(4)
+            clutch_rate_cols[0].metric("TS% clutch", f"{float(clutch_row.get('TS%') or 0.0):.2f}")
+            clutch_rate_cols[1].metric("eFG% clutch", f"{float(clutch_row.get('eFG%') or 0.0):.2f}")
+            clutch_rate_cols[2].metric("NET_RTG clutch", f"{float(clutch_row.get('NET_RTG') or 0.0):.2f}")
+            clutch_rate_cols[3].metric("USG% clutch", f"{float(clutch_row.get('USG%') or 0.0):.2f}")
+
+    if st.button("Generar informe GM", type="primary", key="gm_generate_player_report"):
+        bundle = load_report_bundle(db_signature, season, league, tuple(selected_phases), tuple(selected_jornadas))
+        player_rows = bundle.players_df[bundle.players_df["PLAYER_KEY"].astype(str) == str(selected_player_key)].copy()
+        if player_rows.empty:
+            st.error("No se encontro el jugador seleccionado dentro del bundle GM.")
+        else:
+            player_name = str(player_rows["JUGADOR"].iloc[0])
+            with st.spinner("Generando informe del jugador desde GM..."):
+                path = get_generate_report_fn()(
+                    player_name,
+                    output_dir=PLAYER_REPORTS_DIR,
+                    overwrite=True,
+                    data_df=player_rows,
+                    teams_df=bundle.teams_df,
+                    clutch_df=bundle.clutch_df,
+                )
+            st.session_state[GM_REPORT_PATH_KEY] = str(path)
+
+    report_path = st.session_state.get(GM_REPORT_PATH_KEY)
+    if report_path and Path(report_path).exists():
+        image_bytes = Path(report_path).read_bytes()
+        st.image(image_bytes, caption=Path(report_path).name, use_container_width=True)
+        st.download_button(
+            "Descargar PNG GM",
+            data=image_bytes,
+            file_name=Path(report_path).name,
+            mime="image/png",
+            key="gm_player_download",
+        )
+
+
 def render_player_tab(bundle: ReportBundle) -> None:
     st.subheader("Informe de jugador")
     if bundle.players_df.empty:
@@ -721,7 +1613,7 @@ def render_player_tab(bundle: ReportBundle) -> None:
 
     if st.button("Generar informe de jugador", type="primary", key="player_generate"):
         with st.spinner("Generando informe de jugador..."):
-            path = generate_report(
+            path = get_generate_report_fn()(
                 player_name,
                 output_dir=PLAYER_REPORTS_DIR,
                 overwrite=True,
@@ -780,7 +1672,7 @@ def render_team_tab(bundle: ReportBundle) -> None:
 
     if st.button("Generar informe de equipo", type="primary", key="team_generate"):
         with st.spinner("Generando informe de equipo..."):
-            path = build_team_report(
+            path = get_build_team_report_fn()(
                 team_filter=selected_team if not selected_players else None,
                 player_filter=selected_players or None,
                 rival_team=selected_rival or None,
@@ -831,7 +1723,7 @@ def render_phase_tab(bundle: ReportBundle, filters: ReportFilters | None) -> Non
 
     if st.button("Generar informe de fase", type="primary", key="phase_generate"):
         with st.spinner("Generando informe de fase..."):
-            path = build_phase_report(
+            path = get_build_phase_report_fn()(
                 teams=selected_teams or None,
                 phase=None,
                 min_games=min_games,
@@ -1186,7 +2078,7 @@ def main() -> None:
         with st.sidebar:
             st.info("Modo cloud: la pestana `Scraper` esta oculta y la app funciona en solo lectura.")
 
-    tab_names = ["Base de datos", "Jugador", "Equipo", "Fase"]
+    tab_names = ["Base de datos", "GM", "Jugador", "Equipo", "Fase"]
     if not cloud_mode:
         tab_names.append("Scraper")
 
@@ -1194,13 +2086,15 @@ def main() -> None:
     with tabs[0]:
         render_database_tab(db_signature)
     with tabs[1]:
-        render_player_tab(bundle)
+        render_gm_tab(db_signature)
     with tabs[2]:
-        render_team_tab(bundle)
+        render_player_tab(bundle)
     with tabs[3]:
+        render_team_tab(bundle)
+    with tabs[4]:
         render_phase_tab(bundle, filters)
     if not cloud_mode:
-        with tabs[4]:
+        with tabs[5]:
             render_scraper_tab(store)
 
 

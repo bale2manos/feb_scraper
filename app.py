@@ -1386,12 +1386,24 @@ def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
         ):
             st.session_state[GM_BIRTH_RANGE_KEY] = (min_year, max_year)
 
-    st.markdown("---")
-    with st.form("gm_filters_form", clear_on_submit=False):
-        apply_row = st.columns([1.2, 4])
-        apply_filters_clicked = apply_row[0].form_submit_button("Aplicar filtros", use_container_width=True)
-        apply_row[1].caption("Los cambios de reglas y bio se aplican al pulsar Enter o `Aplicar filtros`.")
+    sort_candidates = [column for column in [*GM_RULE_METRICS, *GM_RATE_COLUMNS, GM_BIRTH_YEAR_COLUMN] if column in gm_df.columns]
+    all_display_options = list(dict.fromkeys([column for column in gm_df.columns if column != "PLAYER_KEY"]))
+    default_visible_columns = [column for column in GM_DEFAULT_VISIBLE_COLUMNS if column in all_display_options]
+    current_visible_columns = st.session_state.get(GM_VISIBLE_COLUMNS_KEY)
+    if current_visible_columns is None:
+        st.session_state[GM_VISIBLE_COLUMNS_KEY] = default_visible_columns
+    else:
+        filtered_visible_columns = [column for column in current_visible_columns if column in all_display_options]
+        st.session_state[GM_VISIBLE_COLUMNS_KEY] = filtered_visible_columns or default_visible_columns
 
+    st.markdown("---")
+    selected_columns = st.multiselect(
+        "Columnas visibles",
+        options=all_display_options,
+        key=GM_VISIBLE_COLUMNS_KEY,
+    )
+
+    with st.form("gm_filters_form", clear_on_submit=False):
         st.write("**Filtros bio**")
         bio_cols = st.columns([1.5, 1.5])
         selected_nationalities = bio_cols[0].multiselect(
@@ -1415,6 +1427,10 @@ def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
 
         st.markdown("---")
         rules, rule_errors, add_rule_clicked, remove_rule_id = render_gm_rule_builder(inside_form=True)
+        st.markdown("---")
+        apply_row = st.columns([1.2, 4])
+        apply_row[0].form_submit_button("Aplicar filtros", use_container_width=True)
+        apply_row[1].caption("Los cambios de reglas y bio se aplican al pulsar Enter o `Aplicar filtros`.")
 
     if add_rule_clicked:
         next_rule_id = int(st.session_state.get(GM_RULE_NEXT_ID_KEY, 0))
@@ -1458,19 +1474,10 @@ def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
         f"Modo: {mode} | Nacionalidad: {nationality_summary} | Nacimiento: {birth_summary} | Reglas: {rules_summary}"
     )
 
-    sort_candidates = [column for column in [*GM_RULE_METRICS, *GM_RATE_COLUMNS, GM_BIRTH_YEAR_COLUMN] if column in filtered_df.columns]
     default_sort = next((rule["metric"] for rule in rules if rule.get("min") is not None or rule.get("max") is not None), "PUNTOS")
     if sort_candidates:
         if st.session_state.get(GM_SORT_COLUMN_KEY) not in sort_candidates:
             st.session_state[GM_SORT_COLUMN_KEY] = default_sort if default_sort in sort_candidates else sort_candidates[0]
-
-    all_display_options = list(dict.fromkeys([column for column in filtered_df.columns if column != "PLAYER_KEY"]))
-    _ensure_multiselect_default_state(GM_VISIBLE_COLUMNS_KEY, all_display_options, GM_DEFAULT_VISIBLE_COLUMNS)
-    selected_columns = st.multiselect(
-        "Columnas visibles",
-        options=all_display_options,
-        key=GM_VISIBLE_COLUMNS_KEY,
-    )
 
     sort_cols = st.columns([1.5, 4.5])
     if sort_candidates:
@@ -1500,7 +1507,7 @@ def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
         st.info("No hay jugadores que cumplan los filtros actuales.")
         return
 
-    display_columns = selected_columns or [column for column in GM_DEFAULT_VISIBLE_COLUMNS if column in filtered_df.columns]
+    display_columns = [column for column in selected_columns if column in filtered_df.columns] or default_visible_columns
     st.dataframe(filtered_df[display_columns], use_container_width=True, hide_index=True)
     st.download_button(
         "Descargar CSV GM",
@@ -1522,60 +1529,13 @@ def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
         for _, row in selectable_players.iterrows()
     }
     selected_player_key = st.selectbox(
-        "Jugador para informe GM",
+        "Jugador para ficha GM",
         options=player_keys,
         key=GM_SELECTED_PLAYER_KEY,
         format_func=lambda key: player_labels.get(key, key),
     )
 
-    selected_row = filtered_df[filtered_df["PLAYER_KEY"].astype(str) == str(selected_player_key)].copy()
-    selected_player_data = selected_row.iloc[0] if not selected_row.empty else None
-    if selected_player_data is not None:
-        st.markdown("---")
-        st.write("**Ficha rapida**")
-        detail_cols = st.columns(4)
-        detail_cols[0].metric("Equipo", _display_or_dash(selected_player_data["EQUIPO"]))
-        detail_cols[1].metric("Nacionalidad", _display_or_dash(selected_player_data["NACIONALIDAD"]))
-        detail_cols[2].metric("Año", _display_or_dash(selected_player_data[GM_BIRTH_YEAR_COLUMN]))
-        detail_cols[3].metric("PJ", _display_or_dash(selected_player_data["PJ"]))
-
-        stat_cols = st.columns(5)
-        stat_cols[0].metric("PTS", f"{float(selected_player_data['PUNTOS']):.2f}")
-        stat_cols[1].metric("REB", f"{float(selected_player_data['REB TOTALES']):.2f}")
-        stat_cols[2].metric("AST", f"{float(selected_player_data['ASISTENCIAS']):.2f}")
-        stat_cols[3].metric("AST/TO", f"{float(selected_player_data['AST/TO']):.2f}")
-        stat_cols[4].metric("USG%", f"{float(selected_player_data['USG%']):.2f}")
-
-        clutch_match = _gm_match_player_to_clutch(
-            str(selected_player_data["JUGADOR"]),
-            str(selected_player_data["EQUIPO"]),
-            clutch_lookup,
-        )
-        if clutch_match["status"] == "exact":
-            st.success(f"Match clutch exacto encontrado para `{clutch_match['expected_name']}`.")
-        elif clutch_match["status"] == "loose":
-            st.warning(
-                f"Match clutch relajado encontrado para `{clutch_match['expected_name']}`. Conviene revisar el equipo antes de usarlo como filtro."
-            )
-        else:
-            st.info(f"Sin match clutch para `{clutch_match['expected_name']}` en este scope.")
-
-        clutch_row = clutch_match.get("row")
-        if clutch_row:
-            clutch_cols = st.columns(5)
-            clutch_cols[0].metric("Clutch games", int(clutch_row.get("GAMES") or 0))
-            clutch_cols[1].metric("Min clutch", f"{float(clutch_row.get('MINUTOS_CLUTCH') or 0.0):.2f}")
-            clutch_cols[2].metric("PTS clutch", f"{float(clutch_row.get('PTS') or 0.0):.2f}")
-            clutch_cols[3].metric("AST clutch", f"{float(clutch_row.get('AST') or 0.0):.2f}")
-            clutch_cols[4].metric("REB clutch", f"{float(clutch_row.get('REB') or 0.0):.2f}")
-
-            clutch_rate_cols = st.columns(4)
-            clutch_rate_cols[0].metric("TS% clutch", f"{float(clutch_row.get('TS%') or 0.0):.2f}")
-            clutch_rate_cols[1].metric("eFG% clutch", f"{float(clutch_row.get('eFG%') or 0.0):.2f}")
-            clutch_rate_cols[2].metric("NET_RTG clutch", f"{float(clutch_row.get('NET_RTG') or 0.0):.2f}")
-            clutch_rate_cols[3].metric("USG% clutch", f"{float(clutch_row.get('USG%') or 0.0):.2f}")
-
-    if st.button("Generar informe GM", type="primary", key="gm_generate_player_report"):
+    if st.button("Generar ficha GM", type="primary", key="gm_generate_player_report"):
         bundle = load_report_bundle(db_signature, season, league, tuple(selected_phases), tuple(selected_jornadas))
         player_rows = bundle.players_df[bundle.players_df["PLAYER_KEY"].astype(str) == str(selected_player_key)].copy()
         if player_rows.empty:

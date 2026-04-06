@@ -54,11 +54,15 @@ export function DependencyPage() {
   return (
     <div className="page-stack">
       <ScopeFilters scope={scope} meta={meta} onChange={setScope} />
-      <section className="panel">
-        <div className="panel-header">
+
+      <section className="panel page-panel">
+        <div className="page-header">
           <div>
+            <span className="eyebrow">Riesgo de roster</span>
             <h2>Dependencia</h2>
-            <p className="panel-copy">Resumen de dependencia, riesgo estructural y detalle rápido de cada jugador clave.</p>
+            <p className="panel-copy">
+              La idea se mantiene: detectar donde depende de verdad el equipo. La ejecucion cambia para que la lectura sea mas directa y mas util en una reunion deportiva.
+            </p>
           </div>
           <div className="toolbar">
             <label>
@@ -76,54 +80,88 @@ export function DependencyPage() {
             </button>
           </div>
         </div>
+
         {summary ? (
           <>
-            <div className="metric-grid">
-              <MetricCard label="Jugador crítico" value={String(summary.metrics.criticalPlayer ?? "-")} />
+            <div className="metric-grid metric-grid-wide">
+              <MetricCard label="Jugador critico" value={String(summary.metrics.criticalPlayer ?? "-")} />
               <MetricCard label="Uso top1" value={formatPercent(summary.metrics.topUsage)} />
-              <MetricCard label="Anotación top1" value={formatPercent(summary.metrics.topScoring)} />
-              <MetricCard label="Creación top1" value={formatPercent(summary.metrics.topCreation)} />
-              <MetricCard label="Concentración top3" value={formatPercent(summary.metrics.top3Usage)} />
+              <MetricCard label="Anotacion top1" value={formatPercent(summary.metrics.topScoring)} />
+              <MetricCard label="Creacion top1" value={formatPercent(summary.metrics.topCreation)} />
+              <MetricCard label="Concentracion top3" value={formatPercent(summary.metrics.top3Usage)} />
             </div>
-            <p className="panel-copy">{summary.structuralRisk}</p>
-            {summary.detail ? (
-              <div className="detail-card">
-                <img className="player-image" src={summary.detail.image} alt={summary.detail.name} />
-                <div className="detail-content">
-                  <h3>{summary.detail.name}</h3>
-                  <p className="panel-copy">
-                    {summary.detail.team} · {summary.detail.gamesPlayed} PJ · {summary.detail.risk} · {summary.detail.focus}
-                  </p>
-                  <div className="metric-grid">
-                    <MetricCard label="% uso ofensivo" value={formatPercent(summary.detail.usageShare)} />
-                    <MetricCard label="% anotación" value={formatPercent(summary.detail.scoringShare)} />
-                    <MetricCard label="% creación" value={formatPercent(summary.detail.creationShare)} />
-                    <MetricCard label="% rebote" value={formatPercent(summary.detail.reboundShare)} />
-                    {summary.detail.hasClutchData ? <MetricCard label="% minutos clutch" value={formatPercent(summary.detail.clutchShare)} /> : null}
-                    <MetricCard label="Score dependencia" value={formatNumber(summary.detail.dependencyScore, 1)} />
-                  </div>
-                  <p className="panel-copy">{summary.detail.diagnosis}</p>
-                </div>
+
+            <div className="insight-banner">
+              <strong>Riesgo estructural</strong>
+              <span>{summary.structuralRisk}</span>
+            </div>
+
+            <div className="split-layout">
+              <div className="split-main">
+                <DataTable
+                  title="Jerarquia de dependencia"
+                  subtitle="Selecciona cualquier jugador para ver el diagnostico y las metricas de impacto a la derecha."
+                  columns={[
+                    "JUGADOR",
+                    "PJ",
+                    "MINUTOS JUGADOS",
+                    "%PLAYS_EQUIPO",
+                    "%PUNTOS_EQUIPO",
+                    "%AST_EQUIPO",
+                    "%REB_EQUIPO",
+                    "DEPENDENCIA_SCORE",
+                    "DEPENDENCIA_RIESGO",
+                    "FOCO_PRINCIPAL"
+                  ]}
+                  rows={summary.tableRows}
+                  selectedKey={selectedPlayerKey}
+                  onSelect={(row) => setSelectedPlayerKey(String(row.PLAYER_KEY ?? ""))}
+                  defaultSortColumn="DEPENDENCIA_SCORE"
+                />
               </div>
-            ) : null}
-            <DataTable
-              columns={[
-                "JUGADOR",
-                "PJ",
-                "MINUTOS JUGADOS",
-                "%PLAYS_EQUIPO",
-                "%PUNTOS_EQUIPO",
-                "%AST_EQUIPO",
-                "%REB_EQUIPO",
-                "DEPENDENCIA_SCORE",
-                "DEPENDENCIA_RIESGO",
-                "FOCO_PRINCIPAL"
-              ]}
-              rows={summary.tableRows}
-              selectedKey={selectedPlayerKey}
-              onSelect={(row) => setSelectedPlayerKey(String(row.PLAYER_KEY ?? ""))}
-            />
-            <p className="panel-copy">{summary.note}</p>
+
+              <aside className="split-side">
+                <section className="panel detail-panel">
+                  <div className="detail-panel-header">
+                    <span className="eyebrow">Jugador fijado</span>
+                    <h3>{summary.detail?.name ?? "Selecciona un jugador"}</h3>
+                    <p className="panel-copy">
+                      {summary.detail
+                        ? `${summary.detail.team} · ${summary.detail.gamesPlayed} PJ · ${summary.detail.risk} · ${summary.detail.focus}`
+                        : "Haz click en una fila para ver mejor el riesgo individual."}
+                    </p>
+                  </div>
+
+                  {summary.detail ? (
+                    <>
+                      {summary.detail.image ? (
+                        <img className="player-image player-image-large" src={summary.detail.image} alt={summary.detail.name} />
+                      ) : (
+                        <div className="player-placeholder">DEP</div>
+                      )}
+                      <div className="metric-grid">
+                        <MetricCard label="% uso ofensivo" value={formatPercent(summary.detail.usageShare)} />
+                        <MetricCard label="% anotacion" value={formatPercent(summary.detail.scoringShare)} />
+                        <MetricCard label="% creacion" value={formatPercent(summary.detail.creationShare)} />
+                        <MetricCard label="% rebote" value={formatPercent(summary.detail.reboundShare)} />
+                        {summary.detail.hasClutchData ? (
+                          <MetricCard label="% minutos clutch" value={formatPercent(summary.detail.clutchShare)} />
+                        ) : null}
+                        <MetricCard label="Score dependencia" value={formatNumber(summary.detail.dependencyScore, 1)} />
+                      </div>
+                      <div className="insight-stack">
+                        <p className="panel-copy">{summary.detail.diagnosis}</p>
+                        <p className="detail-note">{summary.note}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="detail-empty">
+                      <p className="empty-state">Sin detalle disponible para este equipo.</p>
+                    </div>
+                  )}
+                </section>
+              </aside>
+            </div>
           </>
         ) : (
           <p className="empty-state">Selecciona un equipo para cargar la vista.</p>

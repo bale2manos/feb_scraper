@@ -106,13 +106,17 @@ export function TrendsPage() {
   return (
     <div className="page-stack">
       <ScopeFilters scope={scope} meta={meta} onChange={setScope} />
-      <section className="panel">
-        <div className="panel-header">
+
+      <section className="panel page-panel">
+        <div className="page-header">
           <div>
+            <span className="eyebrow">Forma reciente</span>
             <h2>Tendencias</h2>
-            <p className="panel-copy">Ultimos partidos con ventana variable, varias métricas en un mismo gráfico y lectura contra la media del scope.</p>
+            <p className="panel-copy">
+              Mismas tendencias de jugadores y equipos, pero con una disposicion mucho mas comoda para comparar ventana, metricas activas y lectura de la serie reciente.
+            </p>
           </div>
-          <div className="tab-row">
+          <div className="tab-row tab-row-wide">
             <button type="button" className={activeTab === "players" ? "tab-button is-active" : "tab-button"} onClick={() => setActiveTab("players")}>
               Jugadores
             </button>
@@ -123,8 +127,8 @@ export function TrendsPage() {
         </div>
 
         {activeTab === "players" ? (
-          <div className="page-stack">
-            <div className="form-grid">
+          <section className="control-panel">
+            <div className="form-grid trend-control-grid">
               <label>
                 Jugador
                 <select value={selectedPlayerKey} onChange={(event) => setSelectedPlayerKey(event.target.value)}>
@@ -145,10 +149,17 @@ export function TrendsPage() {
                   onChange={(event) => setPlayerWindow(Number(event.target.value))}
                 />
               </label>
+              <div className="control-summary-card">
+                <span className="metric-label">Metrica activa</span>
+                <strong>{selectedMetrics.length ? selectedMetrics.join(", ") : "Sin metricas"}</strong>
+                <span className="metric-hint">
+                  {playerData?.recentCount ?? 0} partidos usados de {playerData?.windowMax ?? 0}
+                </span>
+              </div>
             </div>
             <div className="checkbox-grid">
               {(playerData?.availableMetrics ?? []).map((metric) => (
-                <label key={metric.key} className="checkbox-chip">
+                <label key={metric.key} className={playerMetrics.includes(metric.key) ? "checkbox-chip is-selected" : "checkbox-chip"}>
                   <input
                     type="checkbox"
                     checked={playerMetrics.includes(metric.key)}
@@ -162,10 +173,10 @@ export function TrendsPage() {
                 </label>
               ))}
             </div>
-          </div>
+          </section>
         ) : (
-          <div className="page-stack">
-            <div className="form-grid">
+          <section className="control-panel">
+            <div className="form-grid trend-control-grid">
               <label>
                 Equipo
                 <select value={selectedTeam} onChange={(event) => setSelectedTeam(event.target.value)}>
@@ -186,10 +197,17 @@ export function TrendsPage() {
                   onChange={(event) => setTeamWindow(Number(event.target.value))}
                 />
               </label>
+              <div className="control-summary-card">
+                <span className="metric-label">Metrica activa</span>
+                <strong>{selectedMetrics.length ? selectedMetrics.join(", ") : "Sin metricas"}</strong>
+                <span className="metric-hint">
+                  {teamData?.recentCount ?? 0} partidos usados de {teamData?.windowMax ?? 0}
+                </span>
+              </div>
             </div>
             <div className="checkbox-grid">
               {(teamData?.availableMetrics ?? []).map((metric) => (
-                <label key={metric.key} className="checkbox-chip">
+                <label key={metric.key} className={teamMetrics.includes(metric.key) ? "checkbox-chip is-selected" : "checkbox-chip"}>
                   <input
                     type="checkbox"
                     checked={teamMetrics.includes(metric.key)}
@@ -203,26 +221,34 @@ export function TrendsPage() {
                 </label>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
         {trendData ? (
           <>
-            <div className="metric-grid">
+            <div className="metric-grid metric-grid-wide">
               {trendData.summaryRows.map((row) => (
                 <MetricCard
                   key={row.metric}
                   label={row.metric}
                   value={formatNumber(row.recent_avg, 1)}
-                  hint={`Scope ${formatNumber(row.scope_avg, 1)} · Δ ${formatNumber(row.delta, 1)}`}
+                  hint={`Scope ${formatNumber(row.scope_avg, 1)} · Delta ${formatNumber(row.delta, 1)}`}
                 />
               ))}
             </div>
-            <MultiMetricChart rows={trendData.chartRows} metrics={selectedMetrics} />
+
+            <section className="panel panel-soft">
+              <MultiMetricChart rows={trendData.chartRows} metrics={selectedMetrics} />
+            </section>
+
             <DataTable
+              title="Ultimos partidos"
+              subtitle="Serie reciente ordenada por jornada para contrastar el grafico con el detalle de cada partido."
               columns={Object.keys(trendData.recentGames[0] ?? {})}
               rows={trendData.recentGames}
               idField="PARTIDO"
+              defaultSortColumn="JORNADA"
+              searchPlaceholder="Buscar rival, fase o resultado"
             />
           </>
         ) : (

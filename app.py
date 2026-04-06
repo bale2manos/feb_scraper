@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 from unidecode import unidecode
@@ -28,6 +29,7 @@ from config import (
     DEFAULT_SYNC_TASK_NAME,
     DEFAULT_SYNC_DAY,
     DEFAULT_SYNC_TIME,
+    GENERIC_PLAYER_IMAGE,
     LIGAS_DISPONIBLES,
     PLAYER_REPORTS_DIR,
     SQLITE_DB_FILE,
@@ -37,6 +39,21 @@ from config import (
 )
 from storage import DataStore, ReportBundle, ReportFilters, SyncSummary
 from utils.auto_sync import expand_targets_by_phase, iter_enabled_targets, load_auto_sync_config, save_auto_sync_config, target_label
+from utils.dependency_view import (
+    build_dependency_players_view,
+    build_player_dependency_diagnosis,
+    build_structural_risk_summary,
+)
+from utils.trends_view import (
+    PLAYER_TREND_METRIC_OPTIONS,
+    TEAM_TREND_METRIC_OPTIONS,
+    build_player_scope_baseline,
+    build_recent_player_games,
+    build_recent_team_games,
+    build_recent_vs_scope_summary,
+    build_team_scope_baseline,
+    build_trend_chart_frame,
+)
 from utils.sync_runtime import (
     SyncAlreadyRunningError,
     SyncExecutionLock,
@@ -64,6 +81,22 @@ GM_RULE_IDS_KEY = "gm_rule_ids"
 GM_RULE_NEXT_ID_KEY = "gm_rule_next_id"
 GM_VISIBLE_COLUMNS_KEY = "gm_visible_columns"
 GM_SORT_COLUMN_KEY = "gm_sort_column"
+DEP_SCOPE_SEASON_KEY = "dep_scope_season"
+DEP_SCOPE_LEAGUE_KEY = "dep_scope_league"
+DEP_SCOPE_PHASES_KEY = "dep_scope_phases"
+DEP_SCOPE_JORNADAS_KEY = "dep_scope_jornadas"
+DEP_SELECTED_TEAM_KEY = "dep_selected_team"
+DEP_SELECTED_PLAYER_KEY = "dep_selected_player"
+TREND_SCOPE_SEASON_KEY = "trend_scope_season"
+TREND_SCOPE_LEAGUE_KEY = "trend_scope_league"
+TREND_SCOPE_PHASES_KEY = "trend_scope_phases"
+TREND_SCOPE_JORNADAS_KEY = "trend_scope_jornadas"
+TREND_SELECTED_PLAYER_KEY = "trend_selected_player"
+TREND_SELECTED_TEAM_KEY = "trend_selected_team"
+TREND_PLAYER_CHART_METRICS_KEY = "trend_player_chart_metrics"
+TREND_TEAM_CHART_METRICS_KEY = "trend_team_chart_metrics"
+TREND_PLAYER_WINDOW_KEY = "trend_player_window"
+TREND_TEAM_WINDOW_KEY = "trend_team_window"
 GM_BIRTH_YEAR_COLUMN = "AÑO NACIMIENTO"
 GM_LEGACY_BIRTH_YEAR_COLUMNS = ("ANO NACIMIENTO",)
 
@@ -156,6 +189,19 @@ GM_EXPORT_COLUMNS = [
     "NACIONALIDAD",
     GM_BIRTH_YEAR_COLUMN,
     *GM_RULE_METRICS,
+]
+
+DEPENDENCY_DEFAULT_TABLE_COLUMNS = [
+    "JUGADOR",
+    "PJ",
+    "MINUTOS JUGADOS",
+    "%PLAYS_EQUIPO",
+    "%PUNTOS_EQUIPO",
+    "%AST_EQUIPO",
+    "%REB_EQUIPO",
+    "DEPENDENCIA_SCORE",
+    "DEPENDENCIA_RIESGO",
+    "FOCO_PRINCIPAL",
 ]
 
 
@@ -573,6 +619,18 @@ def load_gm_view_data(
     return gm_df, clutch_lookup
 
 
+@st.cache_data(show_spinner=False)
+def load_dependency_view_data(
+    _db_signature: tuple[tuple[str, int, int], ...],
+    season: str,
+    league: str,
+    phases: tuple[str, ...],
+    jornadas: tuple[int, ...],
+) -> pd.DataFrame:
+    bundle = load_report_bundle(_db_signature, season, league, phases, jornadas)
+    return build_dependency_players_view(bundle)
+
+
 def _gm_numeric_series(df: pd.DataFrame, column: str) -> pd.Series:
     if column not in df.columns:
         return pd.Series(0.0, index=df.index, dtype=float)
@@ -601,6 +659,45 @@ def _display_or_dash(value: Any) -> str:
         return "-"
     text = str(value).strip()
     return text or "-"
+
+
+def _as_float(value: Any) -> float:
+    series = pd.to_numeric(pd.Series([value]), errors="coerce").fillna(0.0)
+    return float(series.iloc[0])
+
+
+def _format_optional_dorsal(value: Any) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    numeric = pd.to_numeric(pd.Series([text]), errors="coerce").iloc[0]
+    if pd.notna(numeric) and float(numeric).is_integer():
+        text = str(int(numeric))
+    return f"#{text}"
+
+
+def _build_player_selection_label(player_name: Any, team_name: Any = None, dorsal: Any = None) -> str:
+    name_text = _display_or_dash(player_name)
+    dorsal_text = _format_optional_dorsal(dorsal)
+    prefix = f"{dorsal_text} " if dorsal_text else ""
+    team_text = str(team_name).strip() if team_name is not None and not pd.isna(team_name) else ""
+    if team_text:
+        return f"{prefix}{name_text} | {team_text}"
+    return f"{prefix}{name_text}"
+
+
+def _resolve_player_image_source(image_value: Any) -> str | Path:
+    if image_value is not None and not pd.isna(image_value):
+        text = str(image_value).strip()
+        if text:
+            if text.startswith("http://") or text.startswith("https://"):
+                return text
+            local_path = Path(text)
+            if local_path.exists():
+                return local_path
+    return GENERIC_PLAYER_IMAGE
 
 
 def _normalize_gm_view_columns(gm_df: pd.DataFrame) -> pd.DataFrame:
@@ -924,6 +1021,11 @@ def apply_gm_filters(
 def serialize_gm_csv(filtered_df: pd.DataFrame) -> bytes:
     export_columns = [column for column in GM_EXPORT_COLUMNS if column in filtered_df.columns]
     export_df = filtered_df[export_columns].copy()
+    return export_df.to_csv(index=False, na_rep="").encode("utf-8-sig")
+
+
+def serialize_dependency_csv(filtered_df: pd.DataFrame) -> bytes:
+    export_df = filtered_df.copy()
     return export_df.to_csv(index=False, na_rep="").encode("utf-8-sig")
 
 
@@ -1511,14 +1613,14 @@ def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
     )
 
     selectable_players = (
-        filtered_df[["PLAYER_KEY", "JUGADOR", "EQUIPO"]]
+        filtered_df[[column for column in ["PLAYER_KEY", "JUGADOR", "EQUIPO", "DORSAL"] if column in filtered_df.columns]]
         .drop_duplicates(subset=["PLAYER_KEY"])
         .sort_values(by=["JUGADOR", "EQUIPO"])
     )
     player_keys = selectable_players["PLAYER_KEY"].astype(str).tolist()
     _ensure_select_state(GM_SELECTED_PLAYER_KEY, player_keys)
     player_labels = {
-        row["PLAYER_KEY"]: f"{row['JUGADOR']} | {row['EQUIPO']}"
+        str(row["PLAYER_KEY"]): _build_player_selection_label(row["JUGADOR"], row.get("EQUIPO"), row.get("DORSAL"))
         for _, row in selectable_players.iterrows()
     }
     selected_player_key = st.selectbox(
@@ -1606,6 +1708,495 @@ def render_gm_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
         )
 
 
+def render_dependency_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
+    st.subheader("Dependencia y riesgo")
+
+    seasons = load_available_seasons(db_signature)
+    if not seasons:
+        st.info("No hay datos suficientes para construir la vista de dependencia.")
+        return
+
+    with st.form("dep_scope_form", clear_on_submit=False):
+        apply_row = st.columns([1.2, 4])
+        apply_row[0].form_submit_button("Aplicar scope dependencia", use_container_width=True)
+        apply_row[1].caption("Los cambios de temporada, liga, fases y jornadas se aplican al enviar este formulario.")
+
+        scope_top_cols = st.columns(2)
+        _ensure_select_state(DEP_SCOPE_SEASON_KEY, seasons)
+        season = scope_top_cols[0].selectbox("Temporada dependencia", seasons, key=DEP_SCOPE_SEASON_KEY)
+
+        leagues = load_available_leagues(db_signature, season)
+        _ensure_select_state(DEP_SCOPE_LEAGUE_KEY, leagues)
+        league = scope_top_cols[1].selectbox("Liga dependencia", leagues, key=DEP_SCOPE_LEAGUE_KEY)
+
+        available_phases = load_available_phases(db_signature, season, league)
+        _ensure_multiselect_state(DEP_SCOPE_PHASES_KEY, available_phases)
+        selected_phases = st.multiselect(
+            "Fases dependencia",
+            options=available_phases,
+            key=DEP_SCOPE_PHASES_KEY,
+            placeholder="Vacio = todas las fases",
+        )
+
+        available_jornadas = load_available_jornadas(db_signature, season, league, tuple(selected_phases))
+        _ensure_multiselect_state(DEP_SCOPE_JORNADAS_KEY, available_jornadas)
+        selected_jornadas = st.multiselect(
+            "Jornadas dependencia",
+            options=available_jornadas,
+            key=DEP_SCOPE_JORNADAS_KEY,
+            placeholder="Vacio = todas las jornadas",
+        )
+
+    dependency_df = load_dependency_view_data(
+        db_signature,
+        season,
+        league,
+        tuple(selected_phases),
+        tuple(selected_jornadas),
+    )
+    bundle = load_report_bundle(
+        db_signature,
+        season,
+        league,
+        tuple(selected_phases),
+        tuple(selected_jornadas),
+    )
+    if dependency_df.empty:
+        st.info("No hay jugadores disponibles para el scope de dependencia seleccionado.")
+        return
+
+    teams = sorted(dependency_df["EQUIPO"].dropna().astype(str).unique().tolist())
+    if not teams:
+        st.info("No hay equipos disponibles en el scope actual.")
+        return
+
+    phases_summary = ", ".join(selected_phases) if selected_phases else "todas"
+    jornadas_summary = ", ".join(str(value) for value in selected_jornadas) if selected_jornadas else "todas"
+    st.caption(
+        f"Scope: {season} | {league} | Fases: {phases_summary} | Jornadas: {jornadas_summary} | "
+        "Comparacion interna dentro del scope actual."
+    )
+
+    _ensure_select_state(DEP_SELECTED_TEAM_KEY, teams)
+    selected_team = st.selectbox("Equipo objetivo", teams, key=DEP_SELECTED_TEAM_KEY)
+
+    team_df = dependency_df[dependency_df["EQUIPO"] == selected_team].copy()
+    if team_df.empty:
+        st.info("No hay jugadores para el equipo seleccionado en este scope.")
+        return
+
+    team_df = team_df.sort_values(
+        by=["DEPENDENCIA_SCORE", "%PLAYS_EQUIPO", "PJ"],
+        ascending=[False, False, False],
+        na_position="last",
+    ).reset_index(drop=True)
+    has_clutch = bool(team_df["HAS_CLUTCH_DATA"].fillna(False).any())
+    if not has_clutch:
+        st.info("Este equipo no tiene datos clutch en el scope actual. El score se reescala con las metricas disponibles.")
+
+    critical_row = team_df.iloc[0]
+    use_top_row = team_df.sort_values(by="%PLAYS_EQUIPO", ascending=False, na_position="last").iloc[0]
+    points_top_row = team_df.sort_values(by="%PUNTOS_EQUIPO", ascending=False, na_position="last").iloc[0]
+    ast_top_row = team_df.sort_values(by="%AST_EQUIPO", ascending=False, na_position="last").iloc[0]
+    top3_use = pd.to_numeric(team_df["%PLAYS_EQUIPO"], errors="coerce").fillna(0.0).nlargest(3).sum()
+
+    summary_cols = st.columns(5)
+    summary_cols[0].metric(
+        "Jugador critico",
+        str(critical_row["JUGADOR"]),
+        f"{float(critical_row['DEPENDENCIA_SCORE']):.1f} score",
+    )
+    summary_cols[1].metric(
+        "Uso ofensivo top1",
+        str(use_top_row["JUGADOR"]),
+        f"{float(use_top_row['%PLAYS_EQUIPO']):.1f}%",
+    )
+    summary_cols[2].metric(
+        "Anotacion top1",
+        str(points_top_row["JUGADOR"]),
+        f"{float(points_top_row['%PUNTOS_EQUIPO']):.1f}%",
+    )
+    summary_cols[3].metric(
+        "Creacion top1",
+        str(ast_top_row["JUGADOR"]),
+        f"{float(ast_top_row['%AST_EQUIPO']):.1f}%",
+    )
+    summary_cols[4].metric("Concentracion top3", f"{float(top3_use):.1f}%")
+
+    st.caption("Concentracion top3 = suma del % de plays de los 3 jugadores con mas uso ofensivo.")
+    st.caption("Los porcentajes de dependencia se calculan sobre el total del equipo en los partidos que ese jugador ha disputado.")
+    st.caption(build_structural_risk_summary(team_df))
+
+    display_columns = [column for column in DEPENDENCY_DEFAULT_TABLE_COLUMNS if column in team_df.columns]
+    if has_clutch and "%MIN_CLUTCH_EQUIPO" in team_df.columns and "%MIN_CLUTCH_EQUIPO" not in display_columns:
+        score_index = display_columns.index("DEPENDENCIA_SCORE") if "DEPENDENCIA_SCORE" in display_columns else len(display_columns)
+        display_columns.insert(score_index, "%MIN_CLUTCH_EQUIPO")
+
+    st.dataframe(team_df[display_columns], use_container_width=True, hide_index=True)
+
+    safe_team_name = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team.strip()).strip("_") or "equipo"
+    st.download_button(
+        "Descargar CSV dependencia",
+        data=serialize_dependency_csv(team_df),
+        file_name=f"dependencia_{season.replace('/', '-')}_{league.replace(' ', '_').lower()}_{safe_team_name}.csv",
+        mime="text/csv",
+        key="dependency_download_csv",
+    )
+
+    dorsal_lookup = (
+        bundle.players_df[[column for column in ["PLAYER_KEY", "DORSAL"] if column in bundle.players_df.columns]]
+        .drop_duplicates(subset=["PLAYER_KEY"])
+    )
+    selectable_players = (
+        team_df[["PLAYER_KEY", "JUGADOR"]]
+        .drop_duplicates(subset=["PLAYER_KEY"])
+        .merge(dorsal_lookup, on="PLAYER_KEY", how="left")
+        .sort_values(by=["JUGADOR"])
+    )
+    player_keys = selectable_players["PLAYER_KEY"].astype(str).tolist()
+    _ensure_select_state(DEP_SELECTED_PLAYER_KEY, player_keys)
+    player_labels = {
+        str(row["PLAYER_KEY"]): _build_player_selection_label(row["JUGADOR"], dorsal=row.get("DORSAL"))
+        for _, row in selectable_players.iterrows()
+    }
+    selected_player_key = st.selectbox(
+        "Jugador para detalle",
+        options=player_keys,
+        key=DEP_SELECTED_PLAYER_KEY,
+        format_func=lambda key: player_labels.get(key, key),
+    )
+
+    selected_row = team_df[team_df["PLAYER_KEY"].astype(str) == str(selected_player_key)].copy()
+    selected_player = selected_row.iloc[0] if not selected_row.empty else None
+    if selected_player is None:
+        return
+    bundle_player_rows = bundle.players_df[bundle.players_df["PLAYER_KEY"].astype(str) == str(selected_player_key)].copy()
+    bundle_player = bundle_player_rows.iloc[0] if not bundle_player_rows.empty else None
+    player_dorsal = _format_optional_dorsal(bundle_player.get("DORSAL") if bundle_player is not None else None)
+    player_display_name = f"{player_dorsal} {selected_player['JUGADOR']}".strip()
+
+    st.markdown("---")
+    st.write("**Detalle de dependencia**")
+
+    profile_cols = st.columns([1.0, 3.2])
+    image_value = bundle_player.get("IMAGEN") if bundle_player is not None and "IMAGEN" in bundle_player.index else None
+    profile_cols[0].image(_resolve_player_image_source(image_value), use_container_width=True)
+
+    with profile_cols[1]:
+        st.markdown(f"### {player_display_name}")
+        detail_cols = st.columns(4)
+        detail_cols[0].metric("Equipo", _display_or_dash(selected_player["EQUIPO"]))
+        detail_cols[1].metric("PJ", _display_or_dash(selected_player["PJ"]))
+        detail_cols[2].metric("Riesgo", _display_or_dash(selected_player["DEPENDENCIA_RIESGO"]))
+        detail_cols[3].metric("Foco principal", _display_or_dash(selected_player["FOCO_PRINCIPAL"]))
+
+    metric_pairs = [
+        ("Score dependencia", f"{_as_float(selected_player['DEPENDENCIA_SCORE']):.1f}"),
+        ("% uso ofensivo", f"{_as_float(selected_player['%PLAYS_EQUIPO']):.1f}%"),
+        ("% anotacion", f"{_as_float(selected_player['%PUNTOS_EQUIPO']):.1f}%"),
+        ("% creacion", f"{_as_float(selected_player['%AST_EQUIPO']):.1f}%"),
+        ("% rebote", f"{_as_float(selected_player['%REB_EQUIPO']):.1f}%"),
+    ]
+    if has_clutch:
+        clutch_text = "-" if pd.isna(selected_player["%MIN_CLUTCH_EQUIPO"]) else f"{_as_float(selected_player['%MIN_CLUTCH_EQUIPO']):.1f}%"
+        metric_pairs.append(("% minutos clutch", clutch_text))
+
+    metric_cols = st.columns(len(metric_pairs))
+    for column, (label, value) in zip(metric_cols, metric_pairs):
+        column.metric(label, value)
+
+    st.caption(build_player_dependency_diagnosis(selected_player))
+
+def _trend_metric_decimals(metric: str) -> int:
+    if metric in {"PLAYS", "OFFRTG", "DEFRTG", "NETRTG", "%REB"}:
+        return 2
+    return 1
+
+
+def _format_trend_metric(metric: str, value: float) -> str:
+    return f"{value:.{_trend_metric_decimals(metric)}f}"
+
+
+def _render_trend_summary_kpis(
+    summary_df: pd.DataFrame,
+    metric_order: list[str],
+    metric_labels: dict[str, str],
+    recent_count: int,
+) -> None:
+    if summary_df.empty:
+        return
+
+    indexed = summary_df.set_index("metric")
+    for metric_chunk in (metric_order[:3], metric_order[3:]):
+        if not metric_chunk:
+            continue
+        cols = st.columns(len(metric_chunk))
+        for col, metric in zip(cols, metric_chunk):
+            row = indexed.loc[metric] if metric in indexed.index else pd.Series({"recent_avg": 0.0, "delta": 0.0})
+            col.metric(
+                f"{metric_labels.get(metric, metric)} ult. {recent_count}",
+                _format_trend_metric(metric, float(row.get("recent_avg", 0.0))),
+                f"{float(row.get('delta', 0.0)):+.{_trend_metric_decimals(metric)}f} vs media",
+            )
+
+
+def _resolve_trend_window(widget_key: str, available_games: int) -> int:
+    if available_games <= 0:
+        st.session_state.pop(widget_key, None)
+        return 0
+
+    if available_games == 1:
+        st.session_state[widget_key] = 1
+        st.caption("Solo hay 1 partido disponible en este scope.")
+        return 1
+
+    default_window = min(5, available_games)
+    current_window = pd.to_numeric(
+        pd.Series([st.session_state.get(widget_key, default_window)]),
+        errors="coerce",
+    ).fillna(default_window).iloc[0]
+    if current_window < 1 or current_window > available_games:
+        st.session_state[widget_key] = default_window
+
+    return st.slider(
+        "Partidos a mostrar",
+        min_value=1,
+        max_value=available_games,
+        value=int(st.session_state.get(widget_key, default_window)),
+        key=widget_key,
+    )
+
+
+def _render_trend_chart(chart_df: pd.DataFrame, metrics: list[str], metric_labels: dict[str, str], chart_key: str) -> None:
+    valid_metrics = [metric for metric in metrics if metric in chart_df.columns]
+    if chart_df.empty or not valid_metrics:
+        return
+
+    value_vars = ["PARTIDO", "__ORDER", *valid_metrics]
+    if "JORNADA" in chart_df.columns:
+        value_vars.append("JORNADA")
+    chart_long = chart_df[value_vars].melt(
+        id_vars=[column for column in ["PARTIDO", "JORNADA", "__ORDER"] if column in chart_df.columns],
+        value_vars=valid_metrics,
+        var_name="METRICA",
+        value_name="VALOR",
+    )
+    chart_long["METRICA_LABEL"] = chart_long["METRICA"].map(lambda value: metric_labels.get(value, value))
+
+    chart = (
+        alt.Chart(chart_long)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X(
+                "PARTIDO:N",
+                sort=alt.EncodingSortField(field="__ORDER", order="ascending"),
+                axis=alt.Axis(labelAngle=-35, title="Partido"),
+            ),
+            y=alt.Y("VALOR:Q", title="Valor"),
+            color=alt.Color("METRICA_LABEL:N", title="Metrica"),
+            tooltip=[
+                alt.Tooltip("PARTIDO:N", title="Partido"),
+                *([alt.Tooltip("JORNADA:Q", title="Jornada")] if "JORNADA" in chart_long.columns else []),
+                alt.Tooltip("METRICA_LABEL:N", title="Metrica"),
+                alt.Tooltip("VALOR:Q", title="Valor", format=".2f"),
+            ],
+        )
+    )
+    st.altair_chart(chart, use_container_width=True, key=chart_key)
+
+
+def _render_player_trends_tab(bundle: ReportBundle) -> None:
+    if bundle.players_df.empty or bundle.boxscores_df.empty:
+        st.info("No hay datos suficientes de jugadores para el scope actual.")
+        return
+
+    players_source = (
+        bundle.players_df[[column for column in ["PLAYER_KEY", "JUGADOR", "EQUIPO", "DORSAL"] if column in bundle.players_df.columns]]
+        .dropna(subset=["PLAYER_KEY", "JUGADOR"])
+        .drop_duplicates(subset=["PLAYER_KEY"])
+        .sort_values(by=["JUGADOR", "EQUIPO"])
+    )
+    if players_source.empty:
+        st.info("No hay jugadores disponibles en este scope.")
+        return
+
+    player_keys = players_source["PLAYER_KEY"].astype(str).tolist()
+    _ensure_select_state(TREND_SELECTED_PLAYER_KEY, player_keys)
+    player_labels = {
+        str(row["PLAYER_KEY"]): _build_player_selection_label(row["JUGADOR"], row.get("EQUIPO"), row.get("DORSAL"))
+        for _, row in players_source.iterrows()
+    }
+    selected_player_key = st.selectbox(
+        "Jugador",
+        options=player_keys,
+        key=TREND_SELECTED_PLAYER_KEY,
+        format_func=lambda key: player_labels.get(key, key),
+    )
+
+    player_games_df = bundle.boxscores_df[bundle.boxscores_df["PLAYER_KEY"].astype(str) == str(selected_player_key)].copy()
+    if "IdPartido" in player_games_df.columns:
+        available_player_games = int(player_games_df["IdPartido"].nunique())
+    else:
+        available_player_games = int(player_games_df.shape[0])
+    player_window = _resolve_trend_window(TREND_PLAYER_WINDOW_KEY, available_player_games)
+    if player_window <= 0:
+        st.info("No hay partidos recientes para el jugador seleccionado.")
+        return
+
+    recent_df = build_recent_player_games(bundle.boxscores_df, str(selected_player_key), last_n=player_window)
+    if recent_df.empty:
+        st.info("No hay partidos recientes para el jugador seleccionado.")
+        return
+
+    recent_count = int(recent_df.shape[0])
+    baseline = build_player_scope_baseline(bundle.players_df, str(selected_player_key))
+    summary_df = build_recent_vs_scope_summary(recent_df, baseline, list(PLAYER_TREND_METRIC_OPTIONS.keys()))
+
+    st.caption(f"Ultimos {recent_count} partidos vs media del scope actual.")
+    _render_trend_summary_kpis(summary_df, list(PLAYER_TREND_METRIC_OPTIONS.keys()), PLAYER_TREND_METRIC_OPTIONS, recent_count)
+
+    player_metric_options = list(PLAYER_TREND_METRIC_OPTIONS.keys())
+    _ensure_multiselect_default_state(TREND_PLAYER_CHART_METRICS_KEY, player_metric_options, [player_metric_options[0]])
+    selected_metrics = st.multiselect(
+        "Metricas del grafico",
+        options=player_metric_options,
+        key=TREND_PLAYER_CHART_METRICS_KEY,
+        format_func=lambda metric: PLAYER_TREND_METRIC_OPTIONS.get(metric, metric),
+    )
+    if not selected_metrics:
+        st.info("Selecciona al menos una metrica para el grafico.")
+        st.dataframe(recent_df, use_container_width=True, hide_index=True)
+        return
+
+    chart_df = build_trend_chart_frame(recent_df, selected_metrics)
+    st.caption("El grafico va de mas antiguo a mas reciente dentro de los filtros actuales.")
+    if not chart_df.empty:
+        player_chart_key = f"trend-player-chart::{selected_player_key}::{player_window}::{'|'.join(selected_metrics)}::{len(chart_df)}"
+        _render_trend_chart(chart_df, selected_metrics, PLAYER_TREND_METRIC_OPTIONS, player_chart_key)
+        if len(selected_metrics) > 1:
+            st.caption("Las metricas comparten el mismo eje Y en este grafico.")
+    st.dataframe(recent_df, use_container_width=True, hide_index=True)
+
+
+def _render_team_trends_tab(bundle: ReportBundle) -> None:
+    if bundle.games_df.empty:
+        st.info("No hay datos suficientes de equipos para el scope actual.")
+        return
+
+    team_options = sorted(bundle.games_df["EQUIPO LOCAL"].dropna().astype(str).unique().tolist())
+    if not team_options:
+        st.info("No hay equipos disponibles en este scope.")
+        return
+
+    _ensure_select_state(TREND_SELECTED_TEAM_KEY, team_options)
+    selected_team = st.selectbox("Equipo", team_options, key=TREND_SELECTED_TEAM_KEY)
+
+    team_games_df = bundle.games_df[bundle.games_df["EQUIPO LOCAL"].astype(str) == str(selected_team)].copy()
+    if "PID" in team_games_df.columns:
+        available_team_games = int(team_games_df["PID"].nunique())
+    else:
+        available_team_games = int(team_games_df.shape[0])
+    team_window = _resolve_trend_window(TREND_TEAM_WINDOW_KEY, available_team_games)
+    if team_window <= 0:
+        st.info("No hay partidos recientes para el equipo seleccionado.")
+        return
+
+    recent_df = build_recent_team_games(bundle.games_df, selected_team, last_n=team_window)
+    if recent_df.empty:
+        st.info("No hay partidos recientes para el equipo seleccionado.")
+        return
+
+    recent_count = int(recent_df.shape[0])
+    baseline = build_team_scope_baseline(bundle.games_df, selected_team)
+    summary_df = build_recent_vs_scope_summary(recent_df, baseline, list(TEAM_TREND_METRIC_OPTIONS.keys()))
+
+    st.caption(f"Ultimos {recent_count} partidos vs media del scope actual.")
+    _render_trend_summary_kpis(summary_df, list(TEAM_TREND_METRIC_OPTIONS.keys()), TEAM_TREND_METRIC_OPTIONS, recent_count)
+
+    team_metric_options = list(TEAM_TREND_METRIC_OPTIONS.keys())
+    _ensure_multiselect_default_state(TREND_TEAM_CHART_METRICS_KEY, team_metric_options, [team_metric_options[0]])
+    selected_metrics = st.multiselect(
+        "Metricas del grafico",
+        options=team_metric_options,
+        key=TREND_TEAM_CHART_METRICS_KEY,
+        format_func=lambda metric: TEAM_TREND_METRIC_OPTIONS.get(metric, metric),
+    )
+    if not selected_metrics:
+        st.info("Selecciona al menos una metrica para el grafico.")
+        st.dataframe(recent_df, use_container_width=True, hide_index=True)
+        return
+
+    chart_df = build_trend_chart_frame(recent_df, selected_metrics)
+    st.caption("El grafico va de mas antiguo a mas reciente dentro de los filtros actuales.")
+    if not chart_df.empty:
+        team_chart_key = f"trend-team-chart::{selected_team}::{team_window}::{'|'.join(selected_metrics)}::{len(chart_df)}"
+        _render_trend_chart(chart_df, selected_metrics, TEAM_TREND_METRIC_OPTIONS, team_chart_key)
+        if len(selected_metrics) > 1:
+            st.caption("Las metricas comparten el mismo eje Y en este grafico.")
+    st.dataframe(recent_df, use_container_width=True, hide_index=True)
+
+
+def render_trends_tab(db_signature: tuple[tuple[str, int, int], ...]) -> None:
+    st.subheader("Tendencias")
+
+    seasons = load_available_seasons(db_signature)
+    if not seasons:
+        st.info("No hay datos suficientes para construir la vista de tendencias.")
+        return
+
+    with st.form("trend_scope_form", clear_on_submit=False):
+        apply_row = st.columns([1.1, 4])
+        apply_row[0].form_submit_button("Aplicar scope tendencias", use_container_width=True)
+        apply_row[1].caption("Los filtros de tendencias son independientes de GM y Dependencia.")
+
+        top_cols = st.columns(2)
+        _ensure_select_state(TREND_SCOPE_SEASON_KEY, seasons)
+        season = top_cols[0].selectbox("Temporada tendencias", seasons, key=TREND_SCOPE_SEASON_KEY)
+
+        leagues = load_available_leagues(db_signature, season)
+        _ensure_select_state(TREND_SCOPE_LEAGUE_KEY, leagues)
+        league = top_cols[1].selectbox("Liga tendencias", leagues, key=TREND_SCOPE_LEAGUE_KEY)
+
+        available_phases = load_available_phases(db_signature, season, league)
+        _ensure_multiselect_state(TREND_SCOPE_PHASES_KEY, available_phases)
+        selected_phases = st.multiselect(
+            "Fases tendencias",
+            options=available_phases,
+            key=TREND_SCOPE_PHASES_KEY,
+            placeholder="Vacio = todas las fases",
+        )
+
+        available_jornadas = load_available_jornadas(db_signature, season, league, tuple(selected_phases))
+        _ensure_multiselect_state(TREND_SCOPE_JORNADAS_KEY, available_jornadas)
+        selected_jornadas = st.multiselect(
+            "Jornadas tendencias",
+            options=available_jornadas,
+            key=TREND_SCOPE_JORNADAS_KEY,
+            placeholder="Vacio = todas las jornadas",
+        )
+
+    bundle = load_report_bundle(
+        db_signature,
+        season,
+        league,
+        tuple(selected_phases),
+        tuple(selected_jornadas),
+    )
+    if bundle.players_df.empty and bundle.games_df.empty:
+        st.info("No hay datos de tendencias disponibles en el scope actual.")
+        return
+
+    phases_summary = ", ".join(selected_phases) if selected_phases else "todas"
+    jornadas_summary = ", ".join(str(value) for value in selected_jornadas) if selected_jornadas else "todas"
+    st.caption(f"Scope: {season} | {league} | Fases: {phases_summary} | Jornadas: {jornadas_summary}")
+
+    player_tab, team_tab = st.tabs(["Jugadores", "Equipos"])
+    with player_tab:
+        _render_player_trends_tab(bundle)
+    with team_tab:
+        _render_team_trends_tab(bundle)
+
+
 def render_player_tab(bundle: ReportBundle) -> None:
     st.subheader("Informe de jugador")
     if bundle.players_df.empty:
@@ -1619,8 +2210,24 @@ def render_player_tab(bundle: ReportBundle) -> None:
     if selected_team != "Todos":
         players_source = players_source[players_source["EQUIPO"] == selected_team]
 
-    player_options = sorted(players_source["JUGADOR"].dropna().astype(str).unique().tolist())
-    player_name = st.selectbox("Jugador", player_options, key="player_name")
+    selectable_players = (
+        players_source[[column for column in ["PLAYER_KEY", "JUGADOR", "EQUIPO", "DORSAL"] if column in players_source.columns]]
+        .dropna(subset=["PLAYER_KEY", "JUGADOR"])
+        .drop_duplicates(subset=["PLAYER_KEY"])
+        .sort_values(by=["JUGADOR", "EQUIPO"])
+    )
+    player_keys = selectable_players["PLAYER_KEY"].astype(str).tolist()
+    _ensure_select_state("player_name", player_keys)
+    player_labels = {
+        str(row["PLAYER_KEY"]): _build_player_selection_label(row["JUGADOR"], row.get("EQUIPO"), row.get("DORSAL"))
+        for _, row in selectable_players.iterrows()
+    }
+    selected_player_key = st.selectbox("Jugador", player_keys, key="player_name", format_func=lambda key: player_labels.get(key, key))
+    selected_player_rows = selectable_players[selectable_players["PLAYER_KEY"].astype(str) == str(selected_player_key)].copy()
+    if selected_player_rows.empty:
+        st.info("No se ha encontrado el jugador seleccionado.")
+        return
+    player_name = str(selected_player_rows.iloc[0]["JUGADOR"])
 
     if st.button("Generar informe de jugador", type="primary", key="player_generate"):
         with st.spinner("Generando informe de jugador..."):
@@ -1655,14 +2262,30 @@ def render_team_tab(bundle: ReportBundle) -> None:
 
     teams = sorted(bundle.teams_df["EQUIPO"].dropna().astype(str).unique().tolist())
     selected_team = st.selectbox("Equipo objetivo", teams, key="team_name")
-    team_players = sorted(
-        bundle.players_df[bundle.players_df["EQUIPO"] == selected_team]["JUGADOR"].dropna().astype(str).unique().tolist()
+    team_players_source = (
+        bundle.players_df[bundle.players_df["EQUIPO"] == selected_team][[column for column in ["PLAYER_KEY", "JUGADOR", "DORSAL"] if column in bundle.players_df.columns]]
+        .dropna(subset=["PLAYER_KEY", "JUGADOR"])
+        .drop_duplicates(subset=["PLAYER_KEY"])
+        .sort_values(by=["JUGADOR"])
     )
-    selected_players = st.multiselect(
+    team_player_keys = team_players_source["PLAYER_KEY"].astype(str).tolist()
+    _ensure_multiselect_state("team_players", team_player_keys)
+    team_player_labels = {
+        str(row["PLAYER_KEY"]): _build_player_selection_label(row["JUGADOR"], dorsal=row.get("DORSAL"))
+        for _, row in team_players_source.iterrows()
+    }
+    selected_player_keys = st.multiselect(
         "Jugadores concretos (opcional)",
-        options=team_players,
+        options=team_player_keys,
         default=[],
         key="team_players",
+        format_func=lambda key: team_player_labels.get(key, key),
+    )
+    selected_players = (
+        team_players_source[team_players_source["PLAYER_KEY"].astype(str).isin([str(value) for value in selected_player_keys])]["JUGADOR"]
+        .dropna()
+        .astype(str)
+        .tolist()
     )
     rival_options = [""] + [team for team in teams if team != selected_team]
     selected_rival = st.selectbox("Rival para H2H (opcional)", rival_options, key="team_rival")
@@ -2063,7 +2686,7 @@ def main() -> None:
     db_signature = get_db_signature()
     has_data = load_db_summary(db_signature)["games"] > 0
 
-    page_names = ["Base de datos", "GM", "Jugador", "Equipo", "Fase"]
+    page_names = ["Base de datos", "GM", "Dependencia", "Tendencias", "Jugador", "Equipo", "Fase"]
     if not cloud_mode:
         page_names.append("Scraper")
 
@@ -2105,6 +2728,10 @@ def main() -> None:
         render_database_tab(db_signature)
     elif active_page == "GM":
         render_gm_tab(db_signature)
+    elif active_page == "Dependencia":
+        render_dependency_tab(db_signature)
+    elif active_page == "Tendencias":
+        render_trends_tab(db_signature)
     elif active_page == "Jugador":
         render_player_tab(bundle)
     elif active_page == "Equipo":

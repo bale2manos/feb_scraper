@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { emptyScopeMeta, getMeta, getPlayerTrends, getTeamTrends, normalizeScopeWithMeta } from "../api";
+import { emptyScopeMeta, getMeta, getPlayerTrends, getTeamTrends, isScopeEqual, normalizeScopeWithMeta } from "../api";
 import { DataTable } from "../components/DataTable";
 import { MetricCard } from "../components/MetricCard";
 import { MultiMetricChart } from "../components/MultiMetricChart";
@@ -29,13 +29,20 @@ export function TrendsPage() {
   const [teamWindow, setTeamWindow] = useLocalStorageState<number>("react-trends-team-window", 5);
   const [teamMetrics, setTeamMetrics] = useLocalStorageState<string[]>("react-trends-team-metrics", ["NETRTG"]);
   const [teamData, setTeamData] = useState<TrendsResponse | null>(null);
+  const metaRequestIdRef = useRef(0);
+  const playerRequestIdRef = useRef(0);
+  const teamRequestIdRef = useRef(0);
 
   useEffect(() => {
+    const requestId = ++metaRequestIdRef.current;
     void getMeta(scope).then((response) => {
+      if (requestId !== metaRequestIdRef.current) {
+        return;
+      }
       setMeta(response);
       setScope((current) => {
         const next = normalizeScopeWithMeta(current, response);
-        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+        return isScopeEqual(current, next) ? current : next;
       });
     });
   }, [scope.season, scope.league, scope.phases.join("|"), scope.jornadas.join("|"), setScope]);
@@ -44,7 +51,11 @@ export function TrendsPage() {
     if (activeTab !== "players" || !scope.season || !scope.league) {
       return;
     }
+    const requestId = ++playerRequestIdRef.current;
     void getPlayerTrends(scope, selectedPlayerKey, playerWindow, playerMetrics).then((response) => {
+      if (requestId !== playerRequestIdRef.current) {
+        return;
+      }
       setPlayerData(response);
       if ((response.selectedPlayerKey ?? "") !== selectedPlayerKey) {
         setSelectedPlayerKey(response.selectedPlayerKey ?? "");
@@ -74,7 +85,11 @@ export function TrendsPage() {
     if (activeTab !== "teams" || !scope.season || !scope.league) {
       return;
     }
+    const requestId = ++teamRequestIdRef.current;
     void getTeamTrends(scope, selectedTeam, teamWindow, teamMetrics).then((response) => {
+      if (requestId !== teamRequestIdRef.current) {
+        return;
+      }
       setTeamData(response);
       if ((response.selectedTeam ?? "") !== selectedTeam) {
         setSelectedTeam(response.selectedTeam ?? "");

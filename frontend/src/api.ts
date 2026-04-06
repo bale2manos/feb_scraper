@@ -54,6 +54,17 @@ export function normalizeScopeWithMeta(current: ScopeState, meta: ScopeMeta): Sc
   };
 }
 
+export function isScopeEqual(left: ScopeState, right: ScopeState) {
+  return (
+    left.season === right.season &&
+    left.league === right.league &&
+    left.phases.length === right.phases.length &&
+    left.jornadas.length === right.jornadas.length &&
+    left.phases.every((value, index) => value === right.phases[index]) &&
+    left.jornadas.every((value, index) => value === right.jornadas[index])
+  );
+}
+
 export function getMeta(scope: Partial<ScopeState>) {
   return requestJson<ScopeMeta>("/meta/scopes", {
     season: scope.season,

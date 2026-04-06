@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { emptyScopeMeta, getGmPlayers, getMeta, normalizeScopeWithMeta } from "../api";
+import { emptyScopeMeta, getGmPlayers, getMeta, isScopeEqual, normalizeScopeWithMeta } from "../api";
 import { DataTable } from "../components/DataTable";
 import { MetricCard } from "../components/MetricCard";
 import { ScopeFilters } from "../components/ScopeFilters";
@@ -18,13 +18,19 @@ export function GmPage() {
   const [selectedPlayerKey, setSelectedPlayerKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const metaRequestIdRef = useRef(0);
+  const dataRequestIdRef = useRef(0);
 
   useEffect(() => {
+    const requestId = ++metaRequestIdRef.current;
     void getMeta(scope).then((response) => {
+      if (requestId !== metaRequestIdRef.current) {
+        return;
+      }
       setMeta(response);
       setScope((current) => {
         const next = normalizeScopeWithMeta(current, response);
-        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+        return isScopeEqual(current, next) ? current : next;
       });
     });
   }, [scope.season, scope.league, scope.phases.join("|"), scope.jornadas.join("|"), setScope]);
@@ -33,18 +39,31 @@ export function GmPage() {
     if (!scope.season || !scope.league) {
       return;
     }
+    const requestId = ++dataRequestIdRef.current;
     setLoading(true);
     setError(null);
     void getGmPlayers(scope, mode)
       .then((response) => {
+        if (requestId !== dataRequestIdRef.current) {
+          return;
+        }
         setData(response);
         const firstKey = String(response.rows[0]?.PLAYER_KEY ?? "");
         setSelectedPlayerKey((current) =>
           current && response.rows.some((row) => String(row.PLAYER_KEY ?? "") === current) ? current : firstKey || null
         );
       })
-      .catch((reason: Error) => setError(reason.message))
-      .finally(() => setLoading(false));
+      .catch((reason: Error) => {
+        if (requestId !== dataRequestIdRef.current) {
+          return;
+        }
+        setError(reason.message);
+      })
+      .finally(() => {
+        if (requestId === dataRequestIdRef.current) {
+          setLoading(false);
+        }
+      });
   }, [scope.season, scope.league, scope.phases.join("|"), scope.jornadas.join("|"), mode]);
 
   const selectedRow = data?.rows.find((row) => String(row.PLAYER_KEY ?? "") === selectedPlayerKey) ?? null;

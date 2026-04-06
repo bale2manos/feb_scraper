@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { emptyScopeMeta, getDependencyPlayers, getDependencySummary, getMeta, normalizeScopeWithMeta } from "../api";
+import { emptyScopeMeta, getDependencyPlayers, getDependencySummary, getMeta, isScopeEqual, normalizeScopeWithMeta } from "../api";
 import { DataTable } from "../components/DataTable";
 import { MetricCard } from "../components/MetricCard";
 import { ScopeFilters } from "../components/ScopeFilters";
@@ -17,13 +17,20 @@ export function DependencyPage() {
   const [summary, setSummary] = useState<DependencySummary | null>(null);
   const [selectedTeam, setSelectedTeam] = useLocalStorageState<string>("react-dependency-team", "");
   const [selectedPlayerKey, setSelectedPlayerKey] = useState<string | null>(null);
+  const metaRequestIdRef = useRef(0);
+  const listRequestIdRef = useRef(0);
+  const summaryRequestIdRef = useRef(0);
 
   useEffect(() => {
+    const requestId = ++metaRequestIdRef.current;
     void getMeta(scope).then((response) => {
+      if (requestId !== metaRequestIdRef.current) {
+        return;
+      }
       setMeta(response);
       setScope((current) => {
         const next = normalizeScopeWithMeta(current, response);
-        return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+        return isScopeEqual(current, next) ? current : next;
       });
     });
   }, [scope.season, scope.league, scope.phases.join("|"), scope.jornadas.join("|"), setScope]);
@@ -32,7 +39,11 @@ export function DependencyPage() {
     if (!scope.season || !scope.league) {
       return;
     }
+    const requestId = ++listRequestIdRef.current;
     void getDependencyPlayers(scope).then((response) => {
+      if (requestId !== listRequestIdRef.current) {
+        return;
+      }
       setData(response);
       const firstTeam = response.teams[0]?.name ?? "";
       setSelectedTeam((current) => (response.teams.some((team) => team.name === current) ? current : firstTeam));
@@ -43,7 +54,11 @@ export function DependencyPage() {
     if (!scope.season || !scope.league || !selectedTeam) {
       return;
     }
+    const requestId = ++summaryRequestIdRef.current;
     void getDependencySummary(scope, selectedTeam, selectedPlayerKey).then((response) => {
+      if (requestId !== summaryRequestIdRef.current) {
+        return;
+      }
       setSummary(response);
       if (response.selectedPlayerKey && response.selectedPlayerKey !== selectedPlayerKey) {
         setSelectedPlayerKey(response.selectedPlayerKey);

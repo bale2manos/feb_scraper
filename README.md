@@ -66,3 +66,21 @@ Pasos minimos:
 - Los endpoints analiticos, informes y ficheros de informes exigen sesion valida.
 - Se aplican cookies `HttpOnly`, `Secure` y `SameSite=Strict`.
 - Se anaden headers basicos de seguridad y rate limiting en login e informes.
+
+## Oracle Cloud Free
+
+Si necesitas despliegue remoto gratis con persistencia, usa una VM Always Free en Oracle Cloud:
+
+- `deploy/oracle/docker-compose.yml`
+- `deploy/oracle/Caddyfile.example`
+- `deploy/oracle/env.example`
+- `deploy/oracle/feb-analytics.service.example`
+- `deploy/oracle/README.md`
+
+La idea es:
+
+1. Crear una VM Ubuntu en Oracle Cloud Always Free.
+2. Instalar Docker y Docker Compose.
+3. Apuntar un dominio a la IP publica de la VM.
+4. Levantar la app con `docker compose`.
+5. Dejar Caddy delante para HTTPS automatico.

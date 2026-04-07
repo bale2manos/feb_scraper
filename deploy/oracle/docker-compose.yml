@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      APP_STORAGE_ROOT: /var/data
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      SESSION_SECRET: ${SESSION_SECRET}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+      ALLOWED_ORIGINS: ""
+    expose:
+      - "8000"
+    volumes:
+      - ${HOST_STORAGE_ROOT:-/srv/feb-data}:/var/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

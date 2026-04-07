@@ -1,0 +1,21 @@
+[Unit]
+Description=FEB Analytics FastAPI app
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/feb_scraper
+Environment=APP_ENV=production
+Environment=APP_STORAGE_ROOT=/srv/feb-data
+Environment=SESSION_TTL_HOURS=12
+Environment=SESSION_SECRET=replace-with-a-long-random-secret
+Environment=ADMIN_PASSWORD_HASH=replace-with-argon2-hash
+Environment=ALLOWED_ORIGINS=
+ExecStart=/opt/feb_scraper/.venv/bin/python -m uvicorn backend.api.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

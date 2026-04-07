@@ -84,3 +84,18 @@ La idea es:
 3. Apuntar un dominio a la IP publica de la VM.
 4. Levantar la app con `docker compose`.
 5. Dejar Caddy delante para HTTPS automatico.
+
+## Google Cloud Free
+
+Si Oracle no tiene capacidad, hay una alternativa gratis mas realista para esta app:
+
+- `1` VM `e2-micro` gratis en `us-central1`, `us-east1` o `us-west1`
+- `30 GB` de disco persistente estandar
+
+Ficheros:
+
+- `deploy/gcp/Caddyfile.example`
+- `deploy/gcp/feb-analytics.service.example`
+- `deploy/gcp/README.md`
+
+En esta variante no usamos Docker para ahorrar RAM.

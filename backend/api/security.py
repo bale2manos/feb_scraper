@@ -27,6 +27,8 @@ SESSION_VERSION = 1
 class AppSettings:
     app_env: str
     storage_root: Path
+    app_storage_mode: str
+    report_storage_mode: str
     session_secret: str
     admin_password_hash: str
     session_ttl_hours: int
@@ -34,6 +36,10 @@ class AppSettings:
     auth_enabled: bool
     secure_cookies: bool
     frontend_dist_dir: Path
+    sqlite_bucket: str = ""
+    sqlite_object: str = "snapshots/feb.sqlite"
+    sqlite_local_path: Path | None = None
+    sqlite_snapshot_version: str = ""
     login_rate_limit: int = 5
     login_rate_window_seconds: int = 300
     report_rate_limit: int = 20
@@ -46,6 +52,10 @@ class AppSettings:
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def uses_gcs_snapshot(self) -> bool:
+        return self.app_storage_mode == "gcs_snapshot"
 
 
 @dataclass(slots=True)
@@ -75,6 +85,8 @@ class FixedWindowRateLimiter:
 def load_app_settings() -> AppSettings:
     app_env = str(os.getenv("APP_ENV", "development") or "development").strip().lower()
     storage_root = Path(os.getenv("APP_STORAGE_ROOT", Path(__file__).resolve().parents[2])).resolve()
+    app_storage_mode = str(os.getenv("APP_STORAGE_MODE", "local") or "local").strip().lower()
+    report_storage_mode = str(os.getenv("REPORT_STORAGE_MODE", "local") or "local").strip().lower()
     session_secret = str(os.getenv("SESSION_SECRET", "")).strip()
     admin_password_hash = str(os.getenv("ADMIN_PASSWORD_HASH", "")).strip()
     session_ttl_hours = _coerce_int(os.getenv("SESSION_TTL_HOURS"), 12, minimum=1, maximum=168)
@@ -83,13 +95,21 @@ def load_app_settings() -> AppSettings:
         for origin in str(os.getenv("ALLOWED_ORIGINS", "")).split(",")
         if origin.strip()
     )
+    sqlite_bucket = str(os.getenv("SQLITE_BUCKET", "")).strip()
+    sqlite_object = str(os.getenv("SQLITE_OBJECT", "snapshots/feb.sqlite") or "snapshots/feb.sqlite").strip()
+    sqlite_local_path = Path(os.getenv("SQLITE_LOCAL_PATH", str(storage_root / "data" / "feb.sqlite"))).resolve()
+    sqlite_snapshot_version = str(os.getenv("SQLITE_SNAPSHOT_VERSION", "")).strip()
     auth_enabled = bool(session_secret and admin_password_hash)
     if app_env == "production" and not auth_enabled:
         raise RuntimeError("En produccion debes definir SESSION_SECRET y ADMIN_PASSWORD_HASH.")
+    if app_storage_mode == "gcs_snapshot" and (not sqlite_bucket or not sqlite_object):
+        raise RuntimeError("Con APP_STORAGE_MODE=gcs_snapshot debes definir SQLITE_BUCKET y SQLITE_OBJECT.")
 
     return AppSettings(
         app_env=app_env,
         storage_root=storage_root,
+        app_storage_mode=app_storage_mode,
+        report_storage_mode=report_storage_mode,
         session_secret=session_secret,
         admin_password_hash=admin_password_hash,
         session_ttl_hours=session_ttl_hours,
@@ -97,6 +117,10 @@ def load_app_settings() -> AppSettings:
         auth_enabled=auth_enabled,
         secure_cookies=app_env == "production",
         frontend_dist_dir=Path(__file__).resolve().parents[2] / "frontend" / "dist",
+        sqlite_bucket=sqlite_bucket,
+        sqlite_object=sqlite_object,
+        sqlite_local_path=sqlite_local_path,
+        sqlite_snapshot_version=sqlite_snapshot_version,
     )
 
 

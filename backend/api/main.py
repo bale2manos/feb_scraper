@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .cloud_runtime import StorageClientFactory, prepare_runtime_storage
 from .security import (
     AppSettings,
     FixedWindowRateLimiter,
@@ -66,7 +67,12 @@ class PhaseReportRequest(BaseModel):
     minShots: int = 20
 
 
-def create_app(service: AnalyticsService | None = None, settings: AppSettings | None = None) -> FastAPI:
+def create_app(
+    service: AnalyticsService | None = None,
+    settings: AppSettings | None = None,
+    *,
+    storage_client_factory: StorageClientFactory | None = None,
+) -> FastAPI:
     resolved_settings = settings or load_app_settings()
     app = FastAPI(
         title="FEB Analytics API",
@@ -84,7 +90,11 @@ def create_app(service: AnalyticsService | None = None, settings: AppSettings | 
             allow_headers=["Authorization", "Content-Type"],
         )
 
-    app.state.analytics_service = service or AnalyticsService()
+    sqlite_runtime_path = None
+    if service is None:
+        sqlite_runtime_path = prepare_runtime_storage(resolved_settings, storage_client_factory=storage_client_factory)
+
+    app.state.analytics_service = service or AnalyticsService(sqlite_runtime_path or resolved_settings.sqlite_local_path)
     app.state.settings = resolved_settings
     app.state.login_rate_limiter = FixedWindowRateLimiter()
     app.state.report_rate_limiter = FixedWindowRateLimiter()

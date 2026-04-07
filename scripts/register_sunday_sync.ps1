@@ -35,7 +35,7 @@ Register-ScheduledTask `
     -Action $action `
     -Trigger $trigger `
     -Settings $settings `
-    -Description "Sync FEB data on Sunday night and optionally publish to GitHub." `
+    -Description "Sync FEB data on Sunday night and optionally publish to GitHub and Cloud Run." `
     -Force | Out-Null
 
 $xml = Export-ScheduledTask -TaskName $TaskName

@@ -99,3 +99,29 @@ Ficheros:
 - `deploy/gcp/README.md`
 
 En esta variante no usamos Docker para ahorrar RAM.
+
+## Cloud Run read-only con snapshot semanal
+
+Si quieres priorizar coste minimo sin migrar la base de datos, el repo incluye una variante read-only para Cloud Run:
+
+- la app descarga una snapshot de `feb.sqlite` desde Google Cloud Storage al arrancar
+- la nube nunca hace scraping ni escribe datos FEB
+- el mismo script dominical puede subir la snapshot al terminar el sync local
+- los informes cloud son efimeros
+
+Ficheros:
+
+- `deploy/cloudrun/README.md`
+- `scripts/cloud_publish_config.example.json`
+- `scripts/sync_and_publish.py`
+
+Variables de entorno clave:
+
+- `APP_ENV=production`
+- `APP_STORAGE_ROOT=/tmp`
+- `APP_STORAGE_MODE=gcs_snapshot`
+- `REPORT_STORAGE_MODE=ephemeral`
+- `SQLITE_BUCKET=<bucket>`
+- `SQLITE_OBJECT=snapshots/feb.sqlite`
+- `SQLITE_LOCAL_PATH=/tmp/feb.sqlite`
+- `SQLITE_SNAPSHOT_VERSION=<version>`

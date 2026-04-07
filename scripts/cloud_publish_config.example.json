@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "GCP_PROJECT_ID": "tu-proyecto-gcp",
+  "GCP_REGION": "us-central1",
+  "CLOUD_RUN_SERVICE": "feb-analytics",
+  "GCS_BUCKET": "tu-bucket-feb-snapshots",
+  "GCS_OBJECT": "snapshots/feb.sqlite",
+  "GOOGLE_APPLICATION_CREDENTIALS": "C:/ruta/a/service-account.json"
+}

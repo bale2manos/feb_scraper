@@ -4,6 +4,7 @@ data/sync_runtime_status.json
 data/sync_runtime.lock
 data/feb.sqlite-wal
 data/feb.sqlite-shm
+data/cloud_publish_config.json
 
 
 # Byte-compiled / optimized / DLL files

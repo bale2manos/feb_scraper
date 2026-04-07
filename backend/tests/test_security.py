@@ -24,6 +24,8 @@ def _settings(
     return AppSettings(
         app_env="production" if production else "development",
         storage_root=Path(tempfile.gettempdir()),
+        app_storage_mode="local",
+        report_storage_mode="local",
         session_secret="test-session-secret" if auth_enabled else "",
         admin_password_hash=PasswordHasher().hash(PASSWORD) if auth_enabled else "",
         session_ttl_hours=12,
@@ -31,6 +33,10 @@ def _settings(
         auth_enabled=auth_enabled,
         secure_cookies=production,
         frontend_dist_dir=frontend_dist_dir or Path(tempfile.gettempdir()) / "missing-frontend-dist",
+        sqlite_bucket="",
+        sqlite_object="snapshots/feb.sqlite",
+        sqlite_local_path=Path(tempfile.gettempdir()) / "feb.sqlite",
+        sqlite_snapshot_version="",
     )
 
 

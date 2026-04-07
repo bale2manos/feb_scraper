@@ -122,10 +122,21 @@ MAX_WORKERS_BIO = 3  # Threads para biografías de jugadores (reducido para esta
 # Directorios base
 PROJECT_ROOT = Path(__file__).resolve().parent
 APP_STORAGE_ROOT = Path(os.getenv("APP_STORAGE_ROOT", str(PROJECT_ROOT))).resolve()
+APP_STORAGE_MODE_ENV_VAR = "APP_STORAGE_MODE"
+APP_STORAGE_MODE_LOCAL = "local"
+APP_STORAGE_MODE_GCS_SNAPSHOT = "gcs_snapshot"
+APP_STORAGE_MODE = str(os.getenv(APP_STORAGE_MODE_ENV_VAR, APP_STORAGE_MODE_LOCAL) or APP_STORAGE_MODE_LOCAL).strip().lower()
 
 # Directorio base de datos
 DATA_DIR = APP_STORAGE_ROOT / "data"
-SQLITE_DB_FILE = DATA_DIR / "feb.sqlite"
+SQLITE_LOCAL_PATH_ENV_VAR = "SQLITE_LOCAL_PATH"
+SQLITE_DB_FILE = Path(os.getenv(SQLITE_LOCAL_PATH_ENV_VAR, str(DATA_DIR / "feb.sqlite"))).resolve()
+
+# Almacenamiento de informes
+REPORT_STORAGE_MODE_ENV_VAR = "REPORT_STORAGE_MODE"
+REPORT_STORAGE_MODE_LOCAL = "local"
+REPORT_STORAGE_MODE_EPHEMERAL = "ephemeral"
+REPORT_STORAGE_MODE = str(os.getenv(REPORT_STORAGE_MODE_ENV_VAR, REPORT_STORAGE_MODE_LOCAL) or REPORT_STORAGE_MODE_LOCAL).strip().lower()
 
 # Modos de la app unificada
 APP_MODE_ENV_VAR = "FEB_APP_MODE"

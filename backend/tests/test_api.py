@@ -11,6 +11,16 @@ class FakeAnalyticsService:
     def __init__(self) -> None:
         self.calls: dict[str, dict] = {}
 
+    def get_database_summary(self):
+        self.calls["database_summary"] = {}
+        return {
+            "metrics": {"scopes": 2, "jornadas": 4, "catalogedGames": 40, "withData": 35, "pending": 3, "failed": 2},
+            "scopeSummary": [],
+            "jornadaSummary": [],
+            "autoSyncTargets": [],
+            "autoSync": {"configPath": "data/auto_sync_targets.json", "revalidateWindow": 2, "publish": True},
+        }
+
     def get_meta(self, **kwargs):
         self.calls["meta"] = kwargs
         return {
@@ -61,6 +71,91 @@ class FakeAnalyticsService:
             "teams": [],
         }
 
+    def get_player_similarity(self, **kwargs):
+        self.calls["player_similarity"] = kwargs
+        return {
+            "scope": kwargs,
+            "target": {
+                "playerKey": kwargs.get("target_player_key"),
+                "name": "Jugador A",
+                "gamesPlayed": 12,
+                "minutes": 24.5,
+                "points": 13.2,
+                "rebounds": 4.8,
+                "assists": 3.1,
+                "turnovers": 1.9,
+                "usg": 22.4,
+                "efg": 53.7,
+                "astTo": 1.63,
+            },
+            "filters": {"minGames": kwargs.get("min_games"), "minMinutes": kwargs.get("min_minutes")},
+            "featureWeights": {"PLAYS": 0.14},
+            "candidates": [
+                {
+                    "playerKey": "p2",
+                    "name": "Jugador B",
+                    "team": "Team B",
+                    "similarityScore": 88.1,
+                    "reasons": ["Puntos: 14.0 vs 13.5"],
+                    "differences": ["Mas rebotes: 7.0 vs 4.0"],
+                }
+            ],
+            "players": [],
+        }
+
+    def generate_player_report(self, **kwargs):
+        self.calls["player_report"] = kwargs
+        return {
+            "scope": kwargs,
+            "selectedPlayerKey": kwargs.get("player_key"),
+            "report": {
+                "kind": "player",
+                "fileName": "player.png",
+                "fileUrl": "/reports/files/player/player.png",
+                "previewUrl": "/reports/files/player/player.png",
+                "mimeType": "image/png",
+                "sizeBytes": 123,
+                "generatedAt": "2026-04-06T10:00:00",
+            },
+        }
+
+    def generate_team_report(self, **kwargs):
+        self.calls["team_report"] = kwargs
+        return {
+            "scope": kwargs,
+            "selectedTeam": kwargs.get("team"),
+            "selectedPlayerKeys": kwargs.get("player_keys") or [],
+            "report": {
+                "kind": "team",
+                "fileName": "team.pdf",
+                "fileUrl": "/reports/files/team/team.pdf",
+                "previewUrl": "/reports/files/team/team.pdf",
+                "mimeType": "application/pdf",
+                "sizeBytes": 456,
+                "generatedAt": "2026-04-06T10:00:00",
+            },
+        }
+
+    def generate_phase_report(self, **kwargs):
+        self.calls["phase_report"] = kwargs
+        return {
+            "scope": kwargs,
+            "selectedTeams": kwargs.get("teams") or [],
+            "report": {
+                "kind": "phase",
+                "fileName": "phase.pdf",
+                "fileUrl": "/reports/files/phase/phase.pdf",
+                "previewUrl": "/reports/files/phase/phase.pdf",
+                "mimeType": "application/pdf",
+                "sizeBytes": 789,
+                "generatedAt": "2026-04-06T10:00:00",
+            },
+        }
+
+    def get_report_file_path(self, kind, filename):
+        self.calls["report_file"] = {"kind": kind, "filename": filename}
+        return None
+
 
 class ApiTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -110,6 +205,82 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["selectedTeam"], "Team A")
+
+    def test_database_summary_endpoint_returns_metrics(self) -> None:
+        response = self.client.get("/database/summary")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["metrics"]["catalogedGames"], 40)
+
+    def test_similarity_endpoint_accepts_target_and_filters(self) -> None:
+        response = self.client.get(
+            "/similarity/player",
+            params={
+                "season": "25_26",
+                "league": "Primera FEB",
+                "target_player_key": "p1",
+                "min_games": 7,
+                "min_minutes": 15,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.service.calls["player_similarity"]["target_player_key"], "p1")
+        self.assertEqual(self.service.calls["player_similarity"]["min_games"], 7)
+        self.assertEqual(response.json()["candidates"][0]["playerKey"], "p2")
+
+    def test_player_report_endpoint_accepts_json_body(self) -> None:
+        response = self.client.post(
+            "/reports/player",
+            json={
+                "season": "25_26",
+                "league": "Primera FEB",
+                "phases": ["Liga"],
+                "jornadas": [1, 2],
+                "team": "Team A",
+                "playerKey": "p1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.service.calls["player_report"]["player_key"], "p1")
+        self.assertEqual(response.json()["report"]["kind"], "player")
+
+    def test_team_report_endpoint_accepts_player_keys_and_filters(self) -> None:
+        response = self.client.post(
+            "/reports/team",
+            json={
+                "season": "25_26",
+                "league": "Primera FEB",
+                "team": "Team A",
+                "playerKeys": ["p1", "p2"],
+                "rivalTeam": "Team B",
+                "homeAway": "Local",
+                "h2hHomeAway": "Visitante",
+                "minGames": 4,
+                "minMinutes": 80,
+                "minShots": 30,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.service.calls["team_report"]["player_keys"], ["p1", "p2"])
+        self.assertEqual(self.service.calls["team_report"]["home_away"], "Local")
+
+    def test_phase_report_endpoint_accepts_team_list(self) -> None:
+        response = self.client.post(
+            "/reports/phase",
+            json={
+                "season": "25_26",
+                "league": "Primera FEB",
+                "phases": ["Liga"],
+                "teams": ["Team A", "Team B"],
+                "minGames": 3,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.service.calls["phase_report"]["teams"], ["Team A", "Team B"])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: feb-analytics
+    env: docker
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_STORAGE_ROOT
+        value: /var/data
+      - key: SESSION_TTL_HOURS
+        value: "12"
+      - key: SESSION_SECRET
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: ""
+    disk:
+      name: feb-analytics-data
+      mountPath: /var/data
+      sizeGB: 1

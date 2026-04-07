@@ -1,96 +1,162 @@
-import { useLocalStorageState } from "./hooks";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+
+import { AuthProvider, useAuth } from "./auth";
+import { LoginPage } from "./components/LoginPage";
+import { ReportCenter } from "./components/ReportCenter";
+import { DatabasePage } from "./pages/DatabasePage";
 import { DependencyPage } from "./pages/DependencyPage";
 import { GmPage } from "./pages/GmPage";
+import { PhaseReportPage } from "./pages/PhaseReportPage";
+import { PlayerReportPage } from "./pages/PlayerReportPage";
+import { SimilarityPage } from "./pages/SimilarityPage";
+import { TeamReportPage } from "./pages/TeamReportPage";
 import { TrendsPage } from "./pages/TrendsPage";
+import { ReportsProvider } from "./reports";
+import { ScopeProvider, useScope } from "./scope";
 
-type PageKey = "gm" | "dependency" | "trends";
+type AppPage = {
+  path: string;
+  title: string;
+  subtitle: string;
+  element: React.ReactNode;
+};
 
-const APP_PAGES: { key: PageKey; title: string; tagline: string; badge: string }[] = [
-  {
-    key: "gm",
-    title: "GM",
-    tagline: "Mercado, lectura rapida y filtros de scouting con una interfaz mucho mas limpia.",
-    badge: "Base"
-  },
-  {
-    key: "dependency",
-    title: "Dependencia",
-    tagline: "Riesgo estructural, jugadores criticos y diagnostico visual del equipo.",
-    badge: "Riesgo"
-  },
-  {
-    key: "trends",
-    title: "Tendencias",
-    tagline: "Evolucion reciente de jugadores y equipos con mejor lectura comparativa.",
-    badge: "Forma"
-  }
-];
+function AppRoutes() {
+  const { scope, setScope } = useScope();
+  const { logout, isSubmitting } = useAuth();
 
-export default function App() {
-  const [page, setPage] = useLocalStorageState<PageKey>("react-active-page", "gm");
-  const activePage = APP_PAGES.find((item) => item.key === page) ?? APP_PAGES[0];
+  const pages: AppPage[] = [
+    { path: "/gm", title: "GM", subtitle: "Mercado y scouting", element: <GmPage scope={scope} setScope={setScope} /> },
+    { path: "/similares", title: "Similares", subtitle: "Reemplazos y perfiles parecidos", element: <SimilarityPage scope={scope} setScope={setScope} /> },
+    {
+      path: "/dependencia",
+      title: "Dependencia",
+      subtitle: "Riesgo por equipo y vista general",
+      element: <DependencyPage scope={scope} setScope={setScope} />
+    },
+    { path: "/tendencias", title: "Tendencias", subtitle: "Forma reciente y comparativas", element: <TrendsPage scope={scope} setScope={setScope} /> },
+    { path: "/jugador", title: "Jugador", subtitle: "Informe PNG", element: <PlayerReportPage scope={scope} setScope={setScope} /> },
+    { path: "/equipo", title: "Equipo", subtitle: "Informe PDF", element: <TeamReportPage scope={scope} setScope={setScope} /> },
+    { path: "/fase", title: "Fase", subtitle: "Informe comparativo PDF", element: <PhaseReportPage scope={scope} setScope={setScope} /> },
+    { path: "/base-datos", title: "Base de datos", subtitle: "Cobertura y autosync", element: <DatabasePage /> }
+  ];
+
+  const location = useLocation();
+  const activePage = pages.find((page) => page.path === location.pathname) ?? pages[0];
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-block">
-          <span className="eyebrow eyebrow-dark">Nueva capa web</span>
-          <h1>FEB Analytics</h1>
-          <p className="sidebar-copy">
-            Mismas ideas de producto, pero implementadas con una navegacion mas comoda, mas rapidez percibida y mejor lectura en escritorio y movil.
-          </p>
-        </div>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <div className="topbar-brand">
+            <div className="brand-mark">FEB</div>
+            <div className="topbar-copy">
+              <span className="eyebrow">FEB Analytics</span>
+              <strong>{activePage.title}</strong>
+              <p>{activePage.subtitle}</p>
+            </div>
+          </div>
 
-        <nav className="nav-stack">
-          {APP_PAGES.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              aria-label={item.title}
-              className={page === item.key ? "nav-button is-active" : "nav-button"}
-              onClick={() => setPage(item.key)}
-            >
-              <span className="nav-button-badge">{item.badge}</span>
-              <strong>{item.title}</strong>
-              <span>{item.tagline}</span>
+          <nav className="topnav-shell" aria-label="Secciones">
+            <div className="topnav">
+              {pages.map((page) => (
+                <NavLink
+                  key={page.path}
+                  to={page.path}
+                  aria-label={page.title}
+                  className={({ isActive }) => (isActive ? "topnav-button is-active" : "topnav-button")}
+                >
+                  {page.title}
+                </NavLink>
+              ))}
+            </div>
+          </nav>
+
+          <div className="topbar-actions">
+            <button type="button" className="ghost-button" onClick={() => void logout()} disabled={isSubmitting}>
+              {isSubmitting ? "Cerrando..." : "Salir"}
             </button>
-          ))}
-        </nav>
-
-        <div className="sidebar-note">
-          <span className="scope-badge">Responsive</span>
-          <span className="scope-badge">Mas visual</span>
-          <span className="scope-badge">Mas util en reunion</span>
+          </div>
         </div>
-      </aside>
+      </header>
 
       <main className="content-shell">
-        <header className="content-hero panel">
-          <div>
-            <span className="eyebrow">Workspace activo</span>
-            <h2>{activePage.title}</h2>
-            <p className="panel-copy">{activePage.tagline}</p>
-          </div>
-          <div className="hero-stats">
-            <div className="hero-stat">
-              <span>Navegacion</span>
-              <strong>Separada por vista</strong>
-            </div>
-            <div className="hero-stat">
-              <span>Lectura</span>
-              <strong>Mas limpia y rapida</strong>
-            </div>
-            <div className="hero-stat">
-              <span>Objetivo</span>
-              <strong>Mas comoda para uso real</strong>
-            </div>
-          </div>
-        </header>
-
-        {page === "gm" ? <GmPage /> : null}
-        {page === "dependency" ? <DependencyPage /> : null}
-        {page === "trends" ? <TrendsPage /> : null}
+        <Routes>
+          <Route path="/" element={<Navigate to="/gm" replace />} />
+          {pages.map((page) => (
+            <Route key={page.path} path={page.path} element={page.element} />
+          ))}
+          <Route path="*" element={<Navigate to="/gm" replace />} />
+        </Routes>
       </main>
+
+      <ReportCenter />
     </div>
+  );
+}
+
+function AppContent() {
+  const { session, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <main className="login-shell">
+        <section className="login-card">
+          <div className="login-copy">
+            <span className="eyebrow">FEB Analytics</span>
+            <h1>Cargando</h1>
+            <p>Estamos comprobando tu sesion.</p>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (session.authRequired && !session.authenticated) {
+    return <LoginPage />;
+  }
+
+  return (
+    <ScopeProvider>
+      <ReportsProvider>
+        <AppRoutes />
+      </ReportsProvider>
+    </ScopeProvider>
+  );
+}
+
+export default function App() {
+  const isTestMode = import.meta.env.MODE === "test";
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 120_000,
+            gcTime: isTestMode ? 0 : 10 * 60_000,
+            refetchOnWindowFocus: false
+          }
+        }
+      })
+  );
+
+  useEffect(
+    () => () => {
+      queryClient.cancelQueries();
+      queryClient.clear();
+    },
+    [queryClient]
+  );
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }

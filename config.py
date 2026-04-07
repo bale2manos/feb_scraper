@@ -7,6 +7,7 @@ Este archivo contiene todas las constantes del proyecto para facilitar
 su modificación y mantenimiento centralizados.
 """
 
+import os
 from pathlib import Path
 
 # =============================================================================
@@ -118,8 +119,12 @@ MAX_WORKERS_BIO = 3  # Threads para biografías de jugadores (reducido para esta
 # RUTAS DE ARCHIVOS Y DIRECTORIOS
 # =============================================================================
 
+# Directorios base
+PROJECT_ROOT = Path(__file__).resolve().parent
+APP_STORAGE_ROOT = Path(os.getenv("APP_STORAGE_ROOT", str(PROJECT_ROOT))).resolve()
+
 # Directorio base de datos
-DATA_DIR = Path("./data")
+DATA_DIR = APP_STORAGE_ROOT / "data"
 SQLITE_DB_FILE = DATA_DIR / "feb.sqlite"
 
 # Modos de la app unificada
@@ -176,10 +181,10 @@ OUTPUT_PHASES_FILE = DATA_DIR / "all_phases_boxscores.xlsx"
 OUTPUT_RESULTADOS_FILE = DATA_DIR / "resultados_completos.csv"
 
 # Directorios de recursos
-IMAGES_DIR = Path("./images")
-FONTS_DIR = Path("./fonts")
-OUTPUT_DIR = Path("./output")
-LIB_DIR = Path("./lib")
+IMAGES_DIR = PROJECT_ROOT / "images"
+FONTS_DIR = PROJECT_ROOT / "fonts"
+OUTPUT_DIR = APP_STORAGE_ROOT / "output"
+LIB_DIR = PROJECT_ROOT / "lib"
 
 # Subdirectorios de imágenes
 CLUBS_DIR = IMAGES_DIR / "clubs"
@@ -207,6 +212,10 @@ ERROR_LOG = "errors.log"
 SCRAPER_LOG = "scraper.log"
 CLUTCH_SEASON_LOG = "clutch_season.log"
 BIO_SCRAPE_ERRORS_LOG = "bio_scrape_errors.log"
+
+# Crear directorios persistentes necesarios
+for _directory in (DATA_DIR, OUTPUT_DIR, REPORTS_DIR, PLAYER_REPORTS_DIR, TEAM_REPORTS_DIR, PHASE_REPORTS_DIR):
+    _directory.mkdir(parents=True, exist_ok=True)
 
 # =============================================================================
 # CONFIGURACIÓN DE FILTROS Y UMBRALES

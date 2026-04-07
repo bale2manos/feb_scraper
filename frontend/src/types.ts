@@ -5,6 +5,12 @@ export type ScopeState = {
   jornadas: number[];
 };
 
+export type AuthSessionResponse = {
+  authenticated: boolean;
+  authRequired: boolean;
+  ttlHours: number;
+};
+
 export type ScopeMeta = {
   seasons: string[];
   leagues: string[];
@@ -92,4 +98,117 @@ export type TrendsResponse = {
   chartRows: Record<string, unknown>[];
   players?: PlayerOption[];
   teams?: TeamOption[];
+};
+
+export type SimilarityCandidate = {
+  playerKey: string;
+  label: string;
+  name: string;
+  team: string;
+  image: string;
+  gamesPlayed: number;
+  minutes: number;
+  points: number;
+  rebounds: number;
+  assists: number;
+  usg: number;
+  similarityScore: number;
+  focus: string;
+  dependencyScore: number;
+  reasons: string[];
+  differences: string[];
+};
+
+export type SimilarityResponse = {
+  scope: ScopeState;
+  target: {
+    playerKey: string;
+    label: string;
+    name: string;
+    team: string;
+    image: string;
+    gamesPlayed: number;
+    minutes: number;
+    points: number;
+    rebounds: number;
+    assists: number;
+    turnovers: number;
+    usg: number;
+    efg: number;
+    astTo: number;
+    focus: string;
+    dependencyScore: number;
+  } | null;
+  filters: {
+    minGames: number;
+    minMinutes: number;
+  };
+  featureWeights: Record<string, number>;
+  candidates: SimilarityCandidate[];
+  players: PlayerOption[];
+};
+
+export type DatabaseSummaryResponse = {
+  metrics: {
+    scopes: number;
+    jornadas: number;
+    catalogedGames: number;
+    withData: number;
+    pending: number;
+    failed: number;
+  };
+  scopeSummary: Record<string, unknown>[];
+  jornadaSummary: Record<string, unknown>[];
+  autoSyncTargets: Record<string, unknown>[];
+  autoSync: {
+    configPath: string;
+    revalidateWindow: number;
+    publish: boolean;
+  };
+};
+
+export type ReportFile = {
+  kind: "player" | "team" | "phase";
+  fileName: string;
+  fileUrl: string;
+  previewUrl: string;
+  mimeType: string;
+  sizeBytes: number;
+  generatedAt: string;
+};
+
+export type PlayerReportResponse = {
+  scope: ScopeState;
+  selectedTeam: string | null;
+  selectedPlayerKey: string | null;
+  playerName: string | null;
+  playerLabel: string | null;
+  report: ReportFile | null;
+};
+
+export type TeamReportResponse = {
+  scope: ScopeState;
+  selectedTeam: string | null;
+  selectedPlayerKeys: string[];
+  selectedPlayerNames: string[];
+  rivalTeam: string | null;
+  filters: {
+    homeAway: string;
+    h2hHomeAway: string;
+    minGames: number;
+    minMinutes: number;
+    minShots: number;
+  };
+  report: ReportFile | null;
+};
+
+export type PhaseReportResponse = {
+  scope: ScopeState;
+  selectedTeams: string[];
+  filters: {
+    minGames: number;
+    minMinutes: number;
+    minShots: number;
+  };
+  report: ReportFile | null;
 };

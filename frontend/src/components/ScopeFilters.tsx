@@ -40,8 +40,8 @@ export function ScopeFilters({ scope, meta, onChange }: ScopeFiltersProps) {
       <div className="scope-header">
         <div>
           <span className="eyebrow">Filtros base</span>
-          <h2>Scope</h2>
-          <p className="panel-copy">Misma idea analitica, pero con una navegacion mas rapida y visual para moverse por temporada, liga y tramos de competicion.</p>
+          <h2>Filtros</h2>
+          <p className="panel-copy">Este filtro se comparte entre las vistas.</p>
         </div>
         <div className="scope-summary">
           <span className="scope-badge">{scope.season || "Sin temporada"}</span>
@@ -50,6 +50,7 @@ export function ScopeFilters({ scope, meta, onChange }: ScopeFiltersProps) {
           <span className="scope-badge">{scope.jornadas.length} jornadas</span>
         </div>
       </div>
+
       <div className="form-grid scope-primary-grid">
         <label>
           Temporada
@@ -77,7 +78,7 @@ export function ScopeFilters({ scope, meta, onChange }: ScopeFiltersProps) {
         <div className="scope-cluster-header">
           <div>
             <h3>Fases</h3>
-            <p className="panel-copy">Activa una o varias sin pelearte con un selector multiple clasico.</p>
+            <p className="panel-copy">Selecciona una o varias fases.</p>
           </div>
           <div className="scope-actions">
             <button type="button" className="ghost-button" onClick={() => updateField("phases", meta.phases)}>
@@ -112,7 +113,7 @@ export function ScopeFilters({ scope, meta, onChange }: ScopeFiltersProps) {
         <div className="scope-cluster-header">
           <div>
             <h3>Jornadas</h3>
-            <p className="panel-copy">Seleccion rapida por chips, mas comoda en escritorio y bastante mejor en movil.</p>
+            <p className="panel-copy">Selecciona las jornadas a incluir.</p>
           </div>
           <div className="scope-actions">
             <button type="button" className="ghost-button" onClick={() => updateField("jornadas", meta.jornadas)}>

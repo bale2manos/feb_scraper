@@ -302,6 +302,35 @@ input,
   padding-top: 4px;
 }
 
+.report-budget-panel {
+  gap: 14px;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(249, 115, 22, 0.08)),
+    rgba(255, 255, 255, 0.92);
+}
+
+.report-budget-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.report-budget-header h3 {
+  margin: 0;
+}
+
+.report-budget-note {
+  margin: 0;
+  color: #41546d;
+  font-size: 0.95rem;
+}
+
+.warning-badge {
+  background: rgba(217, 119, 6, 0.12);
+  color: #9a3412;
+}
+
 .trend-control-block {
   display: grid;
   gap: 16px;

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from backend.api.main import create_app
+from backend.api.security import AppSettings
 
 
 class FakeAnalyticsService:
@@ -160,7 +163,7 @@ class FakeAnalyticsService:
 class ApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.service = FakeAnalyticsService()
-        self.client = TestClient(create_app(self.service))
+        self.client = TestClient(create_app(self.service, settings=_settings()))
 
     def test_meta_endpoint_parses_repeated_filters(self) -> None:
         response = self.client.get(
@@ -281,6 +284,39 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.service.calls["phase_report"]["teams"], ["Team A", "Team B"])
+
+    def test_report_budget_counts_successful_report_generation(self) -> None:
+        report_response = self.client.post(
+            "/reports/player",
+            json={
+                "season": "25_26",
+                "league": "Primera FEB",
+                "playerKey": "p1",
+            },
+        )
+        budget_response = self.client.get("/reports/budget")
+
+        self.assertEqual(report_response.status_code, 200)
+        self.assertEqual(budget_response.status_code, 200)
+        self.assertEqual(budget_response.json()["counts"]["player"], 1)
+
+
+def _settings() -> AppSettings:
+    return AppSettings(
+        app_env="development",
+        storage_root=Path(tempfile.mkdtemp()),
+        app_storage_mode="local",
+        report_storage_mode="local",
+        session_secret="",
+        admin_password_hash="",
+        session_ttl_hours=12,
+        allowed_origins=(),
+        auth_enabled=False,
+        secure_cookies=False,
+        frontend_dist_dir=Path(tempfile.gettempdir()) / "missing-frontend-dist",
+        report_budget_monthly_tokens=1_000,
+        report_budget_seed_tokens={"player": 100.0, "team": 300.0, "phase": 200.0},
+    )
 
 
 if __name__ == "__main__":

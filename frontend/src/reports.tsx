@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 import type { PhaseReportResponse, PlayerReportResponse, ReportFile, TeamReportResponse } from "./types";
@@ -76,6 +77,7 @@ export function buildScopeTaskKey(
 }
 
 export function ReportsProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [jobs, setJobs] = useState<ReportJob[]>([]);
   const [previewState, setPreviewState] = useState<ReportPreviewState | null>(null);
 
@@ -108,6 +110,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
         result
       };
       setJobs((current) => upsertJob(current, completedJob));
+      void queryClient.invalidateQueries({ queryKey: ["report-budget"] });
       return result;
     } catch (error) {
       const failedJob: ReportJob = {
@@ -119,7 +122,7 @@ export function ReportsProvider({ children }: { children: React.ReactNode }) {
       setJobs((current) => upsertJob(current, failedJob));
       throw error;
     }
-  }, []);
+  }, [queryClient]);
 
   const getLatestJob = useCallback(
     (taskKey: string) => jobs.find((job) => job.taskKey === taskKey) ?? null,

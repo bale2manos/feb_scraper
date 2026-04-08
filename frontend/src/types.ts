@@ -212,3 +212,31 @@ export type PhaseReportResponse = {
   };
   report: ReportFile | null;
 };
+
+export type ReportBudgetResponse = {
+  month: string;
+  monthIso: string;
+  monthlyTokens: number;
+  consumedTokens: number;
+  remainingTokens: number;
+  percentRemaining: number;
+  counts: {
+    player: number;
+    team: number;
+    phase: number;
+  };
+  averageTokens: {
+    player: number;
+    team: number;
+    phase: number;
+  };
+  estimatedReportsRemaining: {
+    player: number;
+    team: number;
+    phase: number;
+  };
+  trackingMode: string;
+  trackingEnabled: boolean;
+  warning: string | null;
+  lastUpdated: string | null;
+};

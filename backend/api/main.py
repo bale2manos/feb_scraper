@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -10,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .cloud_runtime import StorageClientFactory, prepare_runtime_storage
+from .report_budget import ReportBudgetTracker
 from .security import (
     AppSettings,
     FixedWindowRateLimiter,
@@ -96,6 +98,7 @@ def create_app(
 
     app.state.analytics_service = service or AnalyticsService(sqlite_runtime_path or resolved_settings.sqlite_local_path)
     app.state.settings = resolved_settings
+    app.state.report_budget_tracker = ReportBudgetTracker(resolved_settings, storage_client_factory=storage_client_factory)
     app.state.login_rate_limiter = FixedWindowRateLimiter()
     app.state.report_rate_limiter = FixedWindowRateLimiter()
 
@@ -110,6 +113,9 @@ def create_app(
 
     def get_settings() -> AppSettings:
         return app.state.settings
+
+    def get_report_budget_tracker() -> ReportBudgetTracker:
+        return app.state.report_budget_tracker
 
     def get_current_session(
         request: Request,
@@ -308,9 +314,11 @@ def create_app(
         payload: Annotated[PlayerReportRequest, Body()],
         _: SessionData = Depends(enforce_report_rate_limit),
         service: AnalyticsService = Depends(get_service),
+        budget_tracker: ReportBudgetTracker = Depends(get_report_budget_tracker),
     ) -> dict:
         try:
-            return service.generate_player_report(
+            started_at = time.perf_counter()
+            result = service.generate_player_report(
                 season=payload.season,
                 league=payload.league,
                 phases=payload.phases,
@@ -318,6 +326,8 @@ def create_app(
                 team=payload.team,
                 player_key=payload.playerKey,
             )
+            _record_report_budget(budget_tracker, "player", time.perf_counter() - started_at)
+            return result
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -326,9 +336,11 @@ def create_app(
         payload: Annotated[TeamReportRequest, Body()],
         _: SessionData = Depends(enforce_report_rate_limit),
         service: AnalyticsService = Depends(get_service),
+        budget_tracker: ReportBudgetTracker = Depends(get_report_budget_tracker),
     ) -> dict:
         try:
-            return service.generate_team_report(
+            started_at = time.perf_counter()
+            result = service.generate_team_report(
                 season=payload.season,
                 league=payload.league,
                 phases=payload.phases,
@@ -342,6 +354,8 @@ def create_app(
                 min_minutes=payload.minMinutes,
                 min_shots=payload.minShots,
             )
+            _record_report_budget(budget_tracker, "team", time.perf_counter() - started_at)
+            return result
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -350,9 +364,11 @@ def create_app(
         payload: Annotated[PhaseReportRequest, Body()],
         _: SessionData = Depends(enforce_report_rate_limit),
         service: AnalyticsService = Depends(get_service),
+        budget_tracker: ReportBudgetTracker = Depends(get_report_budget_tracker),
     ) -> dict:
         try:
-            return service.generate_phase_report(
+            started_at = time.perf_counter()
+            result = service.generate_phase_report(
                 season=payload.season,
                 league=payload.league,
                 phases=payload.phases,
@@ -362,8 +378,17 @@ def create_app(
                 min_minutes=payload.minMinutes,
                 min_shots=payload.minShots,
             )
+            _record_report_budget(budget_tracker, "phase", time.perf_counter() - started_at)
+            return result
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/reports/budget")
+    def report_budget(
+        _: SessionData = Depends(get_current_session),
+        budget_tracker: ReportBudgetTracker = Depends(get_report_budget_tracker),
+    ) -> dict:
+        return budget_tracker.get_summary()
 
     @app.get("/reports/files/{kind}/{filename}")
     def report_file(
@@ -434,6 +459,14 @@ def _is_safe_static_candidate(candidate: Path, dist_dir: Path) -> bool:
         return candidate == dist_resolved or dist_resolved in candidate.parents
     except FileNotFoundError:
         return False
+
+
+def _record_report_budget(tracker: ReportBudgetTracker, kind: str, elapsed_seconds: float) -> None:
+    try:
+        tracker.record_report(kind, elapsed_seconds)
+    except Exception:
+        # El contador mensual nunca debe romper la generacion del informe.
+        return
 
 
 app = create_app()

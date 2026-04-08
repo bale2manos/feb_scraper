@@ -6,6 +6,7 @@ import type {
   GmResponse,
   PhaseReportResponse,
   PlayerReportResponse,
+  ReportBudgetResponse,
   SimilarityResponse,
   ScopeMeta,
   ScopeState,
@@ -313,4 +314,8 @@ export function generatePhaseReport(
     },
     init
   );
+}
+
+export function getReportBudget(init: RequestInit = {}) {
+  return requestJson<ReportBudgetResponse>("/reports/budget", {}, init);
 }

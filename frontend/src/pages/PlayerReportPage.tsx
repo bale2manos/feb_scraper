@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { generatePlayerReport } from "../api";
 import { MetricCard } from "../components/MetricCard";
+import { ReportBudgetPanel } from "../components/ReportBudgetPanel";
 import { ReportPreview } from "../components/ReportPreview";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchSelect } from "../components/SearchSelect";
@@ -147,6 +148,8 @@ export function PlayerReportPage({ scope, setScope }: ScopePageProps) {
                 <MetricCard label="Jugador" value={selectedPlayer?.name ?? "-"} />
                 <MetricCard label="Partidos en filtro" value={String(selectedPlayer?.gamesPlayed ?? 0)} />
               </div>
+
+              <ReportBudgetPanel focusKind="player" />
 
               {error ? <p className="error-text">{error}</p> : null}
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import gc
 import io
 import json
 import os
@@ -778,11 +779,11 @@ class AnalyticsService:
         player_key: str | None,
     ) -> dict[str, Any]:
         resolved_scope = self._resolve_scope(ScopeFilters(season=season, league=league, phases=phases, jornadas=jornadas))
-        bundle = self._load_bundle(resolved_scope, clone=True)
+        bundle = self._load_bundle(resolved_scope)
         if bundle.players_df.empty:
             raise ValueError("No hay jugadores disponibles para generar el informe.")
 
-        players_source = bundle.players_df.copy()
+        players_source = bundle.players_df
         selected_team = str(team).strip() if team else "Todos"
         if selected_team and selected_team != "Todos" and "EQUIPO" in players_source.columns:
             players_source = players_source[players_source["EQUIPO"].astype(str) == selected_team].copy()
@@ -801,17 +802,24 @@ class AnalyticsService:
         player_row = selectable_players[selectable_players["PLAYER_KEY"].astype(str) == str(selected_player_key)].iloc[0]
         player_name = str(player_row["JUGADOR"])
         label = _build_player_selection_label(player_row["JUGADOR"], player_row.get("EQUIPO"), player_row.get("DORSAL"))
-        path = Path(
-            _call_silently(
-                _get_player_report_fn(),
-                player_name,
-                output_dir=PLAYER_REPORTS_DIR,
-                overwrite=True,
-                data_df=bundle.players_df,
-                teams_df=bundle.teams_df,
-                clutch_df=bundle.clutch_df,
+        report_players_df = bundle.players_df.copy()
+        report_teams_df = bundle.teams_df.copy()
+        report_clutch_df = bundle.clutch_df.copy()
+        try:
+            path = Path(
+                _call_silently(
+                    _get_player_report_fn(),
+                    player_name,
+                    output_dir=PLAYER_REPORTS_DIR,
+                    overwrite=True,
+                    data_df=report_players_df,
+                    teams_df=report_teams_df,
+                    clutch_df=report_clutch_df,
+                )
             )
-        )
+        finally:
+            del report_players_df, report_teams_df, report_clutch_df
+            gc.collect()
 
         return {
             "scope": resolved_scope["selected"],
@@ -839,7 +847,7 @@ class AnalyticsService:
         min_shots: int,
     ) -> dict[str, Any]:
         resolved_scope = self._resolve_scope(ScopeFilters(season=season, league=league, phases=phases, jornadas=jornadas))
-        bundle = self._load_bundle(resolved_scope, clone=True)
+        bundle = self._load_bundle(resolved_scope)
         if bundle.players_df.empty or bundle.teams_df.empty:
             raise ValueError("No hay datos de equipo suficientes para generar el informe.")
 
@@ -869,23 +877,31 @@ class AnalyticsService:
         resolved_home_away = home_away if home_away in {"Todos", "Local", "Visitante"} else "Todos"
         resolved_h2h_home_away = h2h_home_away if h2h_home_away in {"Todos", "Local", "Visitante"} else "Todos"
 
-        path = Path(
-            _call_silently(
-                _get_team_report_fn(),
-                team_filter=selected_team if not selected_player_names else None,
-                player_filter=selected_player_names or None,
-                rival_team=selected_rival,
-                home_away_filter=resolved_home_away,
-                h2h_home_away_filter=resolved_h2h_home_away,
-                min_games=_coerce_int(min_games, 5, minimum=0, maximum=100),
-                min_minutes=_coerce_int(min_minutes, 50, minimum=0, maximum=500),
-                min_shots=_coerce_int(min_shots, 20, minimum=0, maximum=300),
-                players_df=bundle.players_df,
-                teams_df=bundle.teams_df,
-                assists_df=bundle.assists_df,
-                clutch_lineups_df=bundle.clutch_lineups_df,
+        report_players_df = bundle.players_df.copy()
+        report_teams_df = bundle.teams_df.copy()
+        report_assists_df = bundle.assists_df.copy()
+        report_clutch_lineups_df = bundle.clutch_lineups_df.copy()
+        try:
+            path = Path(
+                _call_silently(
+                    _get_team_report_fn(),
+                    team_filter=selected_team if not selected_player_names else None,
+                    player_filter=selected_player_names or None,
+                    rival_team=selected_rival,
+                    home_away_filter=resolved_home_away,
+                    h2h_home_away_filter=resolved_h2h_home_away,
+                    min_games=_coerce_int(min_games, 5, minimum=0, maximum=100),
+                    min_minutes=_coerce_int(min_minutes, 50, minimum=0, maximum=500),
+                    min_shots=_coerce_int(min_shots, 20, minimum=0, maximum=300),
+                    players_df=report_players_df,
+                    teams_df=report_teams_df,
+                    assists_df=report_assists_df,
+                    clutch_lineups_df=report_clutch_lineups_df,
+                )
             )
-        )
+        finally:
+            del report_players_df, report_teams_df, report_assists_df, report_clutch_lineups_df
+            gc.collect()
 
         return {
             "scope": resolved_scope["selected"],
@@ -916,24 +932,30 @@ class AnalyticsService:
         min_shots: int,
     ) -> dict[str, Any]:
         resolved_scope = self._resolve_scope(ScopeFilters(season=season, league=league, phases=phases, jornadas=jornadas))
-        bundle = self._load_bundle(resolved_scope, clone=True)
+        bundle = self._load_bundle(resolved_scope)
         if bundle.players_df.empty or bundle.teams_df.empty:
             raise ValueError("No hay datos de fase suficientes para generar el informe.")
 
         available_teams = sorted(bundle.teams_df["EQUIPO"].dropna().astype(str).unique().tolist())
         selected_teams = [str(value) for value in (teams or []) if str(value) in available_teams]
-        path = Path(
-            _call_silently(
-                _get_phase_report_fn(),
-                teams=selected_teams or None,
-                phase=None,
-                min_games=_coerce_int(min_games, 5, minimum=0, maximum=100),
-                min_minutes=_coerce_int(min_minutes, 50, minimum=0, maximum=500),
-                min_shots=_coerce_int(min_shots, 20, minimum=0, maximum=300),
-                teams_df=bundle.teams_df,
-                players_df=bundle.players_df,
+        report_teams_df = bundle.teams_df.copy()
+        report_players_df = bundle.players_df.copy()
+        try:
+            path = Path(
+                _call_silently(
+                    _get_phase_report_fn(),
+                    teams=selected_teams or None,
+                    phase=None,
+                    min_games=_coerce_int(min_games, 5, minimum=0, maximum=100),
+                    min_minutes=_coerce_int(min_minutes, 50, minimum=0, maximum=500),
+                    min_shots=_coerce_int(min_shots, 20, minimum=0, maximum=300),
+                    teams_df=report_teams_df,
+                    players_df=report_players_df,
+                )
             )
-        )
+        finally:
+            del report_teams_df, report_players_df
+            gc.collect()
 
         return {
             "scope": resolved_scope["selected"],

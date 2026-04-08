@@ -23,7 +23,8 @@ from config import (
     ROW_STEP,
     CENTER_TOP,
     MEDIA_WIDTH_Y,
-    CLUTCH_WIDTH_Y
+    CLUTCH_WIDTH_Y,
+    PLOTLY_IMAGE_EXPORT_SCALE,
 )
 
 # Rutas de archivos (convertir Path a string para compatibilidad)
@@ -344,7 +345,7 @@ def plot_media_pct_with_clutch(stats: dict,
         bargap=0.0, bargroupgap=0.0
     )
 
-    img_bytes = fig.to_image(format="png", engine="kaleido", scale=4)
+    img_bytes = fig.to_image(format="png", engine="kaleido", scale=PLOTLY_IMAGE_EXPORT_SCALE)
     img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
     if out_png: img.save(out_png)
 

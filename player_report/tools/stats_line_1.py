@@ -4,6 +4,8 @@ import plotly.graph_objects as go
 from PIL import Image
 import io
 
+from config import PLOTLY_IMAGE_EXPORT_SCALE
+
 def plot_stats_table_plotly(stats: dict,
                             out_png: str   = "player_stats.png",
                             width_px: int  = 800,
@@ -151,7 +153,7 @@ def plot_stats_table_simple(stats: dict,
     )
     
     # Generate image as bytes and convert to PIL Image
-    img_bytes = fig.to_image(format="png", width=width_px, height=height_px, scale=4)
+    img_bytes = fig.to_image(format="png", width=width_px, height=height_px, scale=PLOTLY_IMAGE_EXPORT_SCALE)
     img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
     
     # Optionally save to file if out_png is provided

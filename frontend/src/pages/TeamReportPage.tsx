@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 
 import { generateTeamReport } from "../api";
 import { MetricCard } from "../components/MetricCard";
+import { ReportBudgetPanel } from "../components/ReportBudgetPanel";
 import { ReportPreview } from "../components/ReportPreview";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchMultiSelect } from "../components/SearchMultiSelect";
@@ -194,6 +195,8 @@ export function TeamReportPage({ scope, setScope }: ScopePageProps) {
                 <MetricCard label="Filtro general" value={homeAway} />
                 <MetricCard label="Filtro H2H" value={h2hHomeAway} />
               </div>
+
+              <ReportBudgetPanel focusKind="team" />
 
               {error ? <p className="error-text">{error}</p> : null}
 

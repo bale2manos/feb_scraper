@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import { generatePhaseReport } from "../api";
 import { MetricCard } from "../components/MetricCard";
+import { ReportBudgetPanel } from "../components/ReportBudgetPanel";
 import { ReportPreview } from "../components/ReportPreview";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchMultiSelect } from "../components/SearchMultiSelect";
@@ -108,6 +109,8 @@ export function PhaseReportPage({ scope, setScope }: ScopePageProps) {
                 <MetricCard label="Min minutos" value={String(minMinutes)} />
                 <MetricCard label="Min tiros" value={String(minShots)} />
               </div>
+
+              <ReportBudgetPanel focusKind="phase" />
 
               {error ? <p className="error-text">{error}</p> : null}
 

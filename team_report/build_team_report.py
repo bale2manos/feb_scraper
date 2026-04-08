@@ -24,7 +24,7 @@ from .tools.utils                     import setup_montserrat_font, compute_adva
 import pandas as pd
 
 # Importar configuración centralizada
-from config import TEAMS_AGGREGATED_FILE, JUGADORES_AGGREGATED_FILE
+from config import TEAMS_AGGREGATED_FILE, JUGADORES_AGGREGATED_FILE, TEAM_REPORTS_DIR
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # === NUEVO: import del informe de asistencias ===
@@ -76,7 +76,7 @@ def setup_montserrat_pdf_fonts():
 TEAM_FILE       = Path(str(TEAMS_AGGREGATED_FILE))
 PLAYERS_FILE    = Path(str(JUGADORES_AGGREGATED_FILE))
 ASSISTS_FILE    = Path("data/assists.xlsx")  # <<< NUEVO
-BASE_OUTPUT_DIR = Path("output/reports/team_reports/")
+BASE_OUTPUT_DIR = TEAM_REPORTS_DIR
 
 # Create output directory if it doesn't exist
 BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

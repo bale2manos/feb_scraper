@@ -52,9 +52,6 @@ export function ReportBudgetPanel({ focusKind, budgetQuery }: { focusKind?: Repo
   const summaryLabel = data
     ? `Consumo cloud: ${formatTokens(data.consumedTokens)} / ${formatTokens(data.monthlyTokens)}`
     : "Consumo cloud";
-  const alertClassName = data?.isBlocked ? "budget-alert budget-alert-danger" : "budget-alert budget-alert-warning";
-  const alertTitle = data?.isBlocked ? "Generacion bloqueada" : "Margen ajustado";
-  const compactMessage = data?.message ?? buildKindSummary(data as ReportBudgetResponse, focusKind);
 
   if (budgetQuery.isLoading) {
     return (
@@ -68,6 +65,10 @@ export function ReportBudgetPanel({ focusKind, budgetQuery }: { focusKind?: Repo
   if (budgetQuery.isError || !data) {
     return <p className="detail-note">No se ha podido cargar el contador cloud.</p>;
   }
+
+  const alertClassName = data.isBlocked ? "budget-alert budget-alert-danger" : "budget-alert budget-alert-warning";
+  const alertTitle = data.isBlocked ? "Generacion bloqueada" : "Margen ajustado";
+  const compactMessage = data.message ?? buildKindSummary(data, focusKind);
 
   return (
     <div className="report-budget-shell">

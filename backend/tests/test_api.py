@@ -300,6 +300,14 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(budget_response.status_code, 200)
         self.assertEqual(budget_response.json()["counts"]["player"], 1)
 
+    def test_player_report_is_blocked_after_reaching_hard_limit(self) -> None:
+        self.client.app.state.report_budget_tracker.record_report("team", 1_100.0)
+
+        blocked_response = self.client.post("/reports/player", json={"playerKey": "p1"})
+
+        self.assertEqual(blocked_response.status_code, 429)
+        self.assertIn("bloqueado", blocked_response.json()["detail"].lower())
+
 
 def _settings() -> AppSettings:
     return AppSettings(

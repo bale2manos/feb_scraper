@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getPlayerSimilarity } from "../api";
 import { DataTable } from "../components/DataTable";
 import { MetricCard } from "../components/MetricCard";
+import { PlayerDetailActions } from "../components/PlayerDetailActions";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchSelect } from "../components/SearchSelect";
 import { useLocalStorageState } from "../hooks";
@@ -269,6 +270,11 @@ export function SimilarityPage({ scope, setScope }: ScopePageProps) {
                         ))}
                       </ul>
                     </div>
+                    <PlayerDetailActions
+                      playerKey={selectedCandidate.playerKey}
+                      team={selectedCandidate.team}
+                      currentPage="similares"
+                    />
                   </>
                 ) : (
                   <div className="detail-empty">

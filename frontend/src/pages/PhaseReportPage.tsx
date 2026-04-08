@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { generatePhaseReport } from "../api";
 import { MetricCard } from "../components/MetricCard";
-import { ReportBudgetPanel } from "../components/ReportBudgetPanel";
+import { ReportBudgetPanel, useReportBudget } from "../components/ReportBudgetPanel";
 import { ReportPreview } from "../components/ReportPreview";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchMultiSelect } from "../components/SearchMultiSelect";
@@ -18,7 +18,8 @@ type ScopePageProps = {
 
 export function PhaseReportPage({ scope, setScope }: ScopePageProps) {
   const { meta } = useScopeMeta();
-  const { getLatestJob, openPreview, startReportJob } = useReports();
+  const { getLatestJob, startReportJob } = useReports();
+  const budgetQuery = useReportBudget();
   const [selectedTeams, setSelectedTeams] = useLocalStorageState<string[]>("react-phase-report-teams", []);
   const [minGames, setMinGames] = useLocalStorageState<number>("react-phase-report-min-games", 5);
   const [minMinutes, setMinMinutes] = useLocalStorageState<number>("react-phase-report-min-minutes", 50);
@@ -37,8 +38,12 @@ export function PhaseReportPage({ scope, setScope }: ScopePageProps) {
   const reportTaskKey = buildScopeTaskKey("phase", scope, [validSelectedTeams.join(","), minGames, minMinutes, minShots]);
   const reportJob = getLatestJob(reportTaskKey);
   const error = reportJob?.status === "error" ? reportJob.error : null;
+  const budgetBlocked = budgetQuery.data?.isBlocked ?? false;
 
   async function handleGenerate() {
+    if (budgetBlocked) {
+      return;
+    }
     await startReportJob({
       taskKey: reportTaskKey,
       kind: "phase",
@@ -110,7 +115,7 @@ export function PhaseReportPage({ scope, setScope }: ScopePageProps) {
                 <MetricCard label="Min tiros" value={String(minShots)} />
               </div>
 
-              <ReportBudgetPanel focusKind="phase" />
+              <ReportBudgetPanel focusKind="phase" budgetQuery={budgetQuery} />
 
               {error ? <p className="error-text">{error}</p> : null}
 
@@ -130,9 +135,9 @@ export function PhaseReportPage({ scope, setScope }: ScopePageProps) {
                   onClick={() => {
                     void handleGenerate();
                   }}
-                  disabled={reportJob?.status === "pending"}
+                  disabled={reportJob?.status === "pending" || budgetBlocked}
                 >
-                  {reportJob?.status === "pending" ? "Generando PDF..." : "Generar informe PDF"}
+                  {budgetBlocked ? "Limite mensual alcanzado" : reportJob?.status === "pending" ? "Generando PDF..." : "Generar informe PDF"}
                 </button>
               </div>
             </section>
@@ -146,7 +151,7 @@ export function PhaseReportPage({ scope, setScope }: ScopePageProps) {
               emptyMessage="Genera un informe para verlo aqui."
               isGenerating={reportJob?.status === "pending"}
               statusMessage="Generando el PDF comparativo."
-              onOpenFloating={reportJob?.report ? () => openPreview(reportJob.id) : null}
+              onOpenFloating={null}
             />
           </aside>
         </div>

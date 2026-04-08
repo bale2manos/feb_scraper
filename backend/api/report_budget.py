@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfo
 from .security import AppSettings
 
 DEFAULT_MONTHLY_TOKENS = 90_000
+DEFAULT_WARNING_THRESHOLD_TOKENS = 70_000
+DEFAULT_HARD_LIMIT_TOKENS = 80_000
 DEFAULT_KIND_TOKENS = {
     "player": 110.0,
     "team": 223.0,
@@ -99,6 +101,8 @@ class ReportBudgetTracker:
         }
 
         monthly_tokens = max(int(self.settings.report_budget_monthly_tokens), 1)
+        warning_threshold = min(DEFAULT_WARNING_THRESHOLD_TOKENS, monthly_tokens)
+        hard_limit = min(DEFAULT_HARD_LIMIT_TOKENS, monthly_tokens)
         consumed_tokens = sum(totals.values())
         remaining_tokens = max(float(monthly_tokens) - consumed_tokens, 0.0)
         estimated_remaining = {
@@ -106,6 +110,19 @@ class ReportBudgetTracker:
             for kind in DEFAULT_KIND_TOKENS
         }
         now = self._now()
+        is_warning = consumed_tokens >= warning_threshold
+        is_blocked = consumed_tokens >= hard_limit
+        limit_message = None
+        if is_blocked:
+            limit_message = (
+                f"Se ha alcanzado el limite mensual de {hard_limit:,} tokens. "
+                "Hemos bloqueado nuevas generaciones para guardar margen hasta el proximo mes."
+            ).replace(",", ".")
+        elif is_warning:
+            limit_message = (
+                f"Has superado {warning_threshold:,} tokens este mes. "
+                f"Aun puedes generar informes, pero al llegar a {hard_limit:,} se bloquearan."
+            ).replace(",", ".")
 
         return {
             "month": month_key,
@@ -117,6 +134,11 @@ class ReportBudgetTracker:
             "counts": counts,
             "averageTokens": {kind: round(value, 1) for kind, value in averages.items()},
             "estimatedReportsRemaining": estimated_remaining,
+            "warningThresholdTokens": warning_threshold,
+            "hardLimitTokens": hard_limit,
+            "isWarning": is_warning,
+            "isBlocked": is_blocked,
+            "message": limit_message,
             "trackingMode": self._tracking_mode(),
             "trackingEnabled": True,
             "warning": self._last_warning,

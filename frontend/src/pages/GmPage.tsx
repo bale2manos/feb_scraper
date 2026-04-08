@@ -1,10 +1,10 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import { getGmPlayers } from "../api";
 import { DataTable } from "../components/DataTable";
 import { MetricCard } from "../components/MetricCard";
+import { PlayerDetailActions } from "../components/PlayerDetailActions";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchSelect } from "../components/SearchSelect";
 import { useLocalStorageState } from "../hooks";
@@ -40,7 +40,6 @@ function buildFilterId() {
 }
 
 export function GmPage({ scope, setScope }: ScopePageProps) {
-  const navigate = useNavigate();
   const [mode, setMode] = useLocalStorageState<string>("react-gm-mode-v2", "Promedios");
   const [selectedPlayerKey, setSelectedPlayerKey] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -290,19 +289,11 @@ export function GmPage({ scope, setScope }: ScopePageProps) {
                         <MetricCard label="AST/TO" value={formatNumber(selectedRow["AST/TO"], 2)} />
                       </div>
                       <div className="toolbar">
-                        <button
-                          type="button"
-                          className="primary-cta-button"
-                          onClick={() => {
-                            if (!selectedPlayerKey) {
-                              return;
-                            }
-                            window.localStorage.setItem("react-similarity-target-player", JSON.stringify(selectedPlayerKey));
-                            navigate("/similares");
-                          }}
-                        >
-                          Buscar similares
-                        </button>
+                        <PlayerDetailActions
+                          playerKey={selectedPlayerKey}
+                          team={String(selectedRow.EQUIPO ?? "")}
+                          currentPage="other"
+                        />
                       </div>
                     </>
                   ) : (

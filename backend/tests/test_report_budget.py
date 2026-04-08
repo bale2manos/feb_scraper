@@ -78,6 +78,8 @@ class ReportBudgetTests(unittest.TestCase):
             self.assertEqual(summary["counts"]["team"], 1)
             self.assertEqual(summary["remainingTokens"], 600)
             self.assertEqual(summary["estimatedReportsRemaining"]["phase"], 3)
+            self.assertFalse(summary["isWarning"])
+            self.assertFalse(summary["isBlocked"])
 
     def test_gcs_tracker_persists_usage_in_bucket_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -93,6 +95,20 @@ class ReportBudgetTests(unittest.TestCase):
             self.assertTrue(blob.exists())
             self.assertEqual(summary["counts"]["phase"], 1)
             self.assertEqual(summary["consumedTokens"], 75.0)
+
+    def test_tracker_exposes_warning_and_block_thresholds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tracker = ReportBudgetTracker(_settings(Path(tmp_dir), report_budget_monthly_tokens=90_000))
+
+            tracker.record_report("team", 70_100.0)
+            warning_summary = tracker.get_summary()
+            self.assertTrue(warning_summary["isWarning"])
+            self.assertFalse(warning_summary["isBlocked"])
+
+            tracker.record_report("player", 10_000.0)
+            blocked_summary = tracker.get_summary()
+            self.assertTrue(blocked_summary["isBlocked"])
+            self.assertEqual(blocked_summary["hardLimitTokens"], 80_000)
 
 
 if __name__ == "__main__":

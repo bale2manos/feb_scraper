@@ -66,7 +66,26 @@ async function requestJson<T>(
     throw new UnauthorizedError();
   }
   if (!response.ok) {
-    throw new Error(`Error ${response.status} al cargar ${path}`);
+    let detailMessage = `Error ${response.status} al cargar ${path}`;
+    const contentType = response.headers.get("content-type") ?? "";
+    try {
+      if (contentType.includes("application/json")) {
+        const payload = (await response.json()) as { detail?: unknown; message?: unknown };
+        if (typeof payload.detail === "string" && payload.detail.trim()) {
+          detailMessage = payload.detail.trim();
+        } else if (typeof payload.message === "string" && payload.message.trim()) {
+          detailMessage = payload.message.trim();
+        }
+      } else {
+        const text = (await response.text()).trim();
+        if (text) {
+          detailMessage = text;
+        }
+      }
+    } catch {
+      // Si no podemos leer el body, dejamos el mensaje generico.
+    }
+    throw new Error(detailMessage);
   }
   return (await response.json()) as T;
 }

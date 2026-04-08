@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getDependencyPlayers, getDependencySummary } from "../api";
 import { DataTable } from "../components/DataTable";
 import { MetricCard } from "../components/MetricCard";
+import { PlayerDetailActions } from "../components/PlayerDetailActions";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchSelect } from "../components/SearchSelect";
 import { useLocalStorageState } from "../hooks";
@@ -386,6 +387,11 @@ export function DependencyPage({ scope, setScope }: ScopePageProps) {
                           <p className="panel-copy">{summary.detail.diagnosis}</p>
                           <p className="detail-note">{summary.note}</p>
                         </div>
+                        <PlayerDetailActions
+                          playerKey={summary.detail.playerKey}
+                          team={summary.detail.team}
+                          currentPage="other"
+                        />
                       </>
                     ) : (
                       <div className="detail-empty">

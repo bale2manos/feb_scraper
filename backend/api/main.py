@@ -134,6 +134,20 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Has superado el limite temporal de informes.")
         return session
 
+    def enforce_report_budget_limit(
+        budget_tracker: ReportBudgetTracker = Depends(get_report_budget_tracker),
+    ) -> dict[str, object]:
+        summary = budget_tracker.get_summary()
+        if bool(summary.get("isBlocked")):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=str(
+                    summary.get("message")
+                    or "Se ha alcanzado el limite mensual de informes cloud. Vuelve a intentarlo el mes que viene."
+                ),
+            )
+        return summary
+
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -313,6 +327,7 @@ def create_app(
     def player_report(
         payload: Annotated[PlayerReportRequest, Body()],
         _: SessionData = Depends(enforce_report_rate_limit),
+        __: dict[str, object] = Depends(enforce_report_budget_limit),
         service: AnalyticsService = Depends(get_service),
         budget_tracker: ReportBudgetTracker = Depends(get_report_budget_tracker),
     ) -> dict:
@@ -335,6 +350,7 @@ def create_app(
     def team_report(
         payload: Annotated[TeamReportRequest, Body()],
         _: SessionData = Depends(enforce_report_rate_limit),
+        __: dict[str, object] = Depends(enforce_report_budget_limit),
         service: AnalyticsService = Depends(get_service),
         budget_tracker: ReportBudgetTracker = Depends(get_report_budget_tracker),
     ) -> dict:
@@ -363,6 +379,7 @@ def create_app(
     def phase_report(
         payload: Annotated[PhaseReportRequest, Body()],
         _: SessionData = Depends(enforce_report_rate_limit),
+        __: dict[str, object] = Depends(enforce_report_budget_limit),
         service: AnalyticsService = Depends(get_service),
         budget_tracker: ReportBudgetTracker = Depends(get_report_budget_tracker),
     ) -> dict:

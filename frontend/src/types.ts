@@ -235,6 +235,11 @@ export type ReportBudgetResponse = {
     team: number;
     phase: number;
   };
+  warningThresholdTokens: number;
+  hardLimitTokens: number;
+  isWarning: boolean;
+  isBlocked: boolean;
+  message: string | null;
   trackingMode: string;
   trackingEnabled: boolean;
   warning: string | null;

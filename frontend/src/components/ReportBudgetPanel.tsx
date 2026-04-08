@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { getReportBudget } from "../api";
-import { MetricCard } from "./MetricCard";
+import type { ReportBudgetResponse } from "../types";
 
 type ReportKind = "player" | "team" | "phase";
 
@@ -10,6 +10,12 @@ const REPORT_KIND_LABELS: Record<ReportKind, string> = {
   player: "Jugador",
   team: "Equipo",
   phase: "Fase"
+};
+
+type ReportBudgetQueryLike = {
+  data: ReportBudgetResponse | undefined;
+  isLoading: boolean;
+  isError: boolean;
 };
 
 function formatTokens(value: number) {
@@ -24,83 +30,86 @@ function formatMonthLabel(monthIso: string) {
   return new Intl.DateTimeFormat("es-ES", { month: "long", year: "numeric" }).format(date);
 }
 
-export function ReportBudgetPanel({ focusKind }: { focusKind?: ReportKind }) {
-  const budgetQuery = useQuery({
+export function useReportBudget() {
+  return useQuery({
     queryKey: ["report-budget"],
     queryFn: ({ signal }) => getReportBudget({ signal })
   });
+}
 
+function buildKindSummary(data: ReportBudgetResponse, focusKind?: ReportKind) {
+  if (!focusKind) {
+    return `Quedan ${formatTokens(data.remainingTokens)} tokens este mes.`;
+  }
+  const label = REPORT_KIND_LABELS[focusKind].toLowerCase();
+  return `${data.estimatedReportsRemaining[focusKind]} informes de ${label} estimados con el ritmo actual.`;
+}
+
+export function ReportBudgetPanel({ focusKind, budgetQuery }: { focusKind?: ReportKind; budgetQuery: ReportBudgetQueryLike }) {
   const monthLabel = useMemo(() => formatMonthLabel(budgetQuery.data?.monthIso ?? ""), [budgetQuery.data?.monthIso]);
+  const data = budgetQuery.data;
+  const shouldOpen = Boolean(data?.isWarning || data?.isBlocked || data?.warning);
+  const summaryLabel = data
+    ? `Consumo cloud: ${formatTokens(data.consumedTokens)} / ${formatTokens(data.monthlyTokens)}`
+    : "Consumo cloud";
+  const alertClassName = data?.isBlocked ? "budget-alert budget-alert-danger" : "budget-alert budget-alert-warning";
+  const alertTitle = data?.isBlocked ? "Generacion bloqueada" : "Margen ajustado";
+  const compactMessage = data?.message ?? buildKindSummary(data as ReportBudgetResponse, focusKind);
+
+  if (budgetQuery.isLoading) {
+    return (
+      <details className="budget-disclosure">
+        <summary>Consumo cloud</summary>
+        <p className="detail-note">Cargando el contador mensual...</p>
+      </details>
+    );
+  }
+
+  if (budgetQuery.isError || !data) {
+    return <p className="detail-note">No se ha podido cargar el contador cloud.</p>;
+  }
 
   return (
-    <section className="compact-control-card report-budget-panel">
-      <div className="report-budget-header">
-        <div>
-          <span className="eyebrow">Cloud budget</span>
-          <h3>Tokens restantes del mes</h3>
-          <p className="panel-copy">
-            {budgetQuery.data
-              ? `1 token equivale a 1 segundo estimado de presupuesto Cloud Run en ${monthLabel}.`
-              : "Medimos el consumo real de informes para estimar cuanta bolsa queda este mes."}
+    <div className="report-budget-shell">
+      {data.isWarning || data.isBlocked ? (
+        <section className={alertClassName}>
+          <div>
+            <strong>{alertTitle}</strong>
+            <p>{compactMessage}</p>
+          </div>
+          <span className="budget-alert-pill">
+            {formatTokens(data.consumedTokens)} / {formatTokens(data.hardLimitTokens)}
+          </span>
+        </section>
+      ) : null}
+
+      <details className="budget-disclosure" open={shouldOpen}>
+        <summary>{summaryLabel}</summary>
+        <div className="budget-disclosure-body">
+          <p className="detail-note">
+            {compactMessage} 1 token equivale a 1 segundo estimado de presupuesto Cloud Run en {monthLabel}.
           </p>
+          <div className="budget-mini-grid">
+            <div>
+              <strong>{formatTokens(data.remainingTokens)}</strong>
+              <span>restantes</span>
+            </div>
+            <div>
+              <strong>{data.estimatedReportsRemaining.player}</strong>
+              <span>jugador</span>
+            </div>
+            <div>
+              <strong>{data.estimatedReportsRemaining.team}</strong>
+              <span>equipo</span>
+            </div>
+            <div>
+              <strong>{data.estimatedReportsRemaining.phase}</strong>
+              <span>fase</span>
+            </div>
+          </div>
+          {data.warning ? <p className="error-text">{data.warning}</p> : null}
         </div>
-        {budgetQuery.data?.warning ? <span className="status-badge warning-badge">Tracking limitado</span> : null}
-      </div>
-
-      <div className="metric-grid metric-grid-wide">
-        <MetricCard
-          label="Tokens restantes"
-          value={budgetQuery.data ? formatTokens(budgetQuery.data.remainingTokens) : "-"}
-          hint={budgetQuery.data ? `${budgetQuery.data.percentRemaining.toFixed(1)}% del mes` : undefined}
-          isLoading={budgetQuery.isLoading}
-        />
-        <MetricCard
-          label="Tokens gastados"
-          value={budgetQuery.data ? formatTokens(budgetQuery.data.consumedTokens) : "-"}
-          hint={budgetQuery.data ? `${formatTokens(budgetQuery.data.monthlyTokens)} tokens al mes` : undefined}
-          isLoading={budgetQuery.isLoading}
-        />
-        <MetricCard
-          label="Jugador restantes"
-          value={budgetQuery.data ? String(budgetQuery.data.estimatedReportsRemaining.player) : "-"}
-          hint={
-            budgetQuery.data
-              ? `${budgetQuery.data.counts.player} generados | media ${budgetQuery.data.averageTokens.player.toFixed(1)} tokens`
-              : undefined
-          }
-          isLoading={budgetQuery.isLoading}
-        />
-        <MetricCard
-          label="Equipo restantes"
-          value={budgetQuery.data ? String(budgetQuery.data.estimatedReportsRemaining.team) : "-"}
-          hint={
-            budgetQuery.data
-              ? `${budgetQuery.data.counts.team} generados | media ${budgetQuery.data.averageTokens.team.toFixed(1)} tokens`
-              : undefined
-          }
-          isLoading={budgetQuery.isLoading}
-        />
-        <MetricCard
-          label="Fase restantes"
-          value={budgetQuery.data ? String(budgetQuery.data.estimatedReportsRemaining.phase) : "-"}
-          hint={
-            budgetQuery.data
-              ? `${budgetQuery.data.counts.phase} generados | media ${budgetQuery.data.averageTokens.phase.toFixed(1)} tokens`
-              : undefined
-          }
-          isLoading={budgetQuery.isLoading}
-        />
-      </div>
-
-      <p className="report-budget-note">
-        {budgetQuery.data
-          ? `Ritmo actual: Jugador ${budgetQuery.data.averageTokens.player.toFixed(1)} | Equipo ${budgetQuery.data.averageTokens.team.toFixed(1)} | Fase ${budgetQuery.data.averageTokens.phase.toFixed(1)} tokens.`
-          : "En cuanto generes informes, la estimacion se ajustara con tus tiempos reales."}
-        {focusKind ? ` En esta pantalla ahora mismo manda el coste de ${REPORT_KIND_LABELS[focusKind].toLowerCase()}.` : ""}
-      </p>
-
-      {budgetQuery.data?.warning ? <p className="error-text">{budgetQuery.data.warning}</p> : null}
-      {budgetQuery.isError ? <p className="error-text">No se ha podido cargar el contador mensual.</p> : null}
-    </section>
+      </details>
+    </div>
   );
 }

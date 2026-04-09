@@ -29,8 +29,9 @@ type ScopePageProps = {
 const OPPORTUNITY_COLUMNS = [
   "JUGADOR",
   "EQUIPO",
-  "LIGA",
   "AÑO NACIMIENTO",
+  "OpportunityScore",
+  "LIGA",
   "PJ",
   "MIN",
   "USG%",
@@ -38,7 +39,6 @@ const OPPORTUNITY_COLUMNS = [
   "eFG%",
   "PPP",
   "AST/TO",
-  "OpportunityScore",
 ] as const;
 
 export function PotentialPage({ scope }: ScopePageProps) {
@@ -49,6 +49,7 @@ export function PotentialPage({ scope }: ScopePageProps) {
   const [minGames, setMinGames] = useLocalStorageState<number>("react-potential-min-games", 5);
   const [maxMinutes, setMaxMinutes] = useLocalStorageState<number>("react-potential-max-minutes", 22);
   const [maxUsg, setMaxUsg] = useLocalStorageState<number>("react-potential-max-usg", 24);
+  const [showShortlist, setShowShortlist] = useLocalStorageState<boolean>("react-potential-show-shortlist", false);
   const [shortlist, setShortlist] = useState<string[]>([]);
   const [selectedDetailKey, setSelectedDetailKey] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -182,6 +183,8 @@ export function PotentialPage({ scope }: ScopePageProps) {
   });
 
   const error = opportunityQuery.error instanceof Error ? opportunityQuery.error.message : null;
+  const selectedShortlistKey = String(selectedOpportunityRow?.PLAYER_KEY ?? selectedLookupRow?.PLAYER_KEY ?? "");
+  const isSelectedInShortlist = Boolean(selectedShortlistKey && shortlist.includes(selectedShortlistKey));
 
   function addToShortlist(playerKey: string, league: string) {
     if (!scope.season) {
@@ -229,6 +232,13 @@ export function PotentialPage({ scope }: ScopePageProps) {
           </div>
           <div className="toolbar">
             {opportunityQuery.isFetching && !opportunityQuery.isLoading ? <span className="status-badge">Actualizando</span> : null}
+            <button
+              type="button"
+              className={showShortlist ? "tab-button is-active" : "tab-button"}
+              onClick={() => setShowShortlist((current) => !current)}
+            >
+              {showShortlist ? `Ocultar shortlist (${shortlist.length})` : `Ver shortlist (${shortlist.length})`}
+            </button>
           </div>
         </div>
 
@@ -281,8 +291,65 @@ export function PotentialPage({ scope }: ScopePageProps) {
         {shortlistMessage ? <p className="detail-note">{shortlistMessage}</p> : null}
         {error ? <p className="error-text">{error}</p> : null}
 
-        <div className="market-layout">
-          <div className="market-main">
+        {showShortlist ? (
+          <section className="panel detail-panel">
+            <div className="detail-panel-header">
+              <div>
+                <span className="eyebrow">Auxiliar</span>
+                <h3>{shortlist.length ? `${shortlist.length} jugadores guardados` : "Shortlist vacía"}</h3>
+                <p className="panel-copy">Una bandeja ligera para guardar nombres y llevártelos luego a Similares.</p>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => setShowShortlist(false)}>
+                Cerrar shortlist
+              </button>
+            </div>
+
+            {shortlistCards.length ? (
+              <div className="market-shortlist-grid">
+                {shortlistCards.map((player) => (
+                  <article key={player.playerKey} className="market-shortlist-card">
+                    <div>
+                      <strong>{player.name}</strong>
+                      <p className="panel-copy">
+                        {player.team} {player.league ? `| ${player.league}` : ""}
+                      </p>
+                      {player.score != null ? <span className="detail-note">Score potencial {formatNumber(player.score, 1)}</span> : null}
+                      {player.focus ? <span className="detail-note">{player.focus}</span> : null}
+                    </div>
+                    <div className="toolbar">
+                      <button
+                        type="button"
+                        className="tab-button"
+                        onClick={() => useAsTarget(player.playerKey, player.league)}
+                        disabled={!player.league}
+                      >
+                        Buscar reemplazo
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={() => {
+                          setSelectedDetailKey(player.playerKey);
+                          setShowDetail(true);
+                        }}
+                      >
+                        Ver detalle
+                      </button>
+                      <button type="button" className="ghost-button" onClick={() => removeFromShortlist(player.playerKey)}>
+                        Quitar
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">Añade jugadores desde la tabla o desde el detalle cuando quieras guardar opciones.</p>
+            )}
+          </section>
+        ) : null}
+
+        <div className={showDetail ? "split-layout" : "page-stack"}>
+          <div className="split-main">
             <DataTable
               title="Perfiles con potencial"
               subtitle="Jugadores con uso o minutos contenidos, pero con eficiencia suficiente para merecer una segunda mirada."
@@ -302,60 +369,8 @@ export function PotentialPage({ scope }: ScopePageProps) {
             />
           </div>
 
-          <aside className="market-side page-stack">
-            <section className="panel detail-panel">
-              <div className="detail-panel-header">
-                <div>
-                  <span className="eyebrow">Shortlist</span>
-                  <h3>{shortlist.length ? `${shortlist.length} jugadores` : "Shortlist vacía"}</h3>
-                  <p className="panel-copy">Compartida con Similares y ligada a la temporada y ligas activas.</p>
-                </div>
-              </div>
-
-              {shortlistCards.length ? (
-                <div className="market-shortlist-grid">
-                  {shortlistCards.map((player) => (
-                    <article key={player.playerKey} className="market-shortlist-card">
-                      <div>
-                        <strong>{player.name}</strong>
-                        <p className="panel-copy">
-                          {player.team} {player.league ? `| ${player.league}` : ""}
-                        </p>
-                        {player.score != null ? <span className="detail-note">Score potencial {formatNumber(player.score, 1)}</span> : null}
-                        {player.focus ? <span className="detail-note">{player.focus}</span> : null}
-                      </div>
-                      <div className="toolbar">
-                        <button
-                          type="button"
-                          className="tab-button"
-                          onClick={() => useAsTarget(player.playerKey, player.league)}
-                          disabled={!player.league}
-                        >
-                          Buscar reemplazo
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost-button"
-                          onClick={() => {
-                            setSelectedDetailKey(player.playerKey);
-                            setShowDetail(true);
-                          }}
-                        >
-                          Ver detalle
-                        </button>
-                        <button type="button" className="ghost-button" onClick={() => removeFromShortlist(player.playerKey)}>
-                          Quitar
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className="empty-state">Añade jugadores con potencial para compararlos luego en Similares.</p>
-              )}
-            </section>
-
-            {showDetail ? (
+          {showDetail ? (
+            <aside className="split-side">
               <section className="panel detail-panel">
                 <div className="detail-panel-header">
                   <div>
@@ -369,9 +384,12 @@ export function PotentialPage({ scope }: ScopePageProps) {
                           : "Selecciona una fila para ver el detalle."}
                     </p>
                   </div>
-                  <button type="button" className="ghost-button" onClick={() => setShowDetail(false)}>
-                    Cerrar
-                  </button>
+                  <div className="toolbar">
+                    {isSelectedInShortlist ? <span className="status-badge">Ya en shortlist</span> : null}
+                    <button type="button" className="ghost-button" onClick={() => setShowDetail(false)}>
+                      Cerrar
+                    </button>
+                  </div>
                 </div>
 
                 {selectedOpportunityRow || selectedLookupRow ? (
@@ -430,11 +448,9 @@ export function PotentialPage({ scope }: ScopePageProps) {
                             String(selectedOpportunityRow?.LIGA ?? selectedLookupRow?.LIGA ?? "")
                           )
                         }
-                        disabled={shortlist.includes(String(selectedOpportunityRow?.PLAYER_KEY ?? selectedLookupRow?.PLAYER_KEY ?? ""))}
+                        disabled={isSelectedInShortlist}
                       >
-                        {shortlist.includes(String(selectedOpportunityRow?.PLAYER_KEY ?? selectedLookupRow?.PLAYER_KEY ?? ""))
-                          ? "Ya en shortlist"
-                          : "Añadir al shortlist"}
+                        {isSelectedInShortlist ? "Ya en shortlist" : "Añadir al shortlist"}
                       </button>
                     </div>
 
@@ -450,8 +466,8 @@ export function PotentialPage({ scope }: ScopePageProps) {
                   <p className="empty-state">No hay detalle seleccionado.</p>
                 )}
               </section>
-            ) : null}
-          </aside>
+            </aside>
+          ) : null}
         </div>
       </section>
     </div>

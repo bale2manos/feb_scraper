@@ -190,6 +190,8 @@ export function PlayerReportPage({ scope, setScope }: ScopePageProps) {
                   <PlayerDetailActions
                     playerKey={selectedPlayer?.playerKey}
                     team={selectedTeam}
+                    season={scope.season}
+                    league={scope.league}
                     currentPage="jugador"
                   />
                 </div>

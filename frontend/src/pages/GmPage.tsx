@@ -292,6 +292,8 @@ export function GmPage({ scope, setScope }: ScopePageProps) {
                         <PlayerDetailActions
                           playerKey={selectedPlayerKey}
                           team={String(selectedRow.EQUIPO ?? "")}
+                          season={scope.season}
+                          league={scope.league}
                           currentPage="other"
                         />
                       </div>

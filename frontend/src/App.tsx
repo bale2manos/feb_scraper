@@ -8,6 +8,7 @@ import { ReportCenter } from "./components/ReportCenter";
 import { DatabasePage } from "./pages/DatabasePage";
 import { DependencyPage } from "./pages/DependencyPage";
 import { GmPage } from "./pages/GmPage";
+import { MarketPage } from "./pages/MarketPage";
 import { PhaseReportPage } from "./pages/PhaseReportPage";
 import { PlayerReportPage } from "./pages/PlayerReportPage";
 import { SimilarityPage } from "./pages/SimilarityPage";
@@ -29,6 +30,7 @@ function AppRoutes() {
 
   const pages: AppPage[] = [
     { path: "/gm", title: "GM", subtitle: "Mercado y scouting", element: <GmPage scope={scope} setScope={setScope} /> },
+    { path: "/mercado", title: "Mercado", subtitle: "Pool, shortlist y comparador profundo", element: <MarketPage scope={scope} setScope={setScope} /> },
     { path: "/similares", title: "Similares", subtitle: "Reemplazos y perfiles parecidos", element: <SimilarityPage scope={scope} setScope={setScope} /> },
     {
       path: "/dependencia",
@@ -107,7 +109,7 @@ function AppContent() {
           <div className="login-copy">
             <span className="eyebrow">FEB Analytics</span>
             <h1>Cargando</h1>
-            <p>Estamos comprobando tu sesion.</p>
+            <p>Estamos comprobando tu sesión.</p>
           </div>
         </section>
       </main>

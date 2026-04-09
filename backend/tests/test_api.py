@@ -106,6 +106,67 @@ class FakeAnalyticsService:
             "players": [],
         }
 
+    def get_market_pool(self, **kwargs):
+        self.calls["market_pool"] = kwargs
+        return {
+            "season": kwargs.get("season"),
+            "availableLeagues": ["Primera FEB", "Segunda FEB"],
+            "selectedLeagues": kwargs.get("leagues") or ["Primera FEB"],
+            "rows": [
+                {
+                    "PLAYER_KEY": "p1",
+                    "JUGADOR": "Jugador A",
+                    "EQUIPO": "Team A",
+                    "LIGA": "Primera FEB",
+                    "PJ": 12,
+                    "MIN": 24.5,
+                    "PTS": 13.2,
+                    "REB": 4.5,
+                    "AST": 3.1,
+                    "USG%": 22.4,
+                    "TS%": 56.2,
+                    "DEPENDENCIA_SCORE": 61.0,
+                }
+            ],
+            "summary": {"playerCount": 1, "leagueCount": 1, "filters": {"minGames": kwargs.get("min_games"), "minMinutes": kwargs.get("min_minutes")}},
+        }
+
+    def get_market_compare(self, **kwargs):
+        self.calls["market_compare"] = kwargs
+        player_keys = kwargs.get("player_keys") or []
+        if len(player_keys) < 2:
+            raise ValueError("Selecciona al menos 2 jugadores para comparar.")
+        if len(player_keys) > 6:
+            raise ValueError("La comparacion profunda admite un maximo de 6 jugadores.")
+        return {
+            "season": kwargs.get("season"),
+            "availableLeagues": ["Primera FEB", "Segunda FEB"],
+            "selectedLeagues": kwargs.get("leagues") or ["Primera FEB"],
+            "players": [{"playerKey": player_key, "name": f"Jugador {player_key}"} for player_key in player_keys],
+            "blocks": [{"key": "volume", "title": "Volumen", "metrics": []}],
+            "percentiles": {player_key: {"PUNTOS": 80.0} for player_key in player_keys},
+            "poolSummary": {"totalPlayers": 30, "selectedPlayers": len(player_keys)},
+        }
+
+    def get_market_suggestions(self, **kwargs):
+        self.calls["market_suggestions"] = kwargs
+        return {
+            "season": kwargs.get("season"),
+            "availableLeagues": ["Primera FEB", "Segunda FEB"],
+            "selectedLeagues": kwargs.get("leagues") or ["Primera FEB"],
+            "anchor": {"playerKey": kwargs.get("anchor_player_key"), "name": "Jugador A"},
+            "candidates": [
+                {
+                    "playerKey": "p2",
+                    "name": "Jugador B",
+                    "league": "Primera FEB",
+                    "similarityScore": 84.4,
+                    "reasons": ["Puntos: 14.0 vs 13.5"],
+                    "differences": ["Mas rebotes: 7.0 vs 4.0"],
+                }
+            ],
+        }
+
     def generate_player_report(self, **kwargs):
         self.calls["player_report"] = kwargs
         return {
@@ -231,6 +292,66 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.service.calls["player_similarity"]["target_player_key"], "p1")
         self.assertEqual(self.service.calls["player_similarity"]["min_games"], 7)
         self.assertEqual(response.json()["candidates"][0]["playerKey"], "p2")
+
+    def test_market_pool_endpoint_accepts_multiple_leagues(self) -> None:
+        response = self.client.get(
+            "/market/pool",
+            params=[
+                ("season", "25_26"),
+                ("leagues", "Primera FEB"),
+                ("leagues", "Segunda FEB"),
+                ("min_games", "6"),
+                ("min_minutes", "12"),
+                ("query", "jugador"),
+            ],
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.service.calls["market_pool"]["leagues"], ["Primera FEB", "Segunda FEB"])
+        self.assertEqual(self.service.calls["market_pool"]["min_games"], 6)
+        self.assertEqual(response.json()["rows"][0]["PLAYER_KEY"], "p1")
+
+    def test_market_compare_endpoint_rejects_less_than_two_players(self) -> None:
+        response = self.client.post(
+            "/market/compare",
+            json={
+                "season": "25_26",
+                "leagues": ["Primera FEB"],
+                "playerKeys": ["p1"],
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("al menos 2", response.json()["detail"])
+
+    def test_market_compare_endpoint_accepts_two_to_six_players(self) -> None:
+        response = self.client.post(
+            "/market/compare",
+            json={
+                "season": "25_26",
+                "leagues": ["Primera FEB", "Segunda FEB"],
+                "playerKeys": ["p1", "p2", "p3"],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.service.calls["market_compare"]["player_keys"], ["p1", "p2", "p3"])
+        self.assertEqual(len(response.json()["players"]), 3)
+
+    def test_market_suggestions_never_return_anchor_as_candidate_in_contract(self) -> None:
+        response = self.client.get(
+            "/market/suggestions",
+            params={
+                "season": "25_26",
+                "leagues": "Primera FEB",
+                "anchor_player_key": "p1",
+                "limit": 5,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.service.calls["market_suggestions"]["anchor_player_key"], "p1")
+        self.assertNotEqual(response.json()["candidates"][0]["playerKey"], response.json()["anchor"]["playerKey"])
 
     def test_player_report_endpoint_accepts_json_body(self) -> None:
         response = self.client.post(

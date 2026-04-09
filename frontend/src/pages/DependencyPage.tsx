@@ -390,6 +390,8 @@ export function DependencyPage({ scope, setScope }: ScopePageProps) {
                         <PlayerDetailActions
                           playerKey={summary.detail.playerKey}
                           team={summary.detail.team}
+                          season={scope.season}
+                          league={scope.league}
                           currentPage="other"
                         />
                       </>

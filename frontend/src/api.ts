@@ -4,6 +4,9 @@ import type {
   DependencyResponse,
   DependencySummary,
   GmResponse,
+  MarketCompareResponse,
+  MarketPoolResponse,
+  MarketSuggestionsResponse,
   PhaseReportResponse,
   PlayerReportResponse,
   ReportBudgetResponse,
@@ -17,7 +20,7 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:8000" : "");
 
 export class UnauthorizedError extends Error {
-  constructor(message = "Sesion no valida o expirada.") {
+  constructor(message = "Sesión no válida o expirada.") {
     super(message);
     this.name = "UnauthorizedError";
   }
@@ -265,6 +268,69 @@ export function getPlayerSimilarity(
       target_player_key: targetPlayerKey,
       min_games: minGames,
       min_minutes: minMinutes
+    },
+    init
+  );
+}
+
+export function getMarketPool(
+  payload: {
+    season: string;
+    leagues: string[];
+    minGames: number;
+    minMinutes: number;
+    query: string;
+  },
+  init: RequestInit = {}
+) {
+  return requestJson<MarketPoolResponse>(
+    "/market/pool",
+    {
+      season: payload.season,
+      leagues: payload.leagues,
+      min_games: payload.minGames,
+      min_minutes: payload.minMinutes,
+      query: payload.query
+    },
+    init
+  );
+}
+
+export function getMarketCompare(
+  payload: {
+    season: string;
+    leagues: string[];
+    playerKeys: string[];
+  },
+  init: RequestInit = {}
+) {
+  return requestPostJson<MarketCompareResponse>(
+    "/market/compare",
+    {
+      season: payload.season,
+      leagues: payload.leagues,
+      playerKeys: payload.playerKeys
+    },
+    init
+  );
+}
+
+export function getMarketSuggestions(
+  payload: {
+    season: string;
+    leagues: string[];
+    anchorPlayerKey: string;
+    limit: number;
+  },
+  init: RequestInit = {}
+) {
+  return requestJson<MarketSuggestionsResponse>(
+    "/market/suggestions",
+    {
+      season: payload.season,
+      leagues: payload.leagues,
+      anchor_player_key: payload.anchorPlayerKey,
+      limit: payload.limit
     },
     init
   );

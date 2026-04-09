@@ -273,6 +273,8 @@ export function SimilarityPage({ scope, setScope }: ScopePageProps) {
                     <PlayerDetailActions
                       playerKey={selectedCandidate.playerKey}
                       team={selectedCandidate.team}
+                      season={scope.season}
+                      league={scope.league}
                       currentPage="similares"
                     />
                   </>

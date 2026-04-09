@@ -46,6 +46,11 @@ from utils.similarity_view import (
     build_player_similarity_results,
     build_similarity_player_pool,
 )
+from utils.market_view import (
+    build_market_compare_results,
+    build_market_player_pool,
+    filter_market_pool,
+)
 from utils.trends_view import (
     PLAYER_TREND_METRIC_OPTIONS,
     TEAM_TREND_METRIC_OPTIONS,
@@ -233,6 +238,29 @@ class AnalyticsService:
             },
         }
 
+    def _resolve_market_scope(
+        self,
+        *,
+        season: str | None,
+        leagues: list[str] | tuple[str, ...] | None,
+    ) -> dict[str, Any]:
+        store = self._get_store()
+        seasons = store.get_available_seasons()
+        resolved_season = season if season in seasons else (seasons[0] if seasons else None)
+        available_leagues = store.get_available_leagues(resolved_season) if resolved_season else []
+        normalized_leagues: list[str] = []
+        for league in leagues or []:
+            text = str(league or "").strip()
+            if text and text in available_leagues and text not in normalized_leagues:
+                normalized_leagues.append(text)
+        selected_leagues = normalized_leagues or ([available_leagues[0]] if available_leagues else [])
+        return {
+            "seasons": seasons,
+            "season": resolved_season,
+            "availableLeagues": available_leagues,
+            "selectedLeagues": selected_leagues,
+        }
+
     def _load_bundle(
         self,
         resolved_scope: dict[str, Any],
@@ -270,6 +298,83 @@ class AnalyticsService:
             jornadas=jornadas,
         )
         return self._get_store().load_report_bundle(filters)
+
+    @lru_cache(maxsize=32)
+    def _cached_market_pool_context(
+        self,
+        db_signature: tuple[str, int, int],
+        season: str | None,
+        leagues: tuple[str, ...],
+    ) -> dict[str, Any]:
+        resolved_market_scope = self._resolve_market_scope(season=season, leagues=leagues)
+        pool_frames: list[pd.DataFrame] = []
+
+        for league in resolved_market_scope["selectedLeagues"]:
+            resolved_scope = self._resolve_scope(ScopeFilters(season=resolved_market_scope["season"], league=league, phases=[], jornadas=[]))
+            bundle = self._load_bundle(resolved_scope, db_signature)
+            gm_df = build_gm_players_view(bundle.players_df, "Promedios", bundle.teams_df)
+            dependency_df = build_dependency_players_view(bundle)
+            pool_frames.append(build_market_player_pool(gm_df, dependency_df, league))
+
+        pool_df = pd.concat(pool_frames, ignore_index=True) if pool_frames else build_market_player_pool(pd.DataFrame(), pd.DataFrame(), "")
+        return {
+            "season": resolved_market_scope["season"],
+            "availableLeagues": list(resolved_market_scope["availableLeagues"]),
+            "selectedLeagues": list(resolved_market_scope["selectedLeagues"]),
+            "pool": pool_df,
+        }
+
+    def _build_market_summary(self, pool_df: pd.DataFrame, *, selected_leagues: list[str], min_games: int, min_minutes: float, query: str) -> dict[str, Any]:
+        top_points_row = pool_df.iloc[0] if not pool_df.empty else {}
+        top_ts_row = (
+            pool_df.sort_values(by=["TS%", "PUNTOS"], ascending=[False, False], na_position="last").iloc[0]
+            if not pool_df.empty and "TS%" in pool_df.columns
+            else {}
+        )
+        top_dependency_row = (
+            pool_df.sort_values(by=["DEPENDENCIA_SCORE", "PUNTOS"], ascending=[False, False], na_position="last").iloc[0]
+            if not pool_df.empty and "DEPENDENCIA_SCORE" in pool_df.columns
+            else {}
+        )
+        return {
+            "playerCount": int(len(pool_df.index)),
+            "leagueCount": int(len(selected_leagues)),
+            "filters": {
+                "minGames": int(min_games),
+                "minMinutes": float(min_minutes),
+                "query": str(query or ""),
+            },
+            "leaders": {
+                "topScorer": str(top_points_row.get("JUGADOR") or ""),
+                "topEfficiency": str(top_ts_row.get("JUGADOR") or ""),
+                "topDependency": str(top_dependency_row.get("JUGADOR") or ""),
+            },
+        }
+
+    @staticmethod
+    def _build_market_player_payload(player_row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "playerKey": str(player_row.get("PLAYER_KEY") or ""),
+            "label": _build_player_selection_label(player_row.get("JUGADOR"), player_row.get("EQUIPO"), player_row.get("DORSAL")),
+            "name": str(player_row.get("JUGADOR") or ""),
+            "team": str(player_row.get("EQUIPO") or ""),
+            "league": str(player_row.get("LIGA") or ""),
+            "image": _resolve_image(player_row.get("IMAGEN")),
+            "gamesPlayed": int(pd.to_numeric(pd.Series([player_row.get("PJ")]), errors="coerce").fillna(0).iloc[0]),
+            "minutes": float(pd.to_numeric(pd.Series([player_row.get("MINUTOS JUGADOS")]), errors="coerce").fillna(0.0).iloc[0]),
+            "points": float(pd.to_numeric(pd.Series([player_row.get("PUNTOS")]), errors="coerce").fillna(0.0).iloc[0]),
+            "rebounds": float(pd.to_numeric(pd.Series([player_row.get("REB TOTALES")]), errors="coerce").fillna(0.0).iloc[0]),
+            "assists": float(pd.to_numeric(pd.Series([player_row.get("ASISTENCIAS")]), errors="coerce").fillna(0.0).iloc[0]),
+            "turnovers": float(pd.to_numeric(pd.Series([player_row.get("PERDIDAS")]), errors="coerce").fillna(0.0).iloc[0]),
+            "plays": float(pd.to_numeric(pd.Series([player_row.get("PLAYS")]), errors="coerce").fillna(0.0).iloc[0]),
+            "usg": float(pd.to_numeric(pd.Series([player_row.get("USG%")]), errors="coerce").fillna(0.0).iloc[0]),
+            "ts": float(pd.to_numeric(pd.Series([player_row.get("TS%")]), errors="coerce").fillna(0.0).iloc[0]),
+            "efg": float(pd.to_numeric(pd.Series([player_row.get("eFG%")]), errors="coerce").fillna(0.0).iloc[0]),
+            "ppp": float(pd.to_numeric(pd.Series([player_row.get("PPP")]), errors="coerce").fillna(0.0).iloc[0]),
+            "astTo": float(pd.to_numeric(pd.Series([player_row.get("AST/TO")]), errors="coerce").fillna(0.0).iloc[0]),
+            "dependencyScore": float(pd.to_numeric(pd.Series([player_row.get("DEPENDENCIA_SCORE")]), errors="coerce").fillna(0.0).iloc[0]),
+            "focus": str(player_row.get("FOCO_PRINCIPAL") or ""),
+        }
 
     def _build_player_options(self, players_df: pd.DataFrame) -> list[dict[str, Any]]:
         if players_df.empty:
@@ -1073,4 +1178,179 @@ class AnalyticsService:
             "featureWeights": SIMILARITY_FEATURE_WEIGHTS,
             "candidates": candidates,
             "players": player_options,
+        }
+
+    def get_market_pool(
+        self,
+        *,
+        season: str | None,
+        leagues: list[str] | None,
+        min_games: int,
+        min_minutes: float,
+        query: str | None,
+    ) -> dict[str, Any]:
+        payload = self._cached_market_pool(
+            self._db_signature(),
+            season,
+            tuple(str(value or "").strip() for value in (leagues or [])),
+            _coerce_int(min_games, 5, minimum=0, maximum=100),
+            max(float(min_minutes if min_minutes is not None else 10.0), 0.0),
+            str(query or "").strip(),
+        )
+        return deepcopy(payload)
+
+    @lru_cache(maxsize=64)
+    def _cached_market_pool(
+        self,
+        db_signature: tuple[str, int, int],
+        season: str | None,
+        leagues: tuple[str, ...],
+        min_games: int,
+        min_minutes: float,
+        query: str,
+    ) -> dict[str, Any]:
+        context = self._cached_market_pool_context(db_signature, season, leagues)
+        filtered_pool = filter_market_pool(
+            context["pool"],
+            min_games=min_games,
+            min_minutes=min_minutes,
+            query=query,
+        )
+        rows = []
+        for row in _to_records(filtered_pool):
+            rows.append(
+                {
+                    "PLAYER_KEY": row.get("PLAYER_KEY"),
+                    "IMAGEN": _resolve_image(row.get("IMAGEN")),
+                    "JUGADOR": row.get("JUGADOR"),
+                    "EQUIPO": row.get("EQUIPO"),
+                    "LIGA": row.get("LIGA"),
+                    "PJ": row.get("PJ"),
+                    "MIN": row.get("MINUTOS JUGADOS"),
+                    "PTS": row.get("PUNTOS"),
+                    "REB": row.get("REB TOTALES"),
+                    "AST": row.get("ASISTENCIAS"),
+                    "TOV": row.get("PERDIDAS"),
+                    "PLAYS": row.get("PLAYS"),
+                    "USG%": row.get("USG%"),
+                    "TS%": row.get("TS%"),
+                    "eFG%": row.get("eFG%"),
+                    "PPP": row.get("PPP"),
+                    "AST/TO": row.get("AST/TO"),
+                    "%PLAYS_EQUIPO": row.get("%PLAYS_EQUIPO"),
+                    "%PUNTOS_EQUIPO": row.get("%PUNTOS_EQUIPO"),
+                    "%AST_EQUIPO": row.get("%AST_EQUIPO"),
+                    "%REB_EQUIPO": row.get("%REB_EQUIPO"),
+                    "DEPENDENCIA_SCORE": row.get("DEPENDENCIA_SCORE"),
+                    "FOCO_PRINCIPAL": row.get("FOCO_PRINCIPAL"),
+                }
+            )
+
+        return {
+            "season": context["season"],
+            "availableLeagues": context["availableLeagues"],
+            "selectedLeagues": context["selectedLeagues"],
+            "rows": rows,
+            "summary": self._build_market_summary(
+                filtered_pool,
+                selected_leagues=context["selectedLeagues"],
+                min_games=min_games,
+                min_minutes=min_minutes,
+                query=query,
+            ),
+        }
+
+    def get_market_compare(
+        self,
+        *,
+        season: str | None,
+        leagues: list[str] | None,
+        player_keys: list[str] | None,
+    ) -> dict[str, Any]:
+        payload = self._cached_market_compare(
+            self._db_signature(),
+            season,
+            tuple(str(value or "").strip() for value in (leagues or [])),
+            tuple(str(value or "").strip() for value in (player_keys or [])),
+        )
+        return deepcopy(payload)
+
+    @lru_cache(maxsize=64)
+    def _cached_market_compare(
+        self,
+        db_signature: tuple[str, int, int],
+        season: str | None,
+        leagues: tuple[str, ...],
+        player_keys: tuple[str, ...],
+    ) -> dict[str, Any]:
+        context = self._cached_market_pool_context(db_signature, season, leagues)
+        compare_result = build_market_compare_results(context["pool"], list(player_keys))
+        return {
+            "season": context["season"],
+            "availableLeagues": context["availableLeagues"],
+            "selectedLeagues": context["selectedLeagues"],
+            **compare_result,
+        }
+
+    def get_market_suggestions(
+        self,
+        *,
+        season: str | None,
+        leagues: list[str] | None,
+        anchor_player_key: str | None,
+        limit: int,
+    ) -> dict[str, Any]:
+        payload = self._cached_market_suggestions(
+            self._db_signature(),
+            season,
+            tuple(str(value or "").strip() for value in (leagues or [])),
+            str(anchor_player_key or "").strip(),
+            _coerce_int(limit, 6, minimum=1, maximum=10),
+        )
+        return deepcopy(payload)
+
+    @lru_cache(maxsize=64)
+    def _cached_market_suggestions(
+        self,
+        db_signature: tuple[str, int, int],
+        season: str | None,
+        leagues: tuple[str, ...],
+        anchor_player_key: str,
+        limit: int,
+    ) -> dict[str, Any]:
+        context = self._cached_market_pool_context(db_signature, season, leagues)
+        if not anchor_player_key:
+            return {
+                "season": context["season"],
+                "availableLeagues": context["availableLeagues"],
+                "selectedLeagues": context["selectedLeagues"],
+                "anchor": None,
+                "candidates": [],
+            }
+
+        similarity_result = build_player_similarity_results(
+            context["pool"],
+            anchor_player_key,
+            min_games=5,
+            min_minutes=10.0,
+            limit=limit,
+        )
+        target = similarity_result.get("target")
+        candidates = []
+        for candidate in similarity_result.get("candidates", []):
+            candidates.append(
+                {
+                    **self._build_market_player_payload(candidate),
+                    "similarityScore": float(pd.to_numeric(pd.Series([candidate.get("similarityScore")]), errors="coerce").fillna(0.0).iloc[0]),
+                    "reasons": list(candidate.get("reasons") or []),
+                    "differences": list(candidate.get("differences") or []),
+                }
+            )
+
+        return {
+            "season": context["season"],
+            "availableLeagues": context["availableLeagues"],
+            "selectedLeagues": context["selectedLeagues"],
+            "anchor": self._build_market_player_payload(target) if target else None,
+            "candidates": candidates,
         }

@@ -69,6 +69,12 @@ class PhaseReportRequest(BaseModel):
     minShots: int = 20
 
 
+class MarketCompareRequest(BaseModel):
+    season: str | None = None
+    leagues: list[str] = Field(default_factory=list)
+    playerKeys: list[str] = Field(default_factory=list)
+
+
 def create_app(
     service: AnalyticsService | None = None,
     settings: AppSettings | None = None,
@@ -184,7 +190,7 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Demasiados intentos de acceso. Espera unos minutos.")
 
         if not verify_password(payload.password, settings.admin_password_hash):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Contrasena incorrecta.")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Contraseña incorrecta.")
 
         response = JSONResponse({"authenticated": True, "authRequired": True, "ttlHours": settings.session_ttl_hours})
         set_session_cookie(response, settings, create_session_cookie(settings))
@@ -321,6 +327,55 @@ def create_app(
             target_player_key=target_player_key,
             min_games=min_games,
             min_minutes=min_minutes,
+        )
+
+    @app.get("/market/pool")
+    def market_pool(
+        season: str | None = None,
+        leagues: Annotated[list[str] | None, Query()] = None,
+        min_games: int = 5,
+        min_minutes: float = 10.0,
+        query: str | None = None,
+        _: SessionData = Depends(get_current_session),
+        service: AnalyticsService = Depends(get_service),
+    ) -> dict:
+        return service.get_market_pool(
+            season=season,
+            leagues=leagues,
+            min_games=min_games,
+            min_minutes=min_minutes,
+            query=query,
+        )
+
+    @app.post("/market/compare")
+    def market_compare(
+        payload: Annotated[MarketCompareRequest, Body()],
+        _: SessionData = Depends(get_current_session),
+        service: AnalyticsService = Depends(get_service),
+    ) -> dict:
+        try:
+            return service.get_market_compare(
+                season=payload.season,
+                leagues=payload.leagues,
+                player_keys=payload.playerKeys,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/market/suggestions")
+    def market_suggestions(
+        season: str | None = None,
+        leagues: Annotated[list[str] | None, Query()] = None,
+        anchor_player_key: str | None = None,
+        limit: int = 6,
+        _: SessionData = Depends(get_current_session),
+        service: AnalyticsService = Depends(get_service),
+    ) -> dict:
+        return service.get_market_suggestions(
+            season=season,
+            leagues=leagues,
+            anchor_player_key=anchor_player_key,
+            limit=limit,
         )
 
     @app.post("/reports/player")
@@ -461,6 +516,9 @@ def _is_reserved_backend_path(full_path: str) -> bool:
         "trends/player",
         "trends/team",
         "similarity/player",
+        "market/pool",
+        "market/compare",
+        "market/suggestions",
         "auth/session",
         "auth/login",
         "auth/logout",

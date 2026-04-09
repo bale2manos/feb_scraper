@@ -148,6 +148,136 @@ export type SimilarityResponse = {
   players: PlayerOption[];
 };
 
+export type MarketPoolRow = {
+  PLAYER_KEY: string;
+  IMAGEN?: string;
+  JUGADOR: string;
+  EQUIPO: string;
+  LIGA: string;
+  PJ: number;
+  MIN: number;
+  PTS: number;
+  REB: number;
+  AST: number;
+  TOV?: number;
+  PLAYS?: number;
+  "USG%"?: number;
+  "TS%"?: number;
+  "eFG%"?: number;
+  PPP?: number;
+  "AST/TO"?: number;
+  "%PLAYS_EQUIPO"?: number;
+  "%PUNTOS_EQUIPO"?: number;
+  "%AST_EQUIPO"?: number;
+  "%REB_EQUIPO"?: number;
+  DEPENDENCIA_SCORE?: number;
+  FOCO_PRINCIPAL?: string;
+};
+
+export type MarketPoolResponse = {
+  season: string;
+  rows: MarketPoolRow[];
+  availableLeagues: string[];
+  selectedLeagues: string[];
+  summary: {
+    playerCount: number;
+    leagueCount: number;
+    filters: {
+      minGames: number;
+      minMinutes: number;
+      query: string;
+    };
+    leaders: {
+      topScorer: string;
+      topEfficiency: string;
+      topDependency: string;
+    };
+  };
+};
+
+export type MarketComparePlayer = {
+  playerKey: string;
+  label: string;
+  name: string;
+  team: string;
+  league: string;
+  image: string;
+  focus: string;
+  dependencyScore: number;
+};
+
+export type MarketCompareMetricRow = {
+  playerKey: string;
+  value: number | string | null;
+  formatted: string;
+  percentile: number | null;
+  deltaToBest: number | null;
+  deltaToWorst: number | null;
+};
+
+export type MarketCompareMetric = {
+  key: string;
+  label: string;
+  higherIsBetter: boolean | null;
+  bestValue?: number;
+  worstValue?: number;
+  rows: MarketCompareMetricRow[];
+};
+
+export type MarketCompareBlock = {
+  key: string;
+  title: string;
+  metrics: MarketCompareMetric[];
+};
+
+export type MarketCompareResponse = {
+  season: string;
+  players: MarketComparePlayer[];
+  blocks: MarketCompareBlock[];
+  percentiles: Record<string, Record<string, number | null>>;
+  poolSummary: {
+    totalPlayers: number;
+    selectedPlayers: number;
+    selectedPlayerKeys: string[];
+  };
+  availableLeagues: string[];
+  selectedLeagues: string[];
+};
+
+export type MarketSuggestionCandidate = {
+  playerKey: string;
+  label: string;
+  name: string;
+  team: string;
+  league: string;
+  image: string;
+  gamesPlayed: number;
+  minutes: number;
+  points: number;
+  rebounds: number;
+  assists: number;
+  turnovers: number;
+  plays: number;
+  usg: number;
+  ts: number;
+  efg: number;
+  ppp: number;
+  astTo: number;
+  dependencyScore: number;
+  focus: string;
+  similarityScore: number;
+  reasons: string[];
+  differences: string[];
+};
+
+export type MarketSuggestionsResponse = {
+  season: string;
+  availableLeagues: string[];
+  selectedLeagues: string[];
+  anchor: MarketSuggestionCandidate | null;
+  candidates: MarketSuggestionCandidate[];
+};
+
 export type DatabaseSummaryResponse = {
   metrics: {
     scopes: number;

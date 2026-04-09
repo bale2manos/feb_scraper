@@ -19,7 +19,7 @@ import {
 } from "../market";
 import { useScopeMeta } from "../scope";
 import type { MarketOpportunityRow, MarketPoolRow, ScopeState } from "../types";
-import { formatNumber } from "../utils";
+import { formatNumber, getBirthYear, getPlayerAge } from "../utils";
 
 type ScopePageProps = {
   scope: ScopeState;
@@ -30,6 +30,7 @@ const OPPORTUNITY_COLUMNS = [
   "JUGADOR",
   "EQUIPO",
   "LIGA",
+  "AÑO NACIMIENTO",
   "PJ",
   "MIN",
   "USG%",
@@ -164,6 +165,8 @@ export function PotentialPage({ scope }: ScopePageProps) {
       : typeof selectedLookupRow?.IMAGEN === "string" && /^https?:\/\//.test(String(selectedLookupRow.IMAGEN))
         ? String(selectedLookupRow.IMAGEN)
         : null;
+  const selectedBirthYear = getBirthYear(selectedOpportunityRow?.["AÑO NACIMIENTO"] ?? selectedLookupRow?.["AÑO NACIMIENTO"]);
+  const selectedAge = getPlayerAge(selectedOpportunityRow?.["AÑO NACIMIENTO"] ?? selectedLookupRow?.["AÑO NACIMIENTO"]);
 
   const shortlistCards = shortlist.map((playerKey) => {
     const poolRow = shortlistLookup.get(playerKey);
@@ -384,6 +387,8 @@ export function PotentialPage({ scope }: ScopePageProps) {
                     )}
 
                     <div className="metric-grid">
+                      {selectedAge != null ? <MetricCard label="Edad" value={String(selectedAge)} /> : null}
+                      {selectedBirthYear != null ? <MetricCard label="Nacimiento" value={String(selectedBirthYear)} /> : null}
                       <MetricCard label="MIN" value={formatNumber(selectedOpportunityRow?.MIN ?? selectedLookupRow?.MIN ?? 0, 1)} />
                       <MetricCard label="USG%" value={formatNumber(selectedOpportunityRow?.["USG%"] ?? selectedLookupRow?.["USG%"] ?? 0, 1)} />
                       <MetricCard label="TS%" value={formatNumber(selectedOpportunityRow?.["TS%"] ?? selectedLookupRow?.["TS%"] ?? 0, 1)} />

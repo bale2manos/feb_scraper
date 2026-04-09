@@ -11,6 +11,27 @@ export function formatNumber(value: unknown, digits = 1) {
   return asNumber(value).toFixed(digits);
 }
 
+export function getBirthYear(value: unknown) {
+  const numeric = Number(value ?? NaN);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  const year = Math.trunc(numeric);
+  if (year < 1900 || year > 2100) {
+    return null;
+  }
+  return year;
+}
+
+export function getPlayerAge(value: unknown, referenceYear = new Date().getFullYear()) {
+  const birthYear = getBirthYear(value);
+  if (birthYear == null) {
+    return null;
+  }
+  const age = referenceYear - birthYear;
+  return age >= 0 && age <= 70 ? age : null;
+}
+
 export function downloadCsv(filename: string, rows: Record<string, unknown>[]) {
   if (!rows.length) {
     return;

@@ -19,7 +19,7 @@ import {
 } from "../market";
 import { useScopeMeta } from "../scope";
 import type { MarketCompareMetric, MarketComparePlayer, MarketPoolRow, ScopeState } from "../types";
-import { formatNumber } from "../utils";
+import { formatNumber, getBirthYear, getPlayerAge } from "../utils";
 
 type ScopePageProps = {
   scope: ScopeState;
@@ -336,6 +336,8 @@ export function MarketPage({ scope }: ScopePageProps) {
   );
   const selectedImage =
     typeof selectedRow?.IMAGEN === "string" && /^https?:\/\//.test(String(selectedRow.IMAGEN)) ? String(selectedRow.IMAGEN) : null;
+  const selectedBirthYear = getBirthYear(selectedRow?.["AÑO NACIMIENTO"]);
+  const selectedAge = getPlayerAge(selectedRow?.["AÑO NACIMIENTO"]);
 
   function addFilter() {
     if (!numericColumns.length) {
@@ -578,6 +580,8 @@ export function MarketPage({ scope }: ScopePageProps) {
                       <div className="player-placeholder">MKT</div>
                     )}
                     <div className="metric-grid">
+                      {selectedAge != null ? <MetricCard label="Edad" value={String(selectedAge)} /> : null}
+                      {selectedBirthYear != null ? <MetricCard label="Nacimiento" value={String(selectedBirthYear)} /> : null}
                       <MetricCard label="PTS" value={formatNumber(selectedRow.PTS, 1)} />
                       <MetricCard label="REB" value={formatNumber(selectedRow.REB, 1)} />
                       <MetricCard label="AST" value={formatNumber(selectedRow.AST, 1)} />

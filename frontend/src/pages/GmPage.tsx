@@ -10,7 +10,7 @@ import { SearchSelect } from "../components/SearchSelect";
 import { useLocalStorageState } from "../hooks";
 import { buildScopeQueryKey, useScopeMeta } from "../scope";
 import type { ScopeState } from "../types";
-import { downloadCsv, formatNumber } from "../utils";
+import { downloadCsv, formatNumber, getBirthYear, getPlayerAge } from "../utils";
 
 type ScopePageProps = {
   scope: ScopeState;
@@ -125,6 +125,8 @@ export function GmPage({ scope, setScope }: ScopePageProps) {
 
   const selectedImage =
     typeof selectedRow?.IMAGEN === "string" && /^https?:\/\//.test(String(selectedRow.IMAGEN)) ? String(selectedRow.IMAGEN) : null;
+  const selectedBirthYear = getBirthYear(selectedRow?.["AÑO NACIMIENTO"]);
+  const selectedAge = getPlayerAge(selectedRow?.["AÑO NACIMIENTO"]);
   const playersCount = filteredRows.length;
   const totalPlayersCount = data?.rows.length ?? 0;
   const teamsCount = new Set(filteredRows.map((row) => String(row.EQUIPO ?? ""))).size;
@@ -279,6 +281,8 @@ export function GmPage({ scope, setScope }: ScopePageProps) {
                         <div className="player-placeholder">GM</div>
                       )}
                       <div className="metric-grid">
+                        {selectedAge != null ? <MetricCard label="Edad" value={String(selectedAge)} /> : null}
+                        {selectedBirthYear != null ? <MetricCard label="Nacimiento" value={String(selectedBirthYear)} /> : null}
                         <MetricCard label="Puntos" value={formatNumber(selectedRow.PUNTOS, 1)} />
                         <MetricCard label="Rebotes" value={formatNumber(selectedRow["REB TOTALES"], 1)} />
                         <MetricCard label="Asistencias" value={formatNumber(selectedRow.ASISTENCIAS, 1)} />

@@ -20,7 +20,7 @@ import {
 } from "../market";
 import { useScopeMeta } from "../scope";
 import type { MarketSuggestionCandidate, ScopeState } from "../types";
-import { formatNumber } from "../utils";
+import { formatNumber, getBirthYear, getPlayerAge } from "../utils";
 
 type ScopePageProps = {
   scope: ScopeState;
@@ -258,6 +258,8 @@ export function SimilarityPage({ scope }: ScopePageProps) {
       : typeof selectedPoolRow?.IMAGEN === "string" && /^https?:\/\//.test(String(selectedPoolRow.IMAGEN))
         ? String(selectedPoolRow.IMAGEN)
         : null;
+  const selectedBirthYear = getBirthYear(selectedCandidate?.birthYear ?? selectedPoolRow?.["AÑO NACIMIENTO"]);
+  const selectedAge = getPlayerAge(selectedCandidate?.birthYear ?? selectedPoolRow?.["AÑO NACIMIENTO"]);
   const topCandidate = candidates[0] ?? null;
   const error = poolQuery.error instanceof Error ? poolQuery.error.message : suggestionsQuery.error instanceof Error ? suggestionsQuery.error.message : null;
 
@@ -453,6 +455,8 @@ export function SimilarityPage({ scope }: ScopePageProps) {
                       <div className="player-placeholder">SIM</div>
                     )}
                     <div className="metric-grid">
+                      {selectedAge != null ? <MetricCard label="Edad" value={String(selectedAge)} /> : null}
+                      {selectedBirthYear != null ? <MetricCard label="Nacimiento" value={String(selectedBirthYear)} /> : null}
                       <MetricCard label="Minutos" value={formatNumber(selectedCandidate?.minutes ?? selectedPoolRow?.MIN ?? 0, 1)} />
                       <MetricCard label="Puntos" value={formatNumber(selectedCandidate?.points ?? selectedPoolRow?.PTS ?? 0, 1)} />
                       <MetricCard label="Rebotes" value={formatNumber(selectedCandidate?.rebounds ?? selectedPoolRow?.REB ?? 0, 1)} />

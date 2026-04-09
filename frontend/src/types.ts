@@ -61,6 +61,7 @@ export type DependencySummary = {
     name: string;
     image: string;
     team: string;
+    birthYear?: number | null;
     gamesPlayed: number;
     risk: string;
     focus: string;
@@ -154,6 +155,7 @@ export type MarketPoolRow = {
   JUGADOR: string;
   EQUIPO: string;
   LIGA: string;
+  "AÑO NACIMIENTO"?: number | null;
   PJ: number;
   MIN: number;
   PTS: number;
@@ -251,6 +253,7 @@ export type MarketSuggestionCandidate = {
   team: string;
   league: string;
   image: string;
+  birthYear?: number | null;
   gamesPlayed: number;
   minutes: number;
   points: number;
@@ -284,6 +287,7 @@ export type MarketOpportunityRow = {
   JUGADOR: string;
   EQUIPO: string;
   LIGA: string;
+  "AÑO NACIMIENTO"?: number | null;
   PJ: number;
   MIN: number;
   "USG%": number;

@@ -179,6 +179,16 @@ def _coerce_int(value: Any, default: int, *, minimum: int = 0, maximum: int | No
     return numeric
 
 
+def _extract_birth_year(value: Any) -> int | None:
+    numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(numeric):
+        return None
+    year = int(numeric)
+    if year < 1900 or year > 2100:
+        return None
+    return year
+
+
 def _is_http_url(value: str) -> bool:
     return value.startswith("http://") or value.startswith("https://")
 
@@ -354,6 +364,7 @@ class AnalyticsService:
 
     @staticmethod
     def _build_market_player_payload(player_row: dict[str, Any]) -> dict[str, Any]:
+        birth_year = _extract_birth_year(player_row.get("AÑO NACIMIENTO"))
         return {
             "playerKey": str(player_row.get("PLAYER_KEY") or ""),
             "label": _build_player_selection_label(player_row.get("JUGADOR"), player_row.get("EQUIPO"), player_row.get("DORSAL")),
@@ -361,6 +372,7 @@ class AnalyticsService:
             "team": str(player_row.get("EQUIPO") or ""),
             "league": str(player_row.get("LIGA") or ""),
             "image": _resolve_image(player_row.get("IMAGEN")),
+            "birthYear": birth_year,
             "gamesPlayed": int(pd.to_numeric(pd.Series([player_row.get("PJ")]), errors="coerce").fillna(0).iloc[0]),
             "minutes": float(pd.to_numeric(pd.Series([player_row.get("MINUTOS JUGADOS")]), errors="coerce").fillna(0.0).iloc[0]),
             "points": float(pd.to_numeric(pd.Series([player_row.get("PUNTOS")]), errors="coerce").fillna(0.0).iloc[0]),
@@ -715,6 +727,7 @@ class AnalyticsService:
             "name": str(player_row["JUGADOR"]),
             "image": image,
             "team": str(player_row["EQUIPO"]),
+            "birthYear": _extract_birth_year(player_meta.iloc[0]["AÑO NACIMIENTO"] if not player_meta.empty and "AÑO NACIMIENTO" in player_meta.columns else None),
             "gamesPlayed": int(pd.to_numeric(player_row.get("PJ"), errors="coerce") or 0),
             "risk": str(player_row.get("DEPENDENCIA_RIESGO") or ""),
             "focus": str(player_row.get("FOCO_PRINCIPAL") or ""),
@@ -1226,6 +1239,7 @@ class AnalyticsService:
                     "JUGADOR": row.get("JUGADOR"),
                     "EQUIPO": row.get("EQUIPO"),
                     "LIGA": row.get("LIGA"),
+                    "AÑO NACIMIENTO": _extract_birth_year(row.get("AÑO NACIMIENTO")),
                     "PJ": row.get("PJ"),
                     "MIN": row.get("MINUTOS JUGADOS"),
                     "PTS": row.get("PUNTOS"),

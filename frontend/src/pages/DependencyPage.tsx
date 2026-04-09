@@ -10,7 +10,7 @@ import { SearchSelect } from "../components/SearchSelect";
 import { useLocalStorageState } from "../hooks";
 import { buildScopeQueryKey, useScopeMeta } from "../scope";
 import type { ScopeState } from "../types";
-import { downloadCsv, formatNumber, formatPercent } from "../utils";
+import { downloadCsv, formatNumber, formatPercent, getPlayerAge } from "../utils";
 
 type ScopePageProps = {
   scope: ScopeState;
@@ -111,6 +111,7 @@ export function DependencyPage({ scope, setScope }: ScopePageProps) {
 
   const detailImage =
     typeof summary?.detail?.image === "string" && /^https?:\/\//.test(summary.detail.image) ? summary.detail.image : null;
+  const detailAge = getPlayerAge(summary?.detail?.birthYear);
 
   const overviewRows = useMemo<DependencyOverviewRow[]>(() => {
     const rows = data?.rows ?? [];
@@ -376,6 +377,8 @@ export function DependencyPage({ scope, setScope }: ScopePageProps) {
                           <div className="player-placeholder">DEP</div>
                         )}
                         <div className="metric-grid">
+                          {detailAge != null ? <MetricCard label="Edad" value={String(detailAge)} /> : null}
+                          {summary.detail.birthYear != null ? <MetricCard label="Nacimiento" value={String(summary.detail.birthYear)} /> : null}
                           <MetricCard label="% uso ofensivo" value={formatPercent(summary.detail.usageShare)} />
                           <MetricCard label="% anotacion" value={formatPercent(summary.detail.scoringShare)} />
                           <MetricCard label="% creacion" value={formatPercent(summary.detail.creationShare)} />

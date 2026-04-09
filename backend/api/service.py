@@ -48,6 +48,7 @@ from utils.similarity_view import (
 )
 from utils.market_view import (
     build_market_compare_results,
+    build_market_opportunity_results,
     build_market_player_pool,
     filter_market_pool,
 )
@@ -1353,4 +1354,53 @@ class AnalyticsService:
             "selectedLeagues": context["selectedLeagues"],
             "anchor": self._build_market_player_payload(target) if target else None,
             "candidates": candidates,
+        }
+
+    def get_market_opportunity(
+        self,
+        *,
+        season: str | None,
+        leagues: list[str] | None,
+        min_games: int,
+        max_minutes: float,
+        max_usg: float,
+        query: str | None,
+    ) -> dict[str, Any]:
+        payload = self._cached_market_opportunity(
+            self._db_signature(),
+            season,
+            tuple(str(value or "").strip() for value in (leagues or [])),
+            _coerce_int(min_games, 5, minimum=0, maximum=100),
+            max(float(max_minutes if max_minutes is not None else 22.0), 0.0),
+            max(float(max_usg if max_usg is not None else 24.0), 0.0),
+            str(query or "").strip(),
+        )
+        return deepcopy(payload)
+
+    @lru_cache(maxsize=64)
+    def _cached_market_opportunity(
+        self,
+        db_signature: tuple[str, int, int],
+        season: str | None,
+        leagues: tuple[str, ...],
+        min_games: int,
+        max_minutes: float,
+        max_usg: float,
+        query: str,
+    ) -> dict[str, Any]:
+        context = self._cached_market_pool_context(db_signature, season, leagues)
+        results = build_market_opportunity_results(
+            context["pool"],
+            min_games=min_games,
+            max_minutes=max_minutes,
+            max_usg=max_usg,
+            query=query,
+        )
+        return {
+            "season": context["season"],
+            "availableLeagues": context["availableLeagues"],
+            "selectedLeagues": context["selectedLeagues"],
+            "filters": results["summary"]["filters"],
+            "summary": results["summary"],
+            "rows": results["rows"],
         }

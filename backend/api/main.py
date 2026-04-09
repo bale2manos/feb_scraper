@@ -378,6 +378,26 @@ def create_app(
             limit=limit,
         )
 
+    @app.get("/market/opportunity")
+    def market_opportunity(
+        season: str | None = None,
+        leagues: Annotated[list[str] | None, Query()] = None,
+        min_games: int = 5,
+        max_minutes: float = 22.0,
+        max_usg: float = 24.0,
+        query: str | None = None,
+        _: SessionData = Depends(get_current_session),
+        service: AnalyticsService = Depends(get_service),
+    ) -> dict:
+        return service.get_market_opportunity(
+            season=season,
+            leagues=leagues,
+            min_games=min_games,
+            max_minutes=max_minutes,
+            max_usg=max_usg,
+            query=query,
+        )
+
     @app.post("/reports/player")
     def player_report(
         payload: Annotated[PlayerReportRequest, Body()],
@@ -519,6 +539,7 @@ def _is_reserved_backend_path(full_path: str) -> bool:
         "market/pool",
         "market/compare",
         "market/suggestions",
+        "market/opportunity",
         "auth/session",
         "auth/login",
         "auth/logout",

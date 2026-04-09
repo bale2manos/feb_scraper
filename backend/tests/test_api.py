@@ -167,6 +167,32 @@ class FakeAnalyticsService:
             ],
         }
 
+    def get_market_opportunity(self, **kwargs):
+        self.calls["market_opportunity"] = kwargs
+        return {
+            "season": kwargs.get("season"),
+            "availableLeagues": ["Primera FEB", "Segunda FEB"],
+            "selectedLeagues": kwargs.get("leagues") or ["Primera FEB"],
+            "filters": {
+                "minGames": kwargs.get("min_games"),
+                "maxMinutes": kwargs.get("max_minutes"),
+                "maxUsg": kwargs.get("max_usg"),
+                "query": kwargs.get("query") or "",
+            },
+            "summary": {"candidateCount": 1, "leaders": {"topOpportunity": "Jugador B", "bestEfficiency": "Jugador B"}},
+            "rows": [
+                {
+                    "PLAYER_KEY": "p2",
+                    "JUGADOR": "Jugador B",
+                    "EQUIPO": "Team B",
+                    "LIGA": "Primera FEB",
+                    "OpportunityScore": 81.5,
+                    "strengths": ["TS% 60.0", "PPP 1.2"],
+                    "blockers": ["Minutos 20.0", "USG% 23.0"],
+                }
+            ],
+        }
+
     def generate_player_report(self, **kwargs):
         self.calls["player_report"] = kwargs
         return {
@@ -352,6 +378,24 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.service.calls["market_suggestions"]["anchor_player_key"], "p1")
         self.assertNotEqual(response.json()["candidates"][0]["playerKey"], response.json()["anchor"]["playerKey"])
+
+    def test_market_opportunity_endpoint_accepts_thresholds(self) -> None:
+        response = self.client.get(
+            "/market/opportunity",
+            params=[
+                ("season", "25_26"),
+                ("leagues", "Primera FEB"),
+                ("min_games", "5"),
+                ("max_minutes", "22"),
+                ("max_usg", "24"),
+                ("query", "jugador"),
+            ],
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.service.calls["market_opportunity"]["max_minutes"], 22.0)
+        self.assertEqual(self.service.calls["market_opportunity"]["max_usg"], 24.0)
+        self.assertEqual(response.json()["rows"][0]["PLAYER_KEY"], "p2")
 
     def test_player_report_endpoint_accepts_json_body(self) -> None:
         response = self.client.post(

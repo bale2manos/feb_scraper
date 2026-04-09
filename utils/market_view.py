@@ -107,6 +107,26 @@ MARKET_DEPENDENCY_COLUMNS = [
     "FOCO_PRINCIPAL",
 ]
 
+OPPORTUNITY_FEATURE_WEIGHTS: dict[str, float] = {
+    "TS%": 0.24,
+    "PPP": 0.22,
+    "AST/TO": 0.14,
+    "eFG%": 0.12,
+    "MINUTOS JUGADOS": 0.18,
+    "USG%": 0.10,
+}
+
+OPPORTUNITY_FEATURE_LABELS: dict[str, str] = {
+    "TS%": "TS%",
+    "PPP": "PPP",
+    "AST/TO": "AST/TO",
+    "eFG%": "eFG%",
+    "MINUTOS JUGADOS": "Minutos",
+    "USG%": "USG%",
+}
+
+OPPORTUNITY_INVERTED_COLUMNS = {"MINUTOS JUGADOS", "USG%"}
+
 
 def _numeric_series(df: pd.DataFrame, column: str) -> pd.Series:
     if column not in df.columns:
@@ -329,5 +349,159 @@ def build_market_compare_results(pool_df: pd.DataFrame, player_keys: list[str]) 
             "totalPlayers": int(len(pool_df.index)),
             "selectedPlayers": int(len(selected.index)),
             "selectedPlayerKeys": normalized_keys,
+        },
+    }
+
+
+def build_market_opportunity_results(
+    pool_df: pd.DataFrame,
+    *,
+    min_games: int = 5,
+    max_minutes: float = 22.0,
+    max_usg: float = 24.0,
+    query: str | None = None,
+) -> dict[str, Any]:
+    if pool_df.empty:
+        return {
+            "rows": [],
+            "summary": {
+                "candidateCount": 0,
+                "filters": {
+                    "minGames": int(min_games),
+                    "maxMinutes": float(max_minutes),
+                    "maxUsg": float(max_usg),
+                    "query": str(query or ""),
+                },
+                "leaders": {
+                    "topOpportunity": "",
+                    "bestEfficiency": "",
+                },
+            },
+        }
+
+    filtered = pool_df[
+        (_numeric_series(pool_df, "PJ") >= max(int(min_games), 0))
+        & (_numeric_series(pool_df, "MINUTOS JUGADOS") <= max(float(max_minutes), 0.0))
+        & (_numeric_series(pool_df, "USG%") <= max(float(max_usg), 0.0))
+    ].copy()
+
+    normalized_query = str(query or "").strip().casefold()
+    if normalized_query:
+        haystack = (
+            filtered.get("JUGADOR", "").astype(str)
+            + " "
+            + filtered.get("EQUIPO", "").astype(str)
+            + " "
+            + filtered.get("LIGA", "").astype(str)
+        ).str.casefold()
+        filtered = filtered.loc[haystack.str.contains(normalized_query, na=False)].copy()
+
+    if filtered.empty:
+        return {
+            "rows": [],
+            "summary": {
+                "candidateCount": 0,
+                "filters": {
+                    "minGames": int(min_games),
+                    "maxMinutes": float(max_minutes),
+                    "maxUsg": float(max_usg),
+                    "query": str(query or ""),
+                },
+                "leaders": {
+                    "topOpportunity": "",
+                    "bestEfficiency": "",
+                },
+            },
+        }
+
+    percentile_df = _percentile_frame(filtered, [column for column in OPPORTUNITY_FEATURE_WEIGHTS if column in filtered.columns])
+    weight_sum = sum(OPPORTUNITY_FEATURE_WEIGHTS.values()) or 1.0
+    contributions_by_index: dict[int, list[tuple[str, float]]] = {}
+    scores: list[float] = []
+
+    for index, row in filtered.iterrows():
+        contributions: list[tuple[str, float]] = []
+        weighted_sum = 0.0
+        for column, weight in OPPORTUNITY_FEATURE_WEIGHTS.items():
+            if column not in percentile_df.columns:
+                continue
+            percentile = float(percentile_df.loc[index, column])
+            oriented = 100.0 - percentile if column in OPPORTUNITY_INVERTED_COLUMNS else percentile
+            contribution = oriented * weight
+            contributions.append((column, contribution))
+            weighted_sum += contribution
+        contributions_by_index[index] = contributions
+        scores.append(round(weighted_sum / weight_sum, 2))
+
+    filtered = filtered.copy()
+    filtered["opportunityScore"] = scores
+
+    strengths: list[list[str]] = []
+    blockers: list[list[str]] = []
+    for index, row in filtered.iterrows():
+        contributions = contributions_by_index.get(index, [])
+        sorted_contributions = sorted(contributions, key=lambda item: item[1], reverse=True)
+        sorted_blockers = sorted(contributions, key=lambda item: item[1])
+        strengths.append(
+            [
+                f"{OPPORTUNITY_FEATURE_LABELS.get(column, column)} { _format_metric_value(column, row.get(column)) }"
+                for column, _ in sorted_contributions[:2]
+            ]
+        )
+        blockers.append(
+            [
+                f"{OPPORTUNITY_FEATURE_LABELS.get(column, column)} { _format_metric_value(column, row.get(column)) }"
+                for column, _ in sorted_blockers[:2]
+            ]
+        )
+
+    filtered["strengths"] = strengths
+    filtered["blockers"] = blockers
+    filtered = filtered.sort_values(by=["opportunityScore", "TS%", "PPP", "JUGADOR"], ascending=[False, False, False, True], na_position="last")
+
+    rows = []
+    for row in filtered.to_dict(orient="records"):
+        rows.append(
+            {
+                "PLAYER_KEY": str(row.get("PLAYER_KEY") or ""),
+                "IMAGEN": row.get("IMAGEN"),
+                "JUGADOR": str(row.get("JUGADOR") or ""),
+                "EQUIPO": str(row.get("EQUIPO") or ""),
+                "LIGA": str(row.get("LIGA") or ""),
+                "PJ": _to_number(row.get("PJ")),
+                "MIN": _to_number(row.get("MINUTOS JUGADOS")),
+                "USG%": _to_number(row.get("USG%")),
+                "TS%": _to_number(row.get("TS%")),
+                "eFG%": _to_number(row.get("eFG%")),
+                "PPP": _to_number(row.get("PPP")),
+                "AST/TO": _to_number(row.get("AST/TO")),
+                "OpportunityScore": _to_number(row.get("opportunityScore")),
+                "strengths": list(row.get("strengths") or []),
+                "blockers": list(row.get("blockers") or []),
+                "FOCO_PRINCIPAL": str(row.get("FOCO_PRINCIPAL") or ""),
+            }
+        )
+
+    top_row = filtered.iloc[0] if not filtered.empty else {}
+    best_efficiency_row = (
+        filtered.sort_values(by=["TS%", "PPP", "JUGADOR"], ascending=[False, False, True], na_position="last").iloc[0]
+        if not filtered.empty
+        else {}
+    )
+
+    return {
+        "rows": rows,
+        "summary": {
+            "candidateCount": int(len(filtered.index)),
+            "filters": {
+                "minGames": int(min_games),
+                "maxMinutes": float(max_minutes),
+                "maxUsg": float(max_usg),
+                "query": str(query or ""),
+            },
+            "leaders": {
+                "topOpportunity": str(top_row.get("JUGADOR") or ""),
+                "bestEfficiency": str(best_efficiency_row.get("JUGADOR") or ""),
+            },
         },
     }

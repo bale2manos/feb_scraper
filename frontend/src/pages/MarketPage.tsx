@@ -603,7 +603,7 @@ export function MarketPage({ scope }: ScopePageProps) {
                       team={String(selectedRow.EQUIPO ?? "")}
                       season={scope.season}
                       league={String(selectedRow.LIGA ?? scope.league ?? "")}
-                      currentPage="mercado"
+                      currentPage="other"
                     />
                   </>
                 ) : (

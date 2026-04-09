@@ -4,7 +4,7 @@ import unittest
 
 import pandas as pd
 
-from utils.market_view import build_market_compare_results, build_market_player_pool, filter_market_pool
+from utils.market_view import build_market_compare_results, build_market_opportunity_results, build_market_player_pool, filter_market_pool
 
 
 class MarketViewTests(unittest.TestCase):
@@ -95,6 +95,43 @@ class MarketViewTests(unittest.TestCase):
         compare_extended = build_market_compare_results(extended_pool, ["p1", "p2"])
 
         self.assertNotEqual(compare_base["percentiles"]["p2"]["PUNTOS"], compare_extended["percentiles"]["p2"]["PUNTOS"])
+
+    def test_opportunity_prefers_low_usage_high_efficiency_profile(self) -> None:
+        pool = pd.DataFrame(
+            [
+                {
+                    "PLAYER_KEY": "p1",
+                    "JUGADOR": "Eficiente",
+                    "EQUIPO": "T1",
+                    "LIGA": "Primera FEB",
+                    "PJ": 8,
+                    "MINUTOS JUGADOS": 15,
+                    "USG%": 16,
+                    "TS%": 63,
+                    "eFG%": 58,
+                    "PPP": 1.24,
+                    "AST/TO": 2.1,
+                },
+                {
+                    "PLAYER_KEY": "p2",
+                    "JUGADOR": "Mas usado",
+                    "EQUIPO": "T2",
+                    "LIGA": "Primera FEB",
+                    "PJ": 8,
+                    "MINUTOS JUGADOS": 22,
+                    "USG%": 24,
+                    "TS%": 55,
+                    "eFG%": 49,
+                    "PPP": 0.98,
+                    "AST/TO": 1.1,
+                },
+            ]
+        )
+
+        result = build_market_opportunity_results(pool, min_games=5, max_minutes=22, max_usg=24, query="")
+
+        self.assertEqual(result["rows"][0]["PLAYER_KEY"], "p1")
+        self.assertGreater(result["rows"][0]["OpportunityScore"], result["rows"][1]["OpportunityScore"])
 
 
 if __name__ == "__main__":

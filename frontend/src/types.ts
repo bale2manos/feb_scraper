@@ -278,6 +278,45 @@ export type MarketSuggestionsResponse = {
   candidates: MarketSuggestionCandidate[];
 };
 
+export type MarketOpportunityRow = {
+  PLAYER_KEY: string;
+  IMAGEN?: string;
+  JUGADOR: string;
+  EQUIPO: string;
+  LIGA: string;
+  PJ: number;
+  MIN: number;
+  "USG%": number;
+  "TS%": number;
+  "eFG%": number;
+  PPP: number;
+  "AST/TO": number;
+  OpportunityScore: number;
+  strengths: string[];
+  blockers: string[];
+  FOCO_PRINCIPAL?: string;
+};
+
+export type MarketOpportunityResponse = {
+  season: string;
+  availableLeagues: string[];
+  selectedLeagues: string[];
+  filters: {
+    minGames: number;
+    maxMinutes: number;
+    maxUsg: number;
+    query: string;
+  };
+  summary: {
+    candidateCount: number;
+    leaders: {
+      topOpportunity: string;
+      bestEfficiency: string;
+    };
+  };
+  rows: MarketOpportunityRow[];
+};
+
 export type DatabaseSummaryResponse = {
   metrics: {
     scopes: number;

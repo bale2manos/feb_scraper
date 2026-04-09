@@ -5,6 +5,7 @@ import type {
   DependencySummary,
   GmResponse,
   MarketCompareResponse,
+  MarketOpportunityResponse,
   MarketPoolResponse,
   MarketSuggestionsResponse,
   PhaseReportResponse,
@@ -331,6 +332,31 @@ export function getMarketSuggestions(
       leagues: payload.leagues,
       anchor_player_key: payload.anchorPlayerKey,
       limit: payload.limit
+    },
+    init
+  );
+}
+
+export function getMarketOpportunity(
+  payload: {
+    season: string;
+    leagues: string[];
+    minGames: number;
+    maxMinutes: number;
+    maxUsg: number;
+    query: string;
+  },
+  init: RequestInit = {}
+) {
+  return requestJson<MarketOpportunityResponse>(
+    "/market/opportunity",
+    {
+      season: payload.season,
+      leagues: payload.leagues,
+      min_games: payload.minGames,
+      max_minutes: payload.maxMinutes,
+      max_usg: payload.maxUsg,
+      query: payload.query,
     },
     init
   );

@@ -9,6 +9,7 @@ type MarketIntent = {
   season: string;
   league: string;
   playerKey: string;
+  action?: "compare" | "target";
   source?: string;
 };
 
@@ -109,7 +110,9 @@ export function queueMarketIntent(intent: MarketIntent) {
   if (!intent.season || !intent.league || !intent.playerKey) {
     return;
   }
-  writeMarketSelectedLeagues(intent.season, [intent.league]);
+  const currentLeagues = readMarketSelectedLeagues(intent.season, intent.league);
+  const nextLeagues = currentLeagues.includes(intent.league) ? currentLeagues : [intent.league, ...currentLeagues];
+  writeMarketSelectedLeagues(intent.season, nextLeagues);
   window.localStorage.setItem(MARKET_PENDING_INTENT_KEY, JSON.stringify(intent));
 }
 

@@ -8,7 +8,7 @@ type PlayerDetailActionsProps = {
   team?: string | null;
   season?: string | null;
   league?: string | null;
-  currentPage?: "mercado" | "similares" | "tendencias" | "jugador" | "other";
+  currentPage?: "potencial" | "similares" | "tendencias" | "jugador" | "other";
   className?: string;
 };
 
@@ -79,36 +79,41 @@ export function PlayerDetailActions({
           type="button"
           className="ghost-button strong-ghost-button"
           onClick={() => {
-            persistLocalSelection("react-similarity-target-player", normalizedPlayerKey);
+            queueMarketIntent({
+              season: normalizedSeason,
+              league: normalizedLeague,
+              playerKey: normalizedPlayerKey,
+              action: "target",
+              source: currentPage
+            });
             navigate("/similares");
-          }}
-        >
-          Ver similares
-        </button>
-      ) : null}
-
-      {currentPage !== "mercado" ? (
-        <button
-          type="button"
-          className="ghost-button strong-ghost-button"
-          onClick={() => {
-            if (!normalizedSeason || !normalizedLeague) {
-              return;
-            }
-            const nextShortlist = addPlayerToMarketShortlist(normalizedSeason, [normalizedLeague], normalizedPlayerKey);
-            setShortlistNotice(
-              nextShortlist.includes(normalizedPlayerKey)
-                ? "Anadido al shortlist"
-                : "Shortlist llena (maximo 6)"
-            );
           }}
           disabled={!normalizedSeason || !normalizedLeague}
         >
-          Anadir al shortlist
+          Buscar reemplazo
         </button>
       ) : null}
 
-      {currentPage !== "mercado" ? (
+      <button
+        type="button"
+        className="ghost-button strong-ghost-button"
+        onClick={() => {
+          if (!normalizedSeason || !normalizedLeague) {
+            return;
+          }
+          const nextShortlist = addPlayerToMarketShortlist(normalizedSeason, [normalizedLeague], normalizedPlayerKey);
+          setShortlistNotice(
+            nextShortlist.includes(normalizedPlayerKey)
+              ? "Añadido al shortlist"
+              : "Shortlist llena (máximo 6)"
+          );
+        }}
+        disabled={!normalizedSeason || !normalizedLeague}
+      >
+        Añadir al shortlist
+      </button>
+
+      {currentPage !== "similares" ? (
         <button
           type="button"
           className="ghost-button strong-ghost-button"
@@ -120,13 +125,14 @@ export function PlayerDetailActions({
               season: normalizedSeason,
               league: normalizedLeague,
               playerKey: normalizedPlayerKey,
+              action: "compare",
               source: currentPage
             });
-            navigate("/mercado");
+            navigate("/similares");
           }}
           disabled={!normalizedSeason || !normalizedLeague}
         >
-          Abrir en mercado
+          Abrir comparador
         </button>
       ) : null}
 

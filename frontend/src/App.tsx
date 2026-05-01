@@ -42,7 +42,7 @@ function AppRoutes() {
     { path: "/jugador", title: "Jugador", subtitle: "Informe PNG", element: <PlayerReportPage scope={scope} setScope={setScope} /> },
     { path: "/equipo", title: "Equipo", subtitle: "Informe PDF", element: <TeamReportPage scope={scope} setScope={setScope} /> },
     { path: "/fase", title: "Fase", subtitle: "Informe comparativo PDF", element: <PhaseReportPage scope={scope} setScope={setScope} /> },
-    { path: "/base-datos", title: "Base de datos", subtitle: "Cobertura y autosync", element: <DatabasePage /> }
+    { path: "/base-datos", title: "Centro", subtitle: "Control operativo y cobertura", element: <DatabasePage /> }
   ];
 
   const location = useLocation();

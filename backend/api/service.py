@@ -45,6 +45,8 @@ from utils.similarity_view import (
     SIMILARITY_FEATURE_WEIGHTS,
     build_player_similarity_results,
     build_similarity_player_pool,
+    get_similarity_feature_catalog,
+    resolve_similarity_feature_weights,
 )
 from utils.market_view import (
     build_market_compare_results,
@@ -115,6 +117,7 @@ def _empty_bundle() -> ReportBundle:
         assists_df=empty.copy(),
         clutch_df=empty.copy(),
         clutch_lineups_df=empty.copy(),
+        clutch_games_df=empty.copy(),
         games_df=empty.copy(),
         boxscores_df=empty.copy(),
     )
@@ -127,6 +130,7 @@ def _clone_bundle(bundle: ReportBundle) -> ReportBundle:
         assists_df=bundle.assists_df.copy(),
         clutch_df=bundle.clutch_df.copy(),
         clutch_lineups_df=bundle.clutch_lineups_df.copy(),
+        clutch_games_df=bundle.clutch_games_df.copy(),
         games_df=bundle.games_df.copy(),
         boxscores_df=bundle.boxscores_df.copy(),
     )
@@ -218,6 +222,21 @@ class AnalyticsService:
     def _normalize_jornadas(jornadas: list[int] | tuple[int, ...] | None) -> tuple[int, ...]:
         normalized = {int(value) for value in (jornadas or [])}
         return tuple(sorted(normalized))
+
+    @staticmethod
+    def _normalize_similarity_weight_overrides(
+        weights: dict[str, Any] | None,
+    ) -> tuple[tuple[str, float], ...]:
+        if not weights:
+            return tuple()
+        normalized: dict[str, float] = {}
+        for key, value in weights.items():
+            text = str(key or "").strip()
+            if not text or text not in SIMILARITY_FEATURE_WEIGHTS:
+                continue
+            numeric = pd.to_numeric(pd.Series([value]), errors="coerce").fillna(0.0).iloc[0]
+            normalized[text] = max(float(numeric), 0.0)
+        return tuple(sorted(normalized.items()))
 
     def _get_store(self) -> DataStore:
         return DataStore(self.db_path)
@@ -539,7 +558,11 @@ class AnalyticsService:
         }
 
     def get_database_summary(self) -> dict[str, Any]:
-        return deepcopy(self._cached_database_summary(self._db_signature()))
+        db_signature = self._db_signature()
+        payload = deepcopy(self._cached_database_summary(db_signature))
+        payload["dataHealth"] = deepcopy(self._cached_database_health(db_signature))
+        payload["reportLibrary"] = deepcopy(self._cached_report_library(self._report_library_signature()))
+        return payload
 
     @lru_cache(maxsize=8)
     def _cached_database_summary(self, db_signature: tuple[str, int, int]) -> dict[str, Any]:
@@ -572,7 +595,219 @@ class AnalyticsService:
                 "configPath": str(AUTO_SYNC_TARGETS_FILE),
                 "revalidateWindow": int(auto_config.get("revalidate_window", 2)),
                 "publish": bool(auto_config.get("publish", True)),
+                "targetCount": len(auto_target_rows),
             },
+        }
+
+    def _report_library_signature(self) -> tuple[tuple[str, int, int], ...]:
+        signature: list[tuple[str, int, int]] = []
+        for kind, directory in REPORT_DIRECTORIES.items():
+            if not directory.exists():
+                signature.append((kind, 0, 0))
+                continue
+            files = [entry for entry in directory.iterdir() if entry.is_file()]
+            latest_mtime_ns = max((int(entry.stat().st_mtime_ns) for entry in files), default=0)
+            signature.append((kind, len(files), latest_mtime_ns))
+        return tuple(signature)
+
+    @lru_cache(maxsize=8)
+    def _cached_report_library(self, report_signature: tuple[tuple[str, int, int], ...]) -> dict[str, Any]:
+        recent_candidates: list[tuple[int, dict[str, Any]]] = []
+        total_size_bytes = 0
+        metrics = {
+            "totalFiles": 0,
+            "playerFiles": 0,
+            "teamFiles": 0,
+            "phaseFiles": 0,
+            "totalSizeBytes": 0,
+            "latestGeneratedAt": None,
+            "latestFileName": None,
+        }
+
+        for kind, directory in REPORT_DIRECTORIES.items():
+            files = sorted(
+                [entry for entry in directory.iterdir() if entry.is_file()],
+                key=lambda entry: entry.stat().st_mtime_ns,
+                reverse=True,
+            ) if directory.exists() else []
+            metrics[f"{kind}Files"] = len(files)
+            metrics["totalFiles"] += len(files)
+            for entry in files:
+                stat = entry.stat()
+                total_size_bytes += int(stat.st_size)
+                recent_candidates.append((int(stat.st_mtime_ns), self._build_report_file_payload(entry, kind)))
+
+        recent_candidates.sort(key=lambda item: item[0], reverse=True)
+        recent_files = [payload for _, payload in recent_candidates[:12]]
+        latest_file = recent_files[0] if recent_files else None
+        metrics["totalSizeBytes"] = total_size_bytes
+        metrics["latestGeneratedAt"] = latest_file.get("generatedAt") if latest_file else None
+        metrics["latestFileName"] = latest_file.get("fileName") if latest_file else None
+        return {
+            "metrics": metrics,
+            "recentFiles": recent_files,
+        }
+
+    @lru_cache(maxsize=8)
+    def _cached_database_health(self, db_signature: tuple[str, int, int]) -> dict[str, Any]:
+        base_payload = {
+            "metrics": {
+                "uniquePlayers": 0,
+                "uniqueTeams": 0,
+                "playedGames": 0,
+                "playersMissingBirthDate": 0,
+                "playersMissingDorsal": 0,
+                "gamesWithoutBoxscore": 0,
+                "gamesWithClutch": 0,
+                "gamesWithLineups": 0,
+                "assistRows": 0,
+                "clutchPlayerRows": 0,
+                "clutchLineupRows": 0,
+            },
+            "coverage": {
+                "birthDatePct": 0.0,
+                "dorsalPct": 0.0,
+                "boxscorePct": 0.0,
+                "clutchGamesPct": 0.0,
+                "lineupGamesPct": 0.0,
+            },
+            "issues": [],
+        }
+        if not Path(self.db_path).exists():
+            return base_payload
+
+        store = self._get_store()
+        with store.connect() as conn:
+            counts = conn.execute(
+                """
+                SELECT
+                    (SELECT COUNT(DISTINCT player_key) FROM boxscores) AS unique_players,
+                    (
+                        SELECT COUNT(DISTINCT team_name)
+                        FROM (
+                            SELECT local_team AS team_name FROM games_catalog WHERE TRIM(COALESCE(local_team, '')) <> ''
+                            UNION
+                            SELECT away_team AS team_name FROM games_catalog WHERE TRIM(COALESCE(away_team, '')) <> ''
+                        )
+                    ) AS unique_teams,
+                    (SELECT COUNT(*) FROM games_catalog WHERE played = 1) AS played_games,
+                    (SELECT COUNT(DISTINCT game_id) FROM boxscores) AS games_with_boxscore,
+                    (SELECT COUNT(DISTINCT game_id) FROM clutch_player) AS games_with_clutch,
+                    (SELECT COUNT(DISTINCT game_id) FROM clutch_lineups) AS games_with_lineups,
+                    (
+                        SELECT COUNT(DISTINCT bs.player_key)
+                        FROM boxscores bs
+                        JOIN player_bios pb ON pb.player_key = bs.player_key
+                        WHERE TRIM(COALESCE(pb.birth_date, '')) <> ''
+                    ) AS players_with_birth_date,
+                    (SELECT COUNT(DISTINCT player_key) FROM boxscores WHERE TRIM(COALESCE(jersey, '')) <> '') AS players_with_dorsal,
+                    (SELECT COUNT(*) FROM assists) AS assist_rows,
+                    (SELECT COUNT(*) FROM clutch_player) AS clutch_player_rows,
+                    (SELECT COUNT(*) FROM clutch_lineups) AS clutch_lineup_rows,
+                    (SELECT SUM(CASE WHEN scrape_status = 'pending' THEN 1 ELSE 0 END) FROM games_catalog) AS pending_games,
+                    (SELECT SUM(CASE WHEN scrape_status LIKE 'failed:%' THEN 1 ELSE 0 END) FROM games_catalog) AS failed_games
+                """
+            ).fetchone()
+
+        unique_players = int(counts["unique_players"] or 0)
+        unique_teams = int(counts["unique_teams"] or 0)
+        played_games = int(counts["played_games"] or 0)
+        games_with_boxscore = int(counts["games_with_boxscore"] or 0)
+        games_with_clutch = int(counts["games_with_clutch"] or 0)
+        games_with_lineups = int(counts["games_with_lineups"] or 0)
+        players_with_birth_date = int(counts["players_with_birth_date"] or 0)
+        players_with_dorsal = int(counts["players_with_dorsal"] or 0)
+        pending_games = int(counts["pending_games"] or 0)
+        failed_games = int(counts["failed_games"] or 0)
+
+        players_missing_birth_date = max(unique_players - players_with_birth_date, 0)
+        players_missing_dorsal = max(unique_players - players_with_dorsal, 0)
+        games_without_boxscore = max(played_games - games_with_boxscore, 0)
+
+        def _coverage(part: int, total: int) -> float:
+            return round((part / total) * 100.0, 1) if total > 0 else 0.0
+
+        birth_date_pct = _coverage(players_with_birth_date, unique_players)
+        dorsal_pct = _coverage(players_with_dorsal, unique_players)
+        boxscore_pct = _coverage(games_with_boxscore, played_games)
+        clutch_games_pct = _coverage(games_with_clutch, played_games)
+        lineup_games_pct = _coverage(games_with_lineups, played_games)
+
+        def _build_issue(key: str, label: str, value: int, hint: str, *, status: str) -> dict[str, Any]:
+            status_label = {
+                "ok": "OK",
+                "watch": "Vigilar",
+                "warning": "Revisar",
+            }.get(status, "Info")
+            return {
+                "key": key,
+                "label": label,
+                "value": int(value),
+                "hint": hint,
+                "status": status,
+                "statusLabel": status_label,
+            }
+
+        issues = [
+            _build_issue(
+                "players_missing_birth_date",
+                "Jugadores sin fecha de nacimiento",
+                players_missing_birth_date,
+                "Conviene completarlo para scouting, edad y contexto de potencial.",
+                status="ok" if players_missing_birth_date == 0 else ("watch" if birth_date_pct >= 85.0 else "warning"),
+            ),
+            _build_issue(
+                "players_missing_dorsal",
+                "Jugadores sin dorsal",
+                players_missing_dorsal,
+                "Afecta a tablas, clutch y lectura rapida de informes.",
+                status="ok" if players_missing_dorsal == 0 else ("watch" if dorsal_pct >= 92.0 else "warning"),
+            ),
+            _build_issue(
+                "games_without_boxscore",
+                "Partidos jugados sin boxscore",
+                games_without_boxscore,
+                "Si este numero sube, la cobertura real del scope se resiente aunque el partido este catalogado.",
+                status="ok" if games_without_boxscore == 0 else "warning",
+            ),
+            _build_issue(
+                "pending_games",
+                "Partidos pendientes de scrapeo",
+                pending_games,
+                "Sirve para revisar si el autosync dominical ha dejado trabajo a medias.",
+                status="ok" if pending_games == 0 else "watch",
+            ),
+            _build_issue(
+                "failed_games",
+                "Partidos con fallo registrado",
+                failed_games,
+                "Estos casos suelen merecer revision manual antes del siguiente publish.",
+                status="ok" if failed_games == 0 else "warning",
+            ),
+        ]
+
+        return {
+            "metrics": {
+                "uniquePlayers": unique_players,
+                "uniqueTeams": unique_teams,
+                "playedGames": played_games,
+                "playersMissingBirthDate": players_missing_birth_date,
+                "playersMissingDorsal": players_missing_dorsal,
+                "gamesWithoutBoxscore": games_without_boxscore,
+                "gamesWithClutch": games_with_clutch,
+                "gamesWithLineups": games_with_lineups,
+                "assistRows": int(counts["assist_rows"] or 0),
+                "clutchPlayerRows": int(counts["clutch_player_rows"] or 0),
+                "clutchLineupRows": int(counts["clutch_lineup_rows"] or 0),
+            },
+            "coverage": {
+                "birthDatePct": birth_date_pct,
+                "dorsalPct": dorsal_pct,
+                "boxscorePct": boxscore_pct,
+                "clutchGamesPct": clutch_games_pct,
+                "lineupGamesPct": lineup_games_pct,
+            },
+            "issues": issues,
         }
 
     def get_gm_players(
@@ -999,6 +1234,9 @@ class AnalyticsService:
         report_players_df = bundle.players_df.copy()
         report_teams_df = bundle.teams_df.copy()
         report_assists_df = bundle.assists_df.copy()
+        report_games_df = bundle.games_df.copy()
+        report_boxscores_df = bundle.boxscores_df.copy()
+        report_clutch_games_df = bundle.clutch_games_df.copy()
         report_clutch_lineups_df = bundle.clutch_lineups_df.copy()
         try:
             path = Path(
@@ -1015,11 +1253,14 @@ class AnalyticsService:
                     players_df=report_players_df,
                     teams_df=report_teams_df,
                     assists_df=report_assists_df,
+                    games_df=report_games_df,
+                    boxscores_df=report_boxscores_df,
+                    clutch_games_df=report_clutch_games_df,
                     clutch_lineups_df=report_clutch_lineups_df,
                 )
             )
         finally:
-            del report_players_df, report_teams_df, report_assists_df, report_clutch_lineups_df
+            del report_players_df, report_teams_df, report_assists_df, report_games_df, report_boxscores_df, report_clutch_games_df, report_clutch_lineups_df
             gc.collect()
 
         return {
@@ -1189,7 +1430,7 @@ class AnalyticsService:
                 "minGames": min_games,
                 "minMinutes": round(max(float(min_minutes), 0.0), 1),
             },
-            "featureWeights": SIMILARITY_FEATURE_WEIGHTS,
+            "featureWeights": resolve_similarity_feature_weights(),
             "candidates": candidates,
             "players": player_options,
         }
@@ -1314,6 +1555,7 @@ class AnalyticsService:
         leagues: list[str] | None,
         anchor_player_key: str | None,
         limit: int,
+        weights: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload = self._cached_market_suggestions(
             self._db_signature(),
@@ -1321,6 +1563,7 @@ class AnalyticsService:
             tuple(str(value or "").strip() for value in (leagues or [])),
             str(anchor_player_key or "").strip(),
             _coerce_int(limit, 6, minimum=1, maximum=10),
+            self._normalize_similarity_weight_overrides(weights),
         )
         return deepcopy(payload)
 
@@ -1332,13 +1575,17 @@ class AnalyticsService:
         leagues: tuple[str, ...],
         anchor_player_key: str,
         limit: int,
+        weights: tuple[tuple[str, float], ...],
     ) -> dict[str, Any]:
         context = self._cached_market_pool_context(db_signature, season, leagues)
+        resolved_weights = resolve_similarity_feature_weights(dict(weights) if weights else None)
         if not anchor_player_key:
             return {
                 "season": context["season"],
                 "availableLeagues": context["availableLeagues"],
                 "selectedLeagues": context["selectedLeagues"],
+                "availableMetrics": get_similarity_feature_catalog(),
+                "featureWeights": resolved_weights,
                 "anchor": None,
                 "candidates": [],
             }
@@ -1349,6 +1596,7 @@ class AnalyticsService:
             min_games=5,
             min_minutes=10.0,
             limit=limit,
+            feature_weights=resolved_weights,
         )
         target = similarity_result.get("target")
         candidates = []
@@ -1366,6 +1614,8 @@ class AnalyticsService:
             "season": context["season"],
             "availableLeagues": context["availableLeagues"],
             "selectedLeagues": context["selectedLeagues"],
+            "availableMetrics": get_similarity_feature_catalog(),
+            "featureWeights": resolved_weights,
             "anchor": self._build_market_player_payload(target) if target else None,
             "candidates": candidates,
         }

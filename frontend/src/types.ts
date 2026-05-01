@@ -273,10 +273,18 @@ export type MarketSuggestionCandidate = {
   differences: string[];
 };
 
+export type SimilarityMetricOption = {
+  key: string;
+  label: string;
+  defaultWeight: number;
+};
+
 export type MarketSuggestionsResponse = {
   season: string;
   availableLeagues: string[];
   selectedLeagues: string[];
+  availableMetrics: SimilarityMetricOption[];
+  featureWeights: Record<string, number>;
   anchor: MarketSuggestionCandidate | null;
   candidates: MarketSuggestionCandidate[];
 };
@@ -319,25 +327,6 @@ export type MarketOpportunityResponse = {
     };
   };
   rows: MarketOpportunityRow[];
-};
-
-export type DatabaseSummaryResponse = {
-  metrics: {
-    scopes: number;
-    jornadas: number;
-    catalogedGames: number;
-    withData: number;
-    pending: number;
-    failed: number;
-  };
-  scopeSummary: Record<string, unknown>[];
-  jornadaSummary: Record<string, unknown>[];
-  autoSyncTargets: Record<string, unknown>[];
-  autoSync: {
-    configPath: string;
-    revalidateWindow: number;
-    publish: boolean;
-  };
 };
 
 export type ReportFile = {
@@ -417,4 +406,82 @@ export type ReportBudgetResponse = {
   trackingEnabled: boolean;
   warning: string | null;
   lastUpdated: string | null;
+};
+
+export type DatabaseHealthIssue = {
+  key: string;
+  label: string;
+  value: number;
+  hint: string;
+  status: "ok" | "watch" | "warning";
+  statusLabel: string;
+};
+
+export type DatabaseSummaryResponse = {
+  metrics: {
+    scopes: number;
+    jornadas: number;
+    catalogedGames: number;
+    withData: number;
+    pending: number;
+    failed: number;
+  };
+  scopeSummary: Record<string, unknown>[];
+  jornadaSummary: Record<string, unknown>[];
+  autoSyncTargets: Record<string, unknown>[];
+  autoSync: {
+    configPath: string;
+    revalidateWindow: number;
+    publish: boolean;
+    targetCount: number;
+  };
+  dataHealth: {
+    metrics: {
+      uniquePlayers: number;
+      uniqueTeams: number;
+      playedGames: number;
+      playersMissingBirthDate: number;
+      playersMissingDorsal: number;
+      gamesWithoutBoxscore: number;
+      gamesWithClutch: number;
+      gamesWithLineups: number;
+      assistRows: number;
+      clutchPlayerRows: number;
+      clutchLineupRows: number;
+    };
+    coverage: {
+      birthDatePct: number;
+      dorsalPct: number;
+      boxscorePct: number;
+      clutchGamesPct: number;
+      lineupGamesPct: number;
+    };
+    issues: DatabaseHealthIssue[];
+  };
+  reportLibrary: {
+    metrics: {
+      totalFiles: number;
+      playerFiles: number;
+      teamFiles: number;
+      phaseFiles: number;
+      totalSizeBytes: number;
+      latestGeneratedAt: string | null;
+      latestFileName: string | null;
+    };
+    recentFiles: ReportFile[];
+  };
+  runtime: {
+    environment: string;
+    appStorageMode: string;
+    reportStorageMode: string;
+    sourceLabel: string;
+    dbPath: string;
+    dbExists: boolean;
+    dbSizeBytes: number;
+    dbLastModified: string | null;
+    snapshotVersion: string | null;
+    snapshotBucket: string | null;
+    snapshotObject: string | null;
+  };
+  reportBudget: ReportBudgetResponse;
 };

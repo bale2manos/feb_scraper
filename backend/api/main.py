@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -73,6 +75,28 @@ class MarketCompareRequest(BaseModel):
     season: str | None = None
     leagues: list[str] = Field(default_factory=list)
     playerKeys: list[str] = Field(default_factory=list)
+
+
+def _build_runtime_summary(service: AnalyticsService, settings: AppSettings) -> dict[str, object]:
+    raw_db_path = getattr(service, "db_path", None) or settings.sqlite_local_path
+    db_path = Path(str(raw_db_path)).resolve() if raw_db_path else None
+    db_exists = bool(db_path and db_path.exists())
+    stat = db_path.stat() if db_exists and db_path is not None else None
+    snapshot_bucket = settings.sqlite_bucket if settings.uses_gcs_snapshot and settings.sqlite_bucket else None
+    snapshot_object = settings.sqlite_object if settings.uses_gcs_snapshot and settings.sqlite_object else None
+    return {
+        "environment": settings.app_env,
+        "appStorageMode": settings.app_storage_mode,
+        "reportStorageMode": settings.report_storage_mode,
+        "sourceLabel": "Snapshot GCS" if settings.uses_gcs_snapshot else "SQLite local",
+        "dbPath": str(db_path) if db_path else "",
+        "dbExists": db_exists,
+        "dbSizeBytes": int(stat.st_size) if stat is not None else 0,
+        "dbLastModified": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds") if stat is not None else None,
+        "snapshotVersion": settings.sqlite_snapshot_version or None,
+        "snapshotBucket": snapshot_bucket,
+        "snapshotObject": snapshot_object,
+    }
 
 
 def create_app(
@@ -206,8 +230,13 @@ def create_app(
     def database_summary(
         _: SessionData = Depends(get_current_session),
         service: AnalyticsService = Depends(get_service),
+        settings: AppSettings = Depends(get_settings),
+        budget_tracker: ReportBudgetTracker = Depends(get_report_budget_tracker),
     ) -> dict:
-        return service.get_database_summary()
+        payload = service.get_database_summary()
+        payload["runtime"] = _build_runtime_summary(service, settings)
+        payload["reportBudget"] = budget_tracker.get_summary()
+        return payload
 
     @app.get("/meta/scopes")
     def meta_scopes(
@@ -368,15 +397,29 @@ def create_app(
         leagues: Annotated[list[str] | None, Query()] = None,
         anchor_player_key: str | None = None,
         limit: int = 6,
+        weights: str | None = None,
         _: SessionData = Depends(get_current_session),
         service: AnalyticsService = Depends(get_service),
     ) -> dict:
-        return service.get_market_suggestions(
-            season=season,
-            leagues=leagues,
-            anchor_player_key=anchor_player_key,
-            limit=limit,
-        )
+        parsed_weights: dict[str, object] | None = None
+        if weights:
+            try:
+                payload = json.loads(weights)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(status_code=400, detail="El formato de pesos de similares no es valido.") from exc
+            if payload is not None and not isinstance(payload, dict):
+                raise HTTPException(status_code=400, detail="Los pesos de similares deben enviarse como objeto JSON.")
+            parsed_weights = payload
+        try:
+            return service.get_market_suggestions(
+                season=season,
+                leagues=leagues,
+                anchor_player_key=anchor_player_key,
+                limit=limit,
+                weights=parsed_weights,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/market/opportunity")
     def market_opportunity(

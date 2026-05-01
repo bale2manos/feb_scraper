@@ -19,7 +19,7 @@ import {
   writeMarketShortlist,
 } from "../market";
 import { useScopeMeta } from "../scope";
-import type { MarketSuggestionCandidate, ScopeState } from "../types";
+import type { MarketSuggestionCandidate, ScopeState, SimilarityMetricOption } from "../types";
 import { formatNumber, getBirthYear, getPlayerAge } from "../utils";
 
 type ScopePageProps = {
@@ -28,6 +28,42 @@ type ScopePageProps = {
 };
 
 const DEFAULT_SHORTLIST_LIMIT = 6;
+const DEFAULT_SIMILARITY_METRICS: SimilarityMetricOption[] = [
+  { key: "MINUTOS JUGADOS", label: "Minutos", defaultWeight: 0.08 },
+  { key: "PLAYS", label: "Plays", defaultWeight: 0.14 },
+  { key: "USG%", label: "USG%", defaultWeight: 0.12 },
+  { key: "%PLAYS_EQUIPO", label: "Uso ofensivo del equipo", defaultWeight: 0.1 },
+  { key: "PUNTOS", label: "Puntos", defaultWeight: 0.1 },
+  { key: "REB TOTALES", label: "Rebotes", defaultWeight: 0.08 },
+  { key: "ASISTENCIAS", label: "Asistencias", defaultWeight: 0.1 },
+  { key: "%AST_EQUIPO", label: "Creacion del equipo", defaultWeight: 0.08 },
+  { key: "%REB_EQUIPO", label: "Peso en rebote", defaultWeight: 0.06 },
+  { key: "TS%", label: "TS%", defaultWeight: 0.08 },
+  { key: "AST/TO", label: "AST/TO", defaultWeight: 0.06 },
+];
+const DEFAULT_SIMILARITY_FEATURE_WEIGHTS = Object.fromEntries(
+  DEFAULT_SIMILARITY_METRICS.map((metric) => [metric.key, metric.defaultWeight])
+) as Record<string, number>;
+
+function sanitizeSimilarityWeights(weights: Record<string, number> | undefined, metrics: SimilarityMetricOption[]) {
+  const fallback = new Map(DEFAULT_SIMILARITY_METRICS.map((metric) => [metric.key, metric.defaultWeight]));
+  return Object.fromEntries(
+    metrics.map((metric) => {
+      const rawValue = weights?.[metric.key];
+      const numeric = Number.isFinite(Number(rawValue)) ? Number(rawValue) : fallback.get(metric.key) ?? metric.defaultWeight;
+      return [metric.key, Math.max(0, Number(numeric))];
+    })
+  ) as Record<string, number>;
+}
+
+function buildDefaultSimilarityWeights(metrics: SimilarityMetricOption[]) {
+  return Object.fromEntries(
+    metrics.map((metric) => {
+      const fallback = DEFAULT_SIMILARITY_FEATURE_WEIGHTS[metric.key] ?? metric.defaultWeight;
+      return [metric.key, fallback];
+    })
+  ) as Record<string, number>;
+}
 
 function formatBaselineMetric(value: unknown, digits = 1, suffix = "") {
   if (value === null || value === undefined || value === "") {
@@ -46,10 +82,15 @@ export function SimilarityPage({ scope }: ScopePageProps) {
   const [targetPlayerKey, setTargetPlayerKey] = useLocalStorageState<string>("react-similarity-target-player", "");
   const [minGames, setMinGames] = useLocalStorageState<number>("react-similarity-min-games", 5);
   const [minMinutes, setMinMinutes] = useLocalStorageState<number>("react-similarity-min-minutes", 10);
+  const [featureWeights, setFeatureWeights] = useLocalStorageState<Record<string, number>>(
+    "react-similarity-feature-weights-v1",
+    DEFAULT_SIMILARITY_FEATURE_WEIGHTS
+  );
   const [shortlist, setShortlist] = useState<string[]>([]);
   const [selectedDetailKey, setSelectedDetailKey] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [shortlistMessage, setShortlistMessage] = useState("");
+  const [showWeightsPanel, setShowWeightsPanel] = useState(false);
   const leaguesSignature = selectedLeagues.join("|");
   const debouncedTargetPlayerKey = useDebouncedValue(targetPlayerKey, 120);
 
@@ -131,6 +172,21 @@ export function SimilarityPage({ scope }: ScopePageProps) {
   const poolData = poolQuery.data ?? null;
   const poolRows = poolData?.rows ?? [];
   const availableLeagues = poolData?.availableLeagues ?? meta.leagues;
+  const sanitizedFeatureWeights = useMemo(
+    () => sanitizeSimilarityWeights(featureWeights, DEFAULT_SIMILARITY_METRICS),
+    [featureWeights]
+  );
+  const activeMetricCount = useMemo(
+    () => Object.values(sanitizedFeatureWeights).filter((value) => value > 0).length,
+    [sanitizedFeatureWeights]
+  );
+  const featureWeightSignature = useMemo(
+    () =>
+      JSON.stringify(
+        DEFAULT_SIMILARITY_METRICS.map((metric) => [metric.key, Number((sanitizedFeatureWeights[metric.key] ?? 0).toFixed(4))])
+      ),
+    [sanitizedFeatureWeights]
+  );
   const playerOptions = poolRows.map((player) => ({
     value: String(player.PLAYER_KEY),
     label: `${String(player.JUGADOR)} | ${String(player.EQUIPO)} | ${String(player.LIGA)}`,
@@ -165,7 +221,7 @@ export function SimilarityPage({ scope }: ScopePageProps) {
   }, [playerOptions, setTargetPlayerKey, targetPlayerKey]);
 
   const suggestionsQuery = useQuery({
-    queryKey: ["market-suggestions", scope.season, leaguesSignature, debouncedTargetPlayerKey],
+    queryKey: ["market-suggestions", scope.season, leaguesSignature, debouncedTargetPlayerKey, featureWeightSignature],
     queryFn: ({ signal }) =>
       getMarketSuggestions(
         {
@@ -173,10 +229,11 @@ export function SimilarityPage({ scope }: ScopePageProps) {
           leagues: selectedLeagues,
           anchorPlayerKey: debouncedTargetPlayerKey,
           limit: 10,
+          featureWeights: sanitizedFeatureWeights,
         },
         { signal }
       ),
-    enabled: Boolean(scope.season && selectedLeagues.length && debouncedTargetPlayerKey),
+    enabled: Boolean(scope.season && selectedLeagues.length && debouncedTargetPlayerKey && activeMetricCount > 0),
     placeholderData: keepPreviousData,
   });
 
@@ -195,8 +252,20 @@ export function SimilarityPage({ scope }: ScopePageProps) {
     placeholderData: keepPreviousData,
   });
 
+  const similarityMetricOptions =
+    suggestionsQuery.data?.availableMetrics?.length ? suggestionsQuery.data.availableMetrics : DEFAULT_SIMILARITY_METRICS;
+  const defaultFeatureWeights = useMemo(() => buildDefaultSimilarityWeights(similarityMetricOptions), [similarityMetricOptions]);
   const target = suggestionsQuery.data?.anchor ?? null;
   const candidates = suggestionsQuery.data?.candidates ?? [];
+  const activeWeightSummary = useMemo(
+    () =>
+      similarityMetricOptions
+        .filter((metric) => (sanitizedFeatureWeights[metric.key] ?? 0) > 0)
+        .sort((left, right) => (sanitizedFeatureWeights[right.key] ?? 0) - (sanitizedFeatureWeights[left.key] ?? 0))
+        .slice(0, 3)
+        .map((metric) => `${metric.label} ${formatNumber(sanitizedFeatureWeights[metric.key] ?? 0, 2)}`),
+    [sanitizedFeatureWeights, similarityMetricOptions]
+  );
   const targetBaselineCards = target
     ? [
         { label: "PJ", value: String(target.gamesPlayed) },
@@ -261,7 +330,14 @@ export function SimilarityPage({ scope }: ScopePageProps) {
   const selectedBirthYear = getBirthYear(selectedCandidate?.birthYear ?? selectedPoolRow?.["AÑO NACIMIENTO"]);
   const selectedAge = getPlayerAge(selectedCandidate?.birthYear ?? selectedPoolRow?.["AÑO NACIMIENTO"]);
   const topCandidate = candidates[0] ?? null;
-  const error = poolQuery.error instanceof Error ? poolQuery.error.message : suggestionsQuery.error instanceof Error ? suggestionsQuery.error.message : null;
+  const error =
+    activeMetricCount === 0
+      ? "Activa al menos una metrica para calcular el ranking de similares."
+      : poolQuery.error instanceof Error
+        ? poolQuery.error.message
+        : suggestionsQuery.error instanceof Error
+          ? suggestionsQuery.error.message
+          : null;
 
   function addToShortlist(playerKey: string, league: string) {
     if (!scope.season) {
@@ -333,6 +409,65 @@ export function SimilarityPage({ scope }: ScopePageProps) {
               </label>
             </div>
           </div>
+          <div className="detail-note-block">
+            <div className="detail-panel-header">
+              <div>
+                <strong>Modelo de comparaciÃ³n</strong>
+                <p className="panel-copy">
+                  {activeMetricCount
+                    ? `${activeMetricCount} metricas activas${activeWeightSummary.length ? ` · ${activeWeightSummary.join(" · ")}` : ""}`
+                    : "No hay metricas activas. Activa al menos una para desbloquear el ranking."}
+                </p>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => setShowWeightsPanel((current) => !current)}>
+                {showWeightsPanel ? "Ocultar pesos" : "Editar pesos"}
+              </button>
+            </div>
+            {showWeightsPanel ? (
+              <div className="similarity-weight-panel">
+                <div className="toolbar">
+                  <button type="button" className="ghost-button" onClick={() => setFeatureWeights(defaultFeatureWeights)}>
+                    Restablecer pesos por defecto
+                  </button>
+                </div>
+                <div className="similarity-weight-grid">
+                  {similarityMetricOptions.map((metric) => {
+                    const currentWeight = sanitizedFeatureWeights[metric.key] ?? 0;
+                    const isActive = currentWeight > 0;
+                    return (
+                      <label key={metric.key} className="similarity-weight-card">
+                        <span className="checkbox-chip">
+                          <input
+                            type="checkbox"
+                            checked={isActive}
+                            onChange={(event) =>
+                              setFeatureWeights((current) => ({
+                                ...sanitizeSimilarityWeights(current, similarityMetricOptions),
+                                [metric.key]: event.target.checked ? metric.defaultWeight : 0,
+                              }))
+                            }
+                          />
+                          <span>{metric.label}</span>
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={currentWeight}
+                          onChange={(event) =>
+                            setFeatureWeights((current) => ({
+                              ...sanitizeSimilarityWeights(current, similarityMetricOptions),
+                              [metric.key]: Math.max(0, Number(event.target.value || 0)),
+                            }))
+                          }
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </section>
 
         <div className="metric-grid metric-grid-wide">
@@ -361,7 +496,7 @@ export function SimilarityPage({ scope }: ScopePageProps) {
           <div className="market-main">
             <DataTable
               title="Reemplazos sugeridos"
-              subtitle="Ranking de candidatos dentro de las ligas activas. Si no hay objetivo, el comparador manual sigue disponible."
+              subtitle="Ranking de candidatos dentro de las ligas activas. Si ajustas pesos, el score, las razones y las diferencias se recalculan."
               columns={["JUGADOR", "EQUIPO", "LIGA", "PJ", "MINUTOS", "PUNTOS", "REBOTES", "ASISTENCIAS", "USG%", "SCORE"]}
               rows={candidateRows}
               isLoading={suggestionsQuery.isLoading}

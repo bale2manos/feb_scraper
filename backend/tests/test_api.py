@@ -154,6 +154,11 @@ class FakeAnalyticsService:
             "season": kwargs.get("season"),
             "availableLeagues": ["Primera FEB", "Segunda FEB"],
             "selectedLeagues": kwargs.get("leagues") or ["Primera FEB"],
+            "availableMetrics": [
+                {"key": "PLAYS", "label": "Plays", "defaultWeight": 0.14},
+                {"key": "USG%", "label": "USG%", "defaultWeight": 0.12},
+            ],
+            "featureWeights": kwargs.get("weights") or {"PLAYS": 0.54, "USG%": 0.46},
             "anchor": {"playerKey": kwargs.get("anchor_player_key"), "name": "Jugador A"},
             "candidates": [
                 {
@@ -301,6 +306,8 @@ class ApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["metrics"]["catalogedGames"], 40)
+        self.assertIn("runtime", response.json())
+        self.assertIn("reportBudget", response.json())
 
     def test_similarity_endpoint_accepts_target_and_filters(self) -> None:
         response = self.client.get(
@@ -378,6 +385,22 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.service.calls["market_suggestions"]["anchor_player_key"], "p1")
         self.assertNotEqual(response.json()["candidates"][0]["playerKey"], response.json()["anchor"]["playerKey"])
+        self.assertIn("availableMetrics", response.json())
+        self.assertIn("featureWeights", response.json())
+
+    def test_market_suggestions_endpoint_accepts_weight_overrides(self) -> None:
+        response = self.client.get(
+            "/market/suggestions",
+            params={
+                "season": "25_26",
+                "leagues": "Primera FEB",
+                "anchor_player_key": "p1",
+                "weights": "{\"PLAYS\":0.7,\"USG%\":0.3}",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.service.calls["market_suggestions"]["weights"], {"PLAYS": 0.7, "USG%": 0.3})
 
     def test_market_opportunity_endpoint_accepts_thresholds(self) -> None:
         response = self.client.get(

@@ -329,7 +329,7 @@ export function DependencyPage({ scope, setScope }: ScopePageProps) {
               <span>{summary.structuralRisk}</span>
             </div>
 
-            <div className="split-layout">
+            <div className={`split-layout ${showPlayerDetail ? "has-detail" : "is-full"}`}>
               <div className="split-main">
                 <DataTable
                   key={`dependency-team-${teamCriterion}`}

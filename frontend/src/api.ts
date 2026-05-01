@@ -322,6 +322,7 @@ export function getMarketSuggestions(
     leagues: string[];
     anchorPlayerKey: string;
     limit: number;
+    featureWeights?: Record<string, number>;
   },
   init: RequestInit = {}
 ) {
@@ -331,7 +332,8 @@ export function getMarketSuggestions(
       season: payload.season,
       leagues: payload.leagues,
       anchor_player_key: payload.anchorPlayerKey,
-      limit: payload.limit
+      limit: payload.limit,
+      weights: payload.featureWeights ? JSON.stringify(payload.featureWeights) : undefined,
     },
     init
   );

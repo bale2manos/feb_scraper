@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 
 import { generateTeamReport } from "../api";
 import { MetricCard } from "../components/MetricCard";
+import { ReportBudgetPanel, useReportBudget } from "../components/ReportBudgetPanel";
 import { ReportPreview } from "../components/ReportPreview";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchMultiSelect } from "../components/SearchMultiSelect";
@@ -20,7 +21,8 @@ const LOCATION_FILTERS = ["Todos", "Local", "Visitante"];
 
 export function TeamReportPage({ scope, setScope }: ScopePageProps) {
   const { meta } = useScopeMeta();
-  const { getLatestJob, openPreview, startReportJob } = useReports();
+  const { getLatestJob, startReportJob } = useReports();
+  const budgetQuery = useReportBudget();
   const [selectedTeam, setSelectedTeam] = useLocalStorageState<string>("react-team-report-team", "");
   const [selectedPlayerKeys, setSelectedPlayerKeys] = useLocalStorageState<string[]>("react-team-report-players", []);
   const [selectedRival, setSelectedRival] = useLocalStorageState<string>("react-team-report-rival", "");
@@ -68,9 +70,10 @@ export function TeamReportPage({ scope, setScope }: ScopePageProps) {
   ]);
   const reportJob = getLatestJob(reportTaskKey);
   const error = reportJob?.status === "error" ? reportJob.error : null;
+  const budgetBlocked = budgetQuery.data?.isBlocked ?? false;
 
   async function handleGenerate() {
-    if (!currentTeam) {
+    if (!currentTeam || budgetBlocked) {
       return;
     }
     await startReportJob({
@@ -195,6 +198,8 @@ export function TeamReportPage({ scope, setScope }: ScopePageProps) {
                 <MetricCard label="Filtro H2H" value={h2hHomeAway} />
               </div>
 
+              <ReportBudgetPanel focusKind="team" budgetQuery={budgetQuery} />
+
               {error ? <p className="error-text">{error}</p> : null}
 
               <div className="report-action-card">
@@ -213,9 +218,9 @@ export function TeamReportPage({ scope, setScope }: ScopePageProps) {
                   onClick={() => {
                     void handleGenerate();
                   }}
-                  disabled={!currentTeam || reportJob?.status === "pending"}
+                  disabled={!currentTeam || reportJob?.status === "pending" || budgetBlocked}
                 >
-                  {reportJob?.status === "pending" ? "Generando PDF..." : "Generar informe PDF"}
+                  {budgetBlocked ? "Limite mensual alcanzado" : reportJob?.status === "pending" ? "Generando PDF..." : "Generar informe PDF"}
                 </button>
               </div>
             </section>
@@ -229,7 +234,7 @@ export function TeamReportPage({ scope, setScope }: ScopePageProps) {
               emptyMessage="Genera un informe para verlo aqui."
               isGenerating={reportJob?.status === "pending"}
               statusMessage="Generando el PDF del equipo."
-              onOpenFloating={reportJob?.report ? () => openPreview(reportJob.id) : null}
+              onOpenFloating={null}
             />
           </aside>
         </div>

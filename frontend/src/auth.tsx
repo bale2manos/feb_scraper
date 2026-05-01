@@ -55,11 +55,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await queryClient.invalidateQueries();
     } catch (nextError) {
       if (nextError instanceof UnauthorizedError) {
-        setError("Contrasena incorrecta.");
+        setError("Contraseña incorrecta.");
       } else if (nextError instanceof Error) {
         setError(nextError.message);
       } else {
-        setError("No se ha podido iniciar sesion.");
+        setError("No se ha podido iniciar sesión.");
       }
       throw nextError;
     } finally {

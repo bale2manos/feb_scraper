@@ -23,17 +23,17 @@ export function LoginPage() {
         <div className="login-copy">
           <span className="eyebrow">FEB Analytics</span>
           <h1>Acceso interno</h1>
-          <p>Introduce la contrasena compartida del club para entrar en la app.</p>
+          <p>Introduce la contraseña compartida del club para entrar en la app.</p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label>
-            Contrasena
+            Contraseña
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Contrasena del club"
+              placeholder="Contraseña del club"
               autoComplete="current-password"
               disabled={isSubmitting}
             />

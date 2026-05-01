@@ -21,10 +21,11 @@ from .tools.oe                        import plot_player_OE_bar
 from .tools.eps                       import plot_player_EPS_bar
 from .tools.top_assists_vs_turnovers  import plot_top_assists_vs_turnovers
 from .tools.utils                     import setup_montserrat_font, compute_advanced_stats, compute_team_stats
+from .tools.context_pages             import build_clutch_split_payload, build_context_split_payload, build_team_clutch_page, build_team_context_page
 import pandas as pd
 
 # Importar configuración centralizada
-from config import TEAMS_AGGREGATED_FILE, JUGADORES_AGGREGATED_FILE
+from config import TEAMS_AGGREGATED_FILE, JUGADORES_AGGREGATED_FILE, TEAM_REPORTS_DIR
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # === NUEVO: import del informe de asistencias ===
@@ -76,7 +77,7 @@ def setup_montserrat_pdf_fonts():
 TEAM_FILE       = Path(str(TEAMS_AGGREGATED_FILE))
 PLAYERS_FILE    = Path(str(JUGADORES_AGGREGATED_FILE))
 ASSISTS_FILE    = Path("data/assists.xlsx")  # <<< NUEVO
-BASE_OUTPUT_DIR = Path("output/reports/team_reports/")
+BASE_OUTPUT_DIR = TEAM_REPORTS_DIR
 
 # Create output directory if it doesn't exist
 BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -158,6 +159,9 @@ def build_team_report(
     players_file=None,
     teams_file=None,
     assists_file=None,
+    games_df: pd.DataFrame | None = None,
+    boxscores_df: pd.DataFrame | None = None,
+    clutch_games_df: pd.DataFrame | None = None,
     clutch_lineups_file=None,
     rival_team=None,
     home_away_filter="Todos",
@@ -179,6 +183,9 @@ def build_team_report(
     
     df_players = pd.read_excel(players_path) if players_df is None else players_df.copy()
     df_team_raw = pd.read_excel(teams_path) if teams_df is None else teams_df.copy()
+    df_games_source = games_df.copy() if games_df is not None else pd.DataFrame()
+    df_boxscores_source = boxscores_df.copy() if boxscores_df is not None else pd.DataFrame()
+    df_clutch_games_source = clutch_games_df.copy() if clutch_games_df is not None else pd.DataFrame()
     
     # Aplicar filtro de local/visitante a df_team
     if home_away_filter == "Local":
@@ -323,6 +330,9 @@ def build_team_report(
     head_to_head_fig = None  # <<< NUEVO: página head-to-head
     assists_fig = None  # <<< NUEVO
     clutch_fig = None
+    context_home_away_fig = None
+    context_result_fig = None
+    clutch_context_fig = None
     if add_overview_and_bars:
         print("[DEBUG] Generating single overview page...")
         from team_report_overview.build_team_report_overview import build_team_report_overview, compute_advanced_stats_overview
@@ -562,6 +572,54 @@ def build_team_report(
             print(f"[DEBUG] Error generating assists page: {e}")
             assists_fig = None
 
+        try:
+            context_games_df = df_games_source.copy()
+            context_boxscores_df = df_boxscores_source.copy()
+            context_clutch_games_df = df_clutch_games_source.copy()
+            context_clutch_lineups_df = clutch_lineups_df.copy() if clutch_lineups_df is not None else pd.DataFrame()
+
+            if home_away_filter in {"Local", "Visitante"} and not context_games_df.empty and "IS_HOME" in context_games_df.columns:
+                expected_is_home = home_away_filter == "Local"
+                context_games_df = context_games_df[context_games_df["IS_HOME"] == expected_is_home].copy()
+
+            if not context_games_df.empty and "PID" in context_games_df.columns:
+                selected_game_ids = pd.to_numeric(context_games_df["PID"], errors="coerce").dropna().astype(int).tolist()
+                if selected_game_ids:
+                    if not context_boxscores_df.empty:
+                        context_boxscores_df = context_boxscores_df[
+                            pd.to_numeric(context_boxscores_df["IdPartido"], errors="coerce").fillna(-1).astype(int).isin(selected_game_ids)
+                        ].copy()
+                    if not context_clutch_games_df.empty:
+                        context_clutch_games_df = context_clutch_games_df[
+                            pd.to_numeric(context_clutch_games_df["IdPartido"], errors="coerce").fillna(-1).astype(int).isin(selected_game_ids)
+                        ].copy()
+                    if not context_clutch_lineups_df.empty:
+                        context_clutch_lineups_df = context_clutch_lineups_df[
+                            pd.to_numeric(context_clutch_lineups_df["PARTIDO_ID"], errors="coerce").fillna(-1).astype(int).isin(selected_game_ids)
+                        ].copy()
+
+            print("[DEBUG] Generating context split pages...")
+            context_home_away_fig = build_team_context_page(
+                team_name,
+                build_context_split_payload(team_name, context_games_df, context_boxscores_df, "home_away"),
+                dpi=180,
+            )
+            context_result_fig = build_team_context_page(
+                team_name,
+                build_context_split_payload(team_name, context_games_df, context_boxscores_df, "result"),
+                dpi=180,
+            )
+            clutch_context_fig = build_team_clutch_page(
+                team_name,
+                build_clutch_split_payload(team_name, context_games_df, context_clutch_games_df, context_clutch_lineups_df),
+                dpi=180,
+            )
+        except Exception as e:
+            print(f"[DEBUG] Error generating context/clutch pages: {e}")
+            context_home_away_fig = None
+            context_result_fig = None
+            clutch_context_fig = None
+
     # --- Generate main report pages (always) ---
     print("[DEBUG] Generating main report pages...")
     figs = []
@@ -671,6 +729,29 @@ def build_team_report(
         else:
             print("[DEBUG] Assists figure missing; skipping third page.")
 
+        for page_key, figure in [
+            ("team_context_home_away_pdf_direct.png", context_home_away_fig),
+            ("team_context_result_pdf_direct.png", context_result_fig),
+            ("team_clutch_context_pdf_direct.png", clutch_context_fig),
+        ]:
+            if figure is None:
+                continue
+            figure.savefig(page_key, dpi=180, bbox_inches="tight", facecolor="white", edgecolor="none", pad_inches=0.15)
+            page_img = Image.open(page_key)
+            page_img_w, page_img_h = page_img.size
+            available_w = page_w - 2 * margin
+            available_h = page_h - 2 * margin
+            scale_w = available_w / page_img_w
+            scale_h = available_h / page_img_h
+            page_scale = min(scale_w, scale_h)
+            draw_w = page_img_w * page_scale
+            draw_h = page_img_h * page_scale
+            draw_x = (page_w - draw_w) / 2
+            draw_y = (page_h - draw_h) / 2
+            page_reader = ImageReader(page_key)
+            c.drawImage(page_reader, draw_x, draw_y, width=draw_w, height=draw_h, preserveAspectRatio=True, mask='auto')
+            c.showPage()
+
     # Add main report pages
     print("[DEBUG] Adding main report pages to PDF...")
     for idx, fig in enumerate(figs, start=1):
@@ -713,6 +794,12 @@ def build_team_report(
             pages.append("clutch")
         if assists_fig is not None:
             pages.append("asistencias")
+        if context_home_away_fig is not None:
+            pages.append("local-vs-visitante")
+        if context_result_fig is not None:
+            pages.append("victoria-vs-derrota")
+        if clutch_context_fig is not None:
+            pages.append("clutch-y-cierre")
         print(f"📊 PDF con {', '.join(pages)} + main report")
     else:
         print(f"📊 PDF solo con main report (filtrado por jugadores)")

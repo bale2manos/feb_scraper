@@ -1,16 +1,16 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import { getGmPlayers } from "../api";
 import { DataTable } from "../components/DataTable";
 import { MetricCard } from "../components/MetricCard";
+import { PlayerDetailActions } from "../components/PlayerDetailActions";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchSelect } from "../components/SearchSelect";
 import { useLocalStorageState } from "../hooks";
 import { buildScopeQueryKey, useScopeMeta } from "../scope";
 import type { ScopeState } from "../types";
-import { downloadCsv, formatNumber } from "../utils";
+import { downloadCsv, formatNumber, getBirthYear, getPlayerAge } from "../utils";
 
 type ScopePageProps = {
   scope: ScopeState;
@@ -40,7 +40,6 @@ function buildFilterId() {
 }
 
 export function GmPage({ scope, setScope }: ScopePageProps) {
-  const navigate = useNavigate();
   const [mode, setMode] = useLocalStorageState<string>("react-gm-mode-v2", "Promedios");
   const [selectedPlayerKey, setSelectedPlayerKey] = useState<string | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -126,6 +125,8 @@ export function GmPage({ scope, setScope }: ScopePageProps) {
 
   const selectedImage =
     typeof selectedRow?.IMAGEN === "string" && /^https?:\/\//.test(String(selectedRow.IMAGEN)) ? String(selectedRow.IMAGEN) : null;
+  const selectedBirthYear = getBirthYear(selectedRow?.["AÑO NACIMIENTO"]);
+  const selectedAge = getPlayerAge(selectedRow?.["AÑO NACIMIENTO"]);
   const playersCount = filteredRows.length;
   const totalPlayersCount = data?.rows.length ?? 0;
   const teamsCount = new Set(filteredRows.map((row) => String(row.EQUIPO ?? ""))).size;
@@ -280,6 +281,8 @@ export function GmPage({ scope, setScope }: ScopePageProps) {
                         <div className="player-placeholder">GM</div>
                       )}
                       <div className="metric-grid">
+                        {selectedAge != null ? <MetricCard label="Edad" value={String(selectedAge)} /> : null}
+                        {selectedBirthYear != null ? <MetricCard label="Nacimiento" value={String(selectedBirthYear)} /> : null}
                         <MetricCard label="Puntos" value={formatNumber(selectedRow.PUNTOS, 1)} />
                         <MetricCard label="Rebotes" value={formatNumber(selectedRow["REB TOTALES"], 1)} />
                         <MetricCard label="Asistencias" value={formatNumber(selectedRow.ASISTENCIAS, 1)} />
@@ -290,19 +293,13 @@ export function GmPage({ scope, setScope }: ScopePageProps) {
                         <MetricCard label="AST/TO" value={formatNumber(selectedRow["AST/TO"], 2)} />
                       </div>
                       <div className="toolbar">
-                        <button
-                          type="button"
-                          className="primary-cta-button"
-                          onClick={() => {
-                            if (!selectedPlayerKey) {
-                              return;
-                            }
-                            window.localStorage.setItem("react-similarity-target-player", JSON.stringify(selectedPlayerKey));
-                            navigate("/similares");
-                          }}
-                        >
-                          Buscar similares
-                        </button>
+                        <PlayerDetailActions
+                          playerKey={selectedPlayerKey}
+                          team={String(selectedRow.EQUIPO ?? "")}
+                          season={scope.season}
+                          league={scope.league}
+                          currentPage="other"
+                        />
                       </div>
                     </>
                   ) : (

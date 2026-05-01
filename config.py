@@ -10,6 +10,17 @@ su modificación y mantenimiento centralizados.
 import os
 from pathlib import Path
 
+
+def _coerce_float_env(name: str, default: float, *, minimum: float = 0.0, maximum: float | None = None) -> float:
+    try:
+        numeric = float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        numeric = float(default)
+    numeric = max(numeric, minimum)
+    if maximum is not None:
+        numeric = min(numeric, maximum)
+    return numeric
+
 # =============================================================================
 # CONFIGURACIÓN DE TEMPORADA Y COMPETICIÓN
 # =============================================================================
@@ -137,6 +148,14 @@ REPORT_STORAGE_MODE_ENV_VAR = "REPORT_STORAGE_MODE"
 REPORT_STORAGE_MODE_LOCAL = "local"
 REPORT_STORAGE_MODE_EPHEMERAL = "ephemeral"
 REPORT_STORAGE_MODE = str(os.getenv(REPORT_STORAGE_MODE_ENV_VAR, REPORT_STORAGE_MODE_LOCAL) or REPORT_STORAGE_MODE_LOCAL).strip().lower()
+
+DEFAULT_PLOTLY_IMAGE_EXPORT_SCALE = 2.0 if APP_STORAGE_MODE == APP_STORAGE_MODE_GCS_SNAPSHOT else 4.0
+PLOTLY_IMAGE_EXPORT_SCALE = _coerce_float_env(
+    "PLOTLY_IMAGE_EXPORT_SCALE",
+    DEFAULT_PLOTLY_IMAGE_EXPORT_SCALE,
+    minimum=1.0,
+    maximum=4.0,
+)
 
 # Modos de la app unificada
 APP_MODE_ENV_VAR = "FEB_APP_MODE"

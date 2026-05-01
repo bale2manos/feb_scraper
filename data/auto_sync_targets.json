@@ -18,7 +18,7 @@
         "Liga Regular \"ESTE\""
       ],
       "jornadas": [],
-      "enabled": true
+      "enabled": false
     },
     {
       "season": "2025/2026",
@@ -27,7 +27,7 @@
         "Liga Regular \"OESTE\""
       ],
       "jornadas": [],
-      "enabled": true
+      "enabled": false
     },
     {
       "season": "2025/2026",
@@ -36,7 +36,7 @@
         "Liga Regular \"B-A\""
       ],
       "jornadas": [],
-      "enabled": true
+      "enabled": false
     },
     {
       "season": "2025/2026",
@@ -45,7 +45,7 @@
         "Liga Regular \"B-B\""
       ],
       "jornadas": [],
-      "enabled": true
+      "enabled": false
     }
   ]
 }

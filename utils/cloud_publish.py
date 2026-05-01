@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -102,30 +104,33 @@ def publish_sqlite_snapshot_to_cloud(
 
     version = snapshot_version or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     _emit(progress_callback, "info", f"Subiendo snapshot SQLite a {config.gcs_uri}")
-    _run_gcloud_command(
-        config,
-        [
-            "storage",
-            "cp",
-            str(sqlite_file),
-            config.gcs_uri,
-            "--quiet",
-        ],
-    )
+    if shutil.which(config.gcloud_executable):
+        _run_gcloud_command(
+            config,
+            [
+                "storage",
+                "cp",
+                str(sqlite_file),
+                config.gcs_uri,
+                "--quiet",
+            ],
+        )
 
-    _emit(progress_callback, "info", f"Forzando nueva revision de Cloud Run con {config.snapshot_version_env_var}={version}")
-    _run_gcloud_command(
-        config,
-        [
-            "run",
-            "services",
-            "update",
-            config.cloud_run_service,
-            f"--region={config.region}",
-            f"--update-env-vars={config.snapshot_version_env_var}={version}",
-            "--quiet",
-        ],
-    )
+        _emit(progress_callback, "info", f"Forzando nueva revision de Cloud Run con {config.snapshot_version_env_var}={version}")
+        _run_gcloud_command(
+            config,
+            [
+                "run",
+                "services",
+                "update",
+                config.cloud_run_service,
+                f"--region={config.region}",
+                f"--update-env-vars={config.snapshot_version_env_var}={version}",
+                "--quiet",
+            ],
+        )
+    else:
+        _publish_via_google_apis(config, sqlite_file=sqlite_file, snapshot_version=version, progress_callback=progress_callback)
 
     _emit(progress_callback, "success", f"Snapshot cloud publicada en {config.gcs_uri}")
     return {
@@ -182,3 +187,106 @@ def _read_config_value(payload: dict[str, Any], *keys: str, default: str = "") -
 def _emit(progress_callback: Callable[[str, str], None] | None, level: str, message: str) -> None:
     if progress_callback is not None:
         progress_callback(level, message)
+
+
+def _publish_via_google_apis(
+    config: CloudPublishConfig,
+    *,
+    sqlite_file: Path,
+    snapshot_version: str,
+    progress_callback: Callable[[str, str], None] | None,
+) -> None:
+    if config.credentials_path is None:
+        raise RuntimeError(
+            "Sin gcloud instalado necesitas GOOGLE_APPLICATION_CREDENTIALS en el config local para publicar por API."
+        )
+
+    try:
+        import requests
+        from google.auth.transport.requests import Request
+        from google.cloud import storage
+        from google.oauth2 import service_account
+    except ImportError as exc:
+        raise RuntimeError(
+            "Faltan dependencias para publicar por API sin gcloud. Instala google-cloud-storage en tu entorno local."
+        ) from exc
+
+    credentials = service_account.Credentials.from_service_account_file(
+        str(config.credentials_path),
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+
+    storage_client = storage.Client(project=config.project_id, credentials=credentials)
+    bucket = storage_client.bucket(config.gcs_bucket)
+    blob = bucket.blob(config.gcs_object)
+    blob.upload_from_filename(str(sqlite_file))
+
+    credentials.refresh(Request())
+    headers = {
+        "Authorization": f"Bearer {credentials.token}",
+        "Content-Type": "application/json",
+    }
+    service_name = f"projects/{config.project_id}/locations/{config.region}/services/{config.cloud_run_service}"
+    service_url = f"https://run.googleapis.com/v2/{service_name}"
+
+    response = requests.get(service_url, headers=headers, timeout=60)
+    if response.status_code >= 400:
+        raise RuntimeError(f"No se ha podido leer el servicio de Cloud Run: {response.status_code} {response.text}")
+
+    service_payload = response.json()
+    template = dict(service_payload.get("template") or {})
+    containers = list(template.get("containers") or [])
+    if not containers:
+        raise RuntimeError("El servicio Cloud Run no tiene contenedores configurados.")
+
+    container = dict(containers[0])
+    env_items = [dict(item) for item in container.get("env") or []]
+    updated = False
+    for item in env_items:
+        if item.get("name") == config.snapshot_version_env_var:
+            item["value"] = snapshot_version
+            updated = True
+            break
+    if not updated:
+        env_items.append({"name": config.snapshot_version_env_var, "value": snapshot_version})
+    container["env"] = env_items
+
+    patch_body = {
+        "name": service_name,
+        "template": {
+            "containers": [container],
+        },
+    }
+
+    _emit(progress_callback, "info", f"Forzando nueva revision de Cloud Run con {config.snapshot_version_env_var}={snapshot_version}")
+    patch_response = requests.patch(
+        service_url,
+        params={"updateMask": "template.containers"},
+        headers=headers,
+        json=patch_body,
+        timeout=60,
+    )
+    if patch_response.status_code >= 400:
+        raise RuntimeError(f"No se ha podido actualizar Cloud Run: {patch_response.status_code} {patch_response.text}")
+
+    operation_name = str((patch_response.json() or {}).get("name") or "").strip()
+    if not operation_name:
+        return
+
+    operation_url = f"https://run.googleapis.com/v2/{operation_name}"
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        operation_response = requests.get(operation_url, headers=headers, timeout=60)
+        if operation_response.status_code >= 400:
+            raise RuntimeError(
+                f"No se ha podido consultar la operacion de Cloud Run: {operation_response.status_code} {operation_response.text}"
+            )
+        operation_payload = operation_response.json() or {}
+        if operation_payload.get("done"):
+            error = operation_payload.get("error")
+            if error:
+                raise RuntimeError(f"Cloud Run devolvio un error al crear la revision: {error}")
+            return
+        time.sleep(2.0)
+
+    raise RuntimeError("Timeout esperando a que Cloud Run terminara de crear la nueva revision.")

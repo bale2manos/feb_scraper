@@ -7,7 +7,7 @@ from PIL import Image
 import io
 
 # Importar configuración centralizada
-from config import FONT_FAMILY, LOW_THRESH
+from config import FONT_FAMILY, LOW_THRESH, PLOTLY_IMAGE_EXPORT_SCALE
 
 # ─────────── CONFIGURACIÓN ────────────────────────────────────────────────
 FONT            = FONT_FAMILY
@@ -141,7 +141,7 @@ def plot_media_pct(stats: dict,
     fig.update_yaxes(categoryorder='array', categoryarray=labels[::-1])
 
     # ── Generate PIL Image directly ──────────────────────────────────────
-    img_bytes = fig.to_image(format="png", engine="kaleido", scale=4)
+    img_bytes = fig.to_image(format="png", engine="kaleido", scale=PLOTLY_IMAGE_EXPORT_SCALE)
     img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
     
     # Optionally save to file if out_png is provided

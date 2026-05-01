@@ -81,10 +81,15 @@ def create_app(
         redoc_url=None if resolved_settings.is_production else "/redoc",
         openapi_url=None if resolved_settings.is_production else "/openapi.json",
     )
-    if resolved_settings.allowed_origins:
+    # Configure CORS: always in development, or when allowed_origins is specified in production
+    cors_origins = list(resolved_settings.allowed_origins)
+    if not cors_origins and not resolved_settings.is_production:
+        cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    
+    if cors_origins:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=list(resolved_settings.allowed_origins),
+            allow_origins=cors_origins,
             allow_credentials=True,
             allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type"],

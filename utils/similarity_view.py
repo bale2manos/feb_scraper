@@ -36,7 +36,6 @@ SIMILARITY_FEATURE_LABELS: dict[str, str] = {
 }
 
 SIMILARITY_DEPENDENCY_COLUMNS = ["%PLAYS_EQUIPO", "%AST_EQUIPO", "%REB_EQUIPO", "FOCO_PRINCIPAL", "DEPENDENCIA_SCORE"]
-SIMILARITY_FEATURE_KEYS = tuple(SIMILARITY_FEATURE_WEIGHTS.keys())
 
 
 def _numeric_series(df: pd.DataFrame, column: str) -> pd.Series:
@@ -78,34 +77,6 @@ def _difference_text(column: str, target_value: Any, candidate_value: Any) -> st
     target = _to_number(target_value)
     direction = "Mas" if candidate > target else "Menos"
     return f"{direction} {label.lower()}: { _format_metric_value(column, candidate_value) } vs { _format_metric_value(column, target_value) }"
-
-
-def get_similarity_feature_catalog() -> list[dict[str, Any]]:
-    return [
-        {
-            "key": key,
-            "label": SIMILARITY_FEATURE_LABELS.get(key, key),
-            "defaultWeight": float(default_weight),
-        }
-        for key, default_weight in SIMILARITY_FEATURE_WEIGHTS.items()
-    ]
-
-
-def resolve_similarity_feature_weights(weight_overrides: dict[str, Any] | None = None) -> dict[str, float]:
-    resolved: dict[str, float] = {}
-    for key, default_weight in SIMILARITY_FEATURE_WEIGHTS.items():
-        raw_value = default_weight if weight_overrides is None else weight_overrides.get(key, default_weight)
-        numeric = max(_to_number(raw_value), 0.0)
-        resolved[key] = numeric
-
-    active_total = sum(value for value in resolved.values() if value > 0)
-    if active_total <= 0:
-        raise ValueError("Selecciona al menos una metrica activa para calcular similares.")
-
-    return {
-        key: (value / active_total if value > 0 else 0.0)
-        for key, value in resolved.items()
-    }
 
 
 def build_similarity_player_pool(
@@ -163,7 +134,6 @@ def build_player_similarity_results(
     min_games: int = 5,
     min_minutes: float = 10.0,
     limit: int = 10,
-    feature_weights: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if pool_df.empty or "PLAYER_KEY" not in pool_df.columns:
         return {"target": None, "candidates": []}
@@ -185,15 +155,13 @@ def build_player_similarity_results(
             "candidates": [],
         }
 
-    resolved_weights = resolve_similarity_feature_weights(feature_weights)
-    active_columns = [column for column, weight in resolved_weights.items() if weight > 0]
     reference_df = pd.concat([target_row.to_frame().T, candidate_pool], ignore_index=True)
-    percentile_df = _percentile_frame(reference_df, active_columns)
+    percentile_df = _percentile_frame(reference_df, list(SIMILARITY_FEATURE_WEIGHTS))
     target_percentiles = percentile_df.iloc[0]
     candidate_percentiles = percentile_df.iloc[1:].reset_index(drop=True)
     candidate_pool = candidate_pool.reset_index(drop=True)
 
-    weight_sum = sum(resolved_weights.values()) or 1.0
+    weight_sum = sum(SIMILARITY_FEATURE_WEIGHTS.values()) or 1.0
     weighted_distances: list[float] = []
     reasons_list: list[list[str]] = []
     differences_list: list[list[str]] = []
@@ -201,9 +169,7 @@ def build_player_similarity_results(
     for index, candidate in candidate_pool.iterrows():
         feature_scores: list[tuple[str, float]] = []
         distance_sum = 0.0
-        for column, weight in resolved_weights.items():
-            if weight <= 0:
-                continue
+        for column, weight in SIMILARITY_FEATURE_WEIGHTS.items():
             delta = float(candidate_percentiles.loc[index, column] - target_percentiles[column])
             impact = abs(delta) * weight
             feature_scores.append((column, impact))

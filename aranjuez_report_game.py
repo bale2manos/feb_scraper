@@ -354,8 +354,8 @@ def main():
     print("=" * 50)
     
     # 1. Leer datos de BasketAranjuez
-    aranjuez_file = Path("data/BasketAranjuez/basket_aranjuez.xlsx")
-    #aranjuez_file = Path("data/BasketAranjuez/stats_basket_aranjuez_vs_corazonistas_blanco_30-3-26.xls")  # Archivo de partido individual (sin hoja Stats_Rival)
+    #aranjuez_file = Path("data/BasketAranjuez/basket_aranjuez.xlsx")
+    aranjuez_file = Path("data/BasketAranjuez/stats_basket_aranjuez_vs_liceo_francés__24-3-26.xls")  # Archivo de partido individual (sin hoja Stats_Rival)
     if not aranjuez_file.exists():
         print(f"❌ Error: No se encontró el archivo {aranjuez_file}")
         print("   Asegúrate de que el archivo existe en la carpeta data/BasketAranjuez/")

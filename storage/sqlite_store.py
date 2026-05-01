@@ -191,7 +191,6 @@ class ReportBundle:
     assists_df: pd.DataFrame
     clutch_df: pd.DataFrame
     clutch_lineups_df: pd.DataFrame
-    clutch_games_df: pd.DataFrame = field(default_factory=pd.DataFrame)
     games_df: pd.DataFrame = field(default_factory=pd.DataFrame)
     boxscores_df: pd.DataFrame = field(default_factory=pd.DataFrame)
 
@@ -303,18 +302,6 @@ def _player_key(player_name: str, player_url: Optional[str], team_name: Optional
         return player_url.strip()
     base = "##".join([_normalize_name(team_name or ""), _normalize_name(player_name)])
     return f"legacy::{base}"
-
-
-def _dorsal_match_key(player_name: object) -> str:
-    raw_name = str(player_name or "")
-    if "," in raw_name:
-        raw_name = raw_name.split(",", 1)[0]
-    text = _normalize_name(raw_name).replace(",", " ")
-    tokens = [token.strip(".") for token in text.split() if token.strip(".")]
-    surname_tokens = [token for token in tokens if len(token) > 1]
-    if not surname_tokens:
-        return ""
-    return " ".join(surname_tokens[:2])
 
 
 def _lookup_path(relative_or_name: str) -> Path:
@@ -2107,25 +2094,6 @@ class DataStore:
                 params=[_season_short(filters.season), filters.league],
             )
         players_df = self._aggregate_players(boxscores_df, bios_df)
-        if not clutch_player_df.empty and not boxscores_df.empty and {"IdPartido", "PLAYER_KEY", "DORSAL"}.issubset(boxscores_df.columns):
-            dorsal_lookup = boxscores_df[["IdPartido", "PLAYER_KEY", "DORSAL"]].drop_duplicates(subset=["IdPartido", "PLAYER_KEY"])
-            clutch_player_df = clutch_player_df.merge(dorsal_lookup, on=["IdPartido", "PLAYER_KEY"], how="left")
-            if clutch_player_df["DORSAL"].isna().any() and {"JUGADOR", "EQUIPO LOCAL"}.issubset(boxscores_df.columns):
-                fallback_lookup = boxscores_df[["IdPartido", "EQUIPO LOCAL", "JUGADOR", "DORSAL"]].copy()
-                fallback_lookup["_DORSAL_MATCH_KEY"] = fallback_lookup["JUGADOR"].map(_dorsal_match_key)
-                fallback_lookup = fallback_lookup[
-                    (fallback_lookup["_DORSAL_MATCH_KEY"] != "") & fallback_lookup["DORSAL"].notna()
-                ].drop_duplicates(subset=["IdPartido", "EQUIPO LOCAL", "_DORSAL_MATCH_KEY"])
-                clutch_player_df["_DORSAL_MATCH_KEY"] = clutch_player_df["JUGADOR"].map(_dorsal_match_key)
-                clutch_player_df = clutch_player_df.merge(
-                    fallback_lookup.rename(columns={"EQUIPO LOCAL": "EQUIPO", "DORSAL": "DORSAL_FALLBACK"})[
-                        ["IdPartido", "EQUIPO", "_DORSAL_MATCH_KEY", "DORSAL_FALLBACK"]
-                    ],
-                    on=["IdPartido", "EQUIPO", "_DORSAL_MATCH_KEY"],
-                    how="left",
-                )
-                clutch_player_df["DORSAL"] = clutch_player_df["DORSAL"].fillna(clutch_player_df["DORSAL_FALLBACK"])
-                clutch_player_df = clutch_player_df.drop(columns=["_DORSAL_MATCH_KEY", "DORSAL_FALLBACK"], errors="ignore")
         games_df = self._aggregate_team_games(boxscores_df, games_catalog_df)
         teams_df = self._aggregate_teams(games_df)
         clutch_df = self._aggregate_clutch(clutch_player_df)
@@ -2135,7 +2103,6 @@ class DataStore:
             assists_df=assists_df,
             clutch_df=clutch_df,
             clutch_lineups_df=clutch_lineups_df,
-            clutch_games_df=clutch_player_df,
             games_df=games_df,
             boxscores_df=boxscores_df,
         )

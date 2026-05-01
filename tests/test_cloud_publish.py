@@ -44,9 +44,8 @@ class CloudPublishTests(unittest.TestCase):
 
             self.assertIsNone(config)
 
-    @patch("utils.cloud_publish.shutil.which", return_value="gcloud")
     @patch("utils.cloud_publish.subprocess.run")
-    def test_publish_sqlite_snapshot_uploads_db_and_updates_cloud_run(self, run_mock, _which_mock) -> None:
+    def test_publish_sqlite_snapshot_uploads_db_and_updates_cloud_run(self, run_mock) -> None:
         run_mock.return_value = SimpleNamespace(returncode=0, stdout="", stderr="")
 
         with tempfile.TemporaryDirectory() as tmp_dir:

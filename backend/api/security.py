@@ -40,11 +40,6 @@ class AppSettings:
     sqlite_object: str = "snapshots/feb.sqlite"
     sqlite_local_path: Path | None = None
     sqlite_snapshot_version: str = ""
-    report_budget_monthly_tokens: int = 90_000
-    report_budget_bucket: str = ""
-    report_budget_object: str = "usage/report_budget.json"
-    report_budget_timezone: str = "Europe/Madrid"
-    report_budget_seed_tokens: dict[str, float] | None = None
     login_rate_limit: int = 5
     login_rate_window_seconds: int = 300
     report_rate_limit: int = 20
@@ -104,15 +99,6 @@ def load_app_settings() -> AppSettings:
     sqlite_object = str(os.getenv("SQLITE_OBJECT", "snapshots/feb.sqlite") or "snapshots/feb.sqlite").strip()
     sqlite_local_path = Path(os.getenv("SQLITE_LOCAL_PATH", str(storage_root / "data" / "feb.sqlite"))).resolve()
     sqlite_snapshot_version = str(os.getenv("SQLITE_SNAPSHOT_VERSION", "")).strip()
-    report_budget_monthly_tokens = _coerce_int(os.getenv("REPORT_BUDGET_MONTHLY_TOKENS"), 90_000, minimum=1, maximum=5_000_000)
-    report_budget_bucket = str(os.getenv("REPORT_BUDGET_BUCKET", sqlite_bucket if app_storage_mode == "gcs_snapshot" else "")).strip()
-    report_budget_object = str(os.getenv("REPORT_BUDGET_OBJECT", "usage/report_budget.json") or "usage/report_budget.json").strip()
-    report_budget_timezone = str(os.getenv("REPORT_BUDGET_TIMEZONE", "Europe/Madrid") or "Europe/Madrid").strip()
-    report_budget_seed_tokens = {
-        "player": _coerce_float(os.getenv("REPORT_BUDGET_PLAYER_TOKENS"), 110.0, minimum=1.0, maximum=10_000.0),
-        "team": _coerce_float(os.getenv("REPORT_BUDGET_TEAM_TOKENS"), 223.0, minimum=1.0, maximum=10_000.0),
-        "phase": _coerce_float(os.getenv("REPORT_BUDGET_PHASE_TOKENS"), 55.0, minimum=1.0, maximum=10_000.0),
-    }
     auth_enabled = bool(session_secret and admin_password_hash)
     if app_env == "production" and not auth_enabled:
         raise RuntimeError("En produccion debes definir SESSION_SECRET y ADMIN_PASSWORD_HASH.")
@@ -135,11 +121,6 @@ def load_app_settings() -> AppSettings:
         sqlite_object=sqlite_object,
         sqlite_local_path=sqlite_local_path,
         sqlite_snapshot_version=sqlite_snapshot_version,
-        report_budget_monthly_tokens=report_budget_monthly_tokens,
-        report_budget_bucket=report_budget_bucket,
-        report_budget_object=report_budget_object,
-        report_budget_timezone=report_budget_timezone,
-        report_budget_seed_tokens=report_budget_seed_tokens,
     )
 
 
@@ -271,17 +252,6 @@ def _urlsafe_b64decode(value: str) -> bytes:
 def _coerce_int(value: Any, default: int, *, minimum: int = 0, maximum: int | None = None) -> int:
     try:
         numeric = int(value)
-    except (TypeError, ValueError):
-        numeric = default
-    numeric = max(numeric, minimum)
-    if maximum is not None:
-        numeric = min(numeric, maximum)
-    return numeric
-
-
-def _coerce_float(value: Any, default: float, *, minimum: float = 0.0, maximum: float | None = None) -> float:
-    try:
-        numeric = float(value)
     except (TypeError, ValueError):
         numeric = default
     numeric = max(numeric, minimum)

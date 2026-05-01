@@ -17,9 +17,6 @@ Esta variante publica la app web en **Google Cloud Run** sin migrar la base de d
 - `APP_STORAGE_ROOT=/tmp`
 - `APP_STORAGE_MODE=gcs_snapshot`
 - `REPORT_STORAGE_MODE=ephemeral`
-- `REPORT_BUDGET_MONTHLY_TOKENS=90000`
-- `REPORT_BUDGET_BUCKET=tu-bucket`
-- `REPORT_BUDGET_OBJECT=usage/report_budget.json`
 
 ## Variables de entorno
 
@@ -31,18 +28,14 @@ Esta variante publica la app web en **Google Cloud Run** sin migrar la base de d
 - `SQLITE_OBJECT=snapshots/feb.sqlite`
 - `SQLITE_LOCAL_PATH=/tmp/feb.sqlite`
 - `SQLITE_SNAPSHOT_VERSION=bootstrap`
-- `REPORT_BUDGET_MONTHLY_TOKENS=90000`
-- `REPORT_BUDGET_BUCKET=tu-bucket`
-- `REPORT_BUDGET_OBJECT=usage/report_budget.json`
 - `SESSION_SECRET=<secreto largo>`
 - `ADMIN_PASSWORD_HASH=<hash Argon2>`
 
 ## Service account de Cloud Run
 
-La service account asociada al servicio de Cloud Run necesita:
+La service account asociada al servicio de Cloud Run solo necesita leer la snapshot:
 
-- `roles/storage.objectViewer` para leer `snapshots/feb.sqlite`
-- `roles/storage.objectAdmin` o equivalente de escritura sobre `usage/report_budget.json` si quieres que la app muestre el contador mensual persistente de tokens restantes
+- `roles/storage.objectViewer` sobre el bucket
 
 ## Despliegue inicial
 
@@ -61,13 +54,11 @@ gcloud run deploy feb-analytics `
   --source . `
   --region us-central1 `
   --allow-unauthenticated `
-  --memory 4Gi `
+  --memory 1Gi `
   --cpu 1 `
   --min-instances 0 `
   --max-instances 1 `
-  --concurrency 1 `
-  --timeout 900 `
-  --set-env-vars APP_ENV=production,APP_STORAGE_ROOT=/tmp,APP_STORAGE_MODE=gcs_snapshot,REPORT_STORAGE_MODE=ephemeral,SQLITE_BUCKET=tu-bucket,SQLITE_OBJECT=snapshots/feb.sqlite,SQLITE_LOCAL_PATH=/tmp/feb.sqlite,SQLITE_SNAPSHOT_VERSION=bootstrap,REPORT_BUDGET_MONTHLY_TOKENS=90000,REPORT_BUDGET_BUCKET=tu-bucket,REPORT_BUDGET_OBJECT=usage/report_budget.json
+  --set-env-vars APP_ENV=production,APP_STORAGE_ROOT=/tmp,APP_STORAGE_MODE=gcs_snapshot,REPORT_STORAGE_MODE=ephemeral,SQLITE_BUCKET=tu-bucket,SQLITE_OBJECT=snapshots/feb.sqlite,SQLITE_LOCAL_PATH=/tmp/feb.sqlite,SQLITE_SNAPSHOT_VERSION=bootstrap
 ```
 
 4. Anade despues:
@@ -102,4 +93,3 @@ Flujo:
 - La app cloud nunca escribe datos FEB.
 - La actualizacion semanal se sigue haciendo solo en tu PC.
 - Los informes generados en cloud no son persistentes.
-- El contador mensual de tokens usa tiempos reales de los informes y, si el runtime puede escribir en el bucket, persiste entre revisiones.

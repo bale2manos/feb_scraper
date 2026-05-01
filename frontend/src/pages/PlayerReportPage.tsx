@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { generatePlayerReport } from "../api";
 import { MetricCard } from "../components/MetricCard";
-import { PlayerDetailActions } from "../components/PlayerDetailActions";
-import { ReportBudgetPanel, useReportBudget } from "../components/ReportBudgetPanel";
 import { ReportPreview } from "../components/ReportPreview";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchSelect } from "../components/SearchSelect";
@@ -18,9 +17,9 @@ type ScopePageProps = {
 };
 
 export function PlayerReportPage({ scope, setScope }: ScopePageProps) {
+  const navigate = useNavigate();
   const { meta } = useScopeMeta();
   const { getLatestJob, openPreview, startReportJob } = useReports();
-  const budgetQuery = useReportBudget();
   const [selectedTeam, setSelectedTeam] = useLocalStorageState<string>("react-player-report-team", "Todos");
   const [selectedPlayerKey, setSelectedPlayerKey] = useLocalStorageState<string>("react-player-report-player", "");
   const [isBulkRunning, setIsBulkRunning] = useState(false);
@@ -62,10 +61,9 @@ export function PlayerReportPage({ scope, setScope }: ScopePageProps) {
   const playerTaskKey = buildScopeTaskKey("player", scope, [selectedTeam, selectedPlayer?.playerKey ?? ""]);
   const playerJob = getLatestJob(playerTaskKey);
   const error = playerJob?.status === "error" ? playerJob.error : null;
-  const budgetBlocked = budgetQuery.data?.isBlocked ?? false;
 
   async function handleGeneratePlayer() {
-    if (!selectedPlayer || budgetBlocked) {
+    if (!selectedPlayer) {
       return;
     }
     await startReportJob({
@@ -79,7 +77,7 @@ export function PlayerReportPage({ scope, setScope }: ScopePageProps) {
   }
 
   async function handleGenerateTeamBatch() {
-    if (selectedTeam === "Todos" || !filteredPlayers.length || budgetBlocked) {
+    if (selectedTeam === "Todos" || !filteredPlayers.length) {
       return;
     }
     setIsBulkRunning(true);
@@ -150,8 +148,6 @@ export function PlayerReportPage({ scope, setScope }: ScopePageProps) {
                 <MetricCard label="Partidos en filtro" value={String(selectedPlayer?.gamesPlayed ?? 0)} />
               </div>
 
-              <ReportBudgetPanel focusKind="player" budgetQuery={budgetQuery} />
-
               {error ? <p className="error-text">{error}</p> : null}
 
               <div className="report-action-card report-action-card-stacked">
@@ -172,9 +168,9 @@ export function PlayerReportPage({ scope, setScope }: ScopePageProps) {
                     onClick={() => {
                       void handleGeneratePlayer();
                     }}
-                    disabled={!selectedPlayer || playerJob?.status === "pending" || budgetBlocked}
+                    disabled={!selectedPlayer || playerJob?.status === "pending"}
                   >
-                    {budgetBlocked ? "Limite mensual alcanzado" : playerJob?.status === "pending" ? "Generando PNG..." : "Generar informe PNG"}
+                    {playerJob?.status === "pending" ? "Generando PNG..." : "Generar informe PNG"}
                   </button>
 
                   <button
@@ -183,17 +179,25 @@ export function PlayerReportPage({ scope, setScope }: ScopePageProps) {
                     onClick={() => {
                       void handleGenerateTeamBatch();
                     }}
-                    disabled={selectedTeam === "Todos" || !filteredPlayers.length || isBulkRunning || budgetBlocked}
+                    disabled={selectedTeam === "Todos" || !filteredPlayers.length || isBulkRunning}
                   >
-                    {budgetBlocked ? "Generacion bloqueada" : isBulkRunning ? "Generando equipo..." : "Generar todos los jugadores del equipo"}
+                    {isBulkRunning ? "Generando equipo..." : "Generar todos los jugadores del equipo"}
                   </button>
-                  <PlayerDetailActions
-                    playerKey={selectedPlayer?.playerKey}
-                    team={selectedTeam}
-                    season={scope.season}
-                    league={scope.league}
-                    currentPage="jugador"
-                  />
+
+                  <button
+                    className="ghost-button strong-ghost-button"
+                    type="button"
+                    onClick={() => {
+                      if (!selectedPlayer?.playerKey) {
+                        return;
+                      }
+                      window.localStorage.setItem("react-similarity-target-player", JSON.stringify(selectedPlayer.playerKey));
+                      navigate("/similares");
+                    }}
+                    disabled={!selectedPlayer}
+                  >
+                    Buscar similares
+                  </button>
                 </div>
               </div>
             </section>

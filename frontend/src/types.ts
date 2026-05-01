@@ -61,7 +61,6 @@ export type DependencySummary = {
     name: string;
     image: string;
     team: string;
-    birthYear?: number | null;
     gamesPlayed: number;
     risk: string;
     focus: string;
@@ -149,184 +148,23 @@ export type SimilarityResponse = {
   players: PlayerOption[];
 };
 
-export type MarketPoolRow = {
-  PLAYER_KEY: string;
-  IMAGEN?: string;
-  JUGADOR: string;
-  EQUIPO: string;
-  LIGA: string;
-  "AÑO NACIMIENTO"?: number | null;
-  PJ: number;
-  MIN: number;
-  PTS: number;
-  REB: number;
-  AST: number;
-  TOV?: number;
-  PLAYS?: number;
-  "USG%"?: number;
-  "TS%"?: number;
-  "eFG%"?: number;
-  PPP?: number;
-  "AST/TO"?: number;
-  "%PLAYS_EQUIPO"?: number;
-  "%PUNTOS_EQUIPO"?: number;
-  "%AST_EQUIPO"?: number;
-  "%REB_EQUIPO"?: number;
-  DEPENDENCIA_SCORE?: number;
-  FOCO_PRINCIPAL?: string;
-};
-
-export type MarketPoolResponse = {
-  season: string;
-  rows: MarketPoolRow[];
-  availableLeagues: string[];
-  selectedLeagues: string[];
-  summary: {
-    playerCount: number;
-    leagueCount: number;
-    filters: {
-      minGames: number;
-      minMinutes: number;
-      query: string;
-    };
-    leaders: {
-      topScorer: string;
-      topEfficiency: string;
-      topDependency: string;
-    };
+export type DatabaseSummaryResponse = {
+  metrics: {
+    scopes: number;
+    jornadas: number;
+    catalogedGames: number;
+    withData: number;
+    pending: number;
+    failed: number;
   };
-};
-
-export type MarketComparePlayer = {
-  playerKey: string;
-  label: string;
-  name: string;
-  team: string;
-  league: string;
-  image: string;
-  focus: string;
-  dependencyScore: number;
-};
-
-export type MarketCompareMetricRow = {
-  playerKey: string;
-  value: number | string | null;
-  formatted: string;
-  percentile: number | null;
-  deltaToBest: number | null;
-  deltaToWorst: number | null;
-};
-
-export type MarketCompareMetric = {
-  key: string;
-  label: string;
-  higherIsBetter: boolean | null;
-  bestValue?: number;
-  worstValue?: number;
-  rows: MarketCompareMetricRow[];
-};
-
-export type MarketCompareBlock = {
-  key: string;
-  title: string;
-  metrics: MarketCompareMetric[];
-};
-
-export type MarketCompareResponse = {
-  season: string;
-  players: MarketComparePlayer[];
-  blocks: MarketCompareBlock[];
-  percentiles: Record<string, Record<string, number | null>>;
-  poolSummary: {
-    totalPlayers: number;
-    selectedPlayers: number;
-    selectedPlayerKeys: string[];
+  scopeSummary: Record<string, unknown>[];
+  jornadaSummary: Record<string, unknown>[];
+  autoSyncTargets: Record<string, unknown>[];
+  autoSync: {
+    configPath: string;
+    revalidateWindow: number;
+    publish: boolean;
   };
-  availableLeagues: string[];
-  selectedLeagues: string[];
-};
-
-export type MarketSuggestionCandidate = {
-  playerKey: string;
-  label: string;
-  name: string;
-  team: string;
-  league: string;
-  image: string;
-  birthYear?: number | null;
-  gamesPlayed: number;
-  minutes: number;
-  points: number;
-  rebounds: number;
-  assists: number;
-  turnovers: number;
-  plays: number;
-  usg: number;
-  ts: number;
-  efg: number;
-  ppp: number;
-  astTo: number;
-  dependencyScore: number;
-  focus: string;
-  similarityScore: number;
-  reasons: string[];
-  differences: string[];
-};
-
-export type SimilarityMetricOption = {
-  key: string;
-  label: string;
-  defaultWeight: number;
-};
-
-export type MarketSuggestionsResponse = {
-  season: string;
-  availableLeagues: string[];
-  selectedLeagues: string[];
-  availableMetrics: SimilarityMetricOption[];
-  featureWeights: Record<string, number>;
-  anchor: MarketSuggestionCandidate | null;
-  candidates: MarketSuggestionCandidate[];
-};
-
-export type MarketOpportunityRow = {
-  PLAYER_KEY: string;
-  IMAGEN?: string;
-  JUGADOR: string;
-  EQUIPO: string;
-  LIGA: string;
-  "AÑO NACIMIENTO"?: number | null;
-  PJ: number;
-  MIN: number;
-  "USG%": number;
-  "TS%": number;
-  "eFG%": number;
-  PPP: number;
-  "AST/TO": number;
-  OpportunityScore: number;
-  strengths: string[];
-  blockers: string[];
-  FOCO_PRINCIPAL?: string;
-};
-
-export type MarketOpportunityResponse = {
-  season: string;
-  availableLeagues: string[];
-  selectedLeagues: string[];
-  filters: {
-    minGames: number;
-    maxMinutes: number;
-    maxUsg: number;
-    query: string;
-  };
-  summary: {
-    candidateCount: number;
-    leaders: {
-      topOpportunity: string;
-      bestEfficiency: string;
-    };
-  };
-  rows: MarketOpportunityRow[];
 };
 
 export type ReportFile = {
@@ -373,115 +211,4 @@ export type PhaseReportResponse = {
     minShots: number;
   };
   report: ReportFile | null;
-};
-
-export type ReportBudgetResponse = {
-  month: string;
-  monthIso: string;
-  monthlyTokens: number;
-  consumedTokens: number;
-  remainingTokens: number;
-  percentRemaining: number;
-  counts: {
-    player: number;
-    team: number;
-    phase: number;
-  };
-  averageTokens: {
-    player: number;
-    team: number;
-    phase: number;
-  };
-  estimatedReportsRemaining: {
-    player: number;
-    team: number;
-    phase: number;
-  };
-  warningThresholdTokens: number;
-  hardLimitTokens: number;
-  isWarning: boolean;
-  isBlocked: boolean;
-  message: string | null;
-  trackingMode: string;
-  trackingEnabled: boolean;
-  warning: string | null;
-  lastUpdated: string | null;
-};
-
-export type DatabaseHealthIssue = {
-  key: string;
-  label: string;
-  value: number;
-  hint: string;
-  status: "ok" | "watch" | "warning";
-  statusLabel: string;
-};
-
-export type DatabaseSummaryResponse = {
-  metrics: {
-    scopes: number;
-    jornadas: number;
-    catalogedGames: number;
-    withData: number;
-    pending: number;
-    failed: number;
-  };
-  scopeSummary: Record<string, unknown>[];
-  jornadaSummary: Record<string, unknown>[];
-  autoSyncTargets: Record<string, unknown>[];
-  autoSync: {
-    configPath: string;
-    revalidateWindow: number;
-    publish: boolean;
-    targetCount: number;
-  };
-  dataHealth: {
-    metrics: {
-      uniquePlayers: number;
-      uniqueTeams: number;
-      playedGames: number;
-      playersMissingBirthDate: number;
-      playersMissingDorsal: number;
-      gamesWithoutBoxscore: number;
-      gamesWithClutch: number;
-      gamesWithLineups: number;
-      assistRows: number;
-      clutchPlayerRows: number;
-      clutchLineupRows: number;
-    };
-    coverage: {
-      birthDatePct: number;
-      dorsalPct: number;
-      boxscorePct: number;
-      clutchGamesPct: number;
-      lineupGamesPct: number;
-    };
-    issues: DatabaseHealthIssue[];
-  };
-  reportLibrary: {
-    metrics: {
-      totalFiles: number;
-      playerFiles: number;
-      teamFiles: number;
-      phaseFiles: number;
-      totalSizeBytes: number;
-      latestGeneratedAt: string | null;
-      latestFileName: string | null;
-    };
-    recentFiles: ReportFile[];
-  };
-  runtime: {
-    environment: string;
-    appStorageMode: string;
-    reportStorageMode: string;
-    sourceLabel: string;
-    dbPath: string;
-    dbExists: boolean;
-    dbSizeBytes: number;
-    dbLastModified: string | null;
-    snapshotVersion: string | null;
-    snapshotBucket: string | null;
-    snapshotObject: string | null;
-  };
-  reportBudget: ReportBudgetResponse;
 };

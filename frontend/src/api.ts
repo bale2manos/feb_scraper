@@ -4,13 +4,8 @@ import type {
   DependencyResponse,
   DependencySummary,
   GmResponse,
-  MarketCompareResponse,
-  MarketOpportunityResponse,
-  MarketPoolResponse,
-  MarketSuggestionsResponse,
   PhaseReportResponse,
   PlayerReportResponse,
-  ReportBudgetResponse,
   SimilarityResponse,
   ScopeMeta,
   ScopeState,
@@ -21,7 +16,7 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:8000" : "");
 
 export class UnauthorizedError extends Error {
-  constructor(message = "Sesión no válida o expirada.") {
+  constructor(message = "Sesion no valida o expirada.") {
     super(message);
     this.name = "UnauthorizedError";
   }
@@ -70,26 +65,7 @@ async function requestJson<T>(
     throw new UnauthorizedError();
   }
   if (!response.ok) {
-    let detailMessage = `Error ${response.status} al cargar ${path}`;
-    const contentType = response.headers.get("content-type") ?? "";
-    try {
-      if (contentType.includes("application/json")) {
-        const payload = (await response.json()) as { detail?: unknown; message?: unknown };
-        if (typeof payload.detail === "string" && payload.detail.trim()) {
-          detailMessage = payload.detail.trim();
-        } else if (typeof payload.message === "string" && payload.message.trim()) {
-          detailMessage = payload.message.trim();
-        }
-      } else {
-        const text = (await response.text()).trim();
-        if (text) {
-          detailMessage = text;
-        }
-      }
-    } catch {
-      // Si no podemos leer el body, dejamos el mensaje generico.
-    }
-    throw new Error(detailMessage);
+    throw new Error(`Error ${response.status} al cargar ${path}`);
   }
   return (await response.json()) as T;
 }
@@ -274,96 +250,6 @@ export function getPlayerSimilarity(
   );
 }
 
-export function getMarketPool(
-  payload: {
-    season: string;
-    leagues: string[];
-    minGames: number;
-    minMinutes: number;
-    query: string;
-  },
-  init: RequestInit = {}
-) {
-  return requestJson<MarketPoolResponse>(
-    "/market/pool",
-    {
-      season: payload.season,
-      leagues: payload.leagues,
-      min_games: payload.minGames,
-      min_minutes: payload.minMinutes,
-      query: payload.query
-    },
-    init
-  );
-}
-
-export function getMarketCompare(
-  payload: {
-    season: string;
-    leagues: string[];
-    playerKeys: string[];
-  },
-  init: RequestInit = {}
-) {
-  return requestPostJson<MarketCompareResponse>(
-    "/market/compare",
-    {
-      season: payload.season,
-      leagues: payload.leagues,
-      playerKeys: payload.playerKeys
-    },
-    init
-  );
-}
-
-export function getMarketSuggestions(
-  payload: {
-    season: string;
-    leagues: string[];
-    anchorPlayerKey: string;
-    limit: number;
-    featureWeights?: Record<string, number>;
-  },
-  init: RequestInit = {}
-) {
-  return requestJson<MarketSuggestionsResponse>(
-    "/market/suggestions",
-    {
-      season: payload.season,
-      leagues: payload.leagues,
-      anchor_player_key: payload.anchorPlayerKey,
-      limit: payload.limit,
-      weights: payload.featureWeights ? JSON.stringify(payload.featureWeights) : undefined,
-    },
-    init
-  );
-}
-
-export function getMarketOpportunity(
-  payload: {
-    season: string;
-    leagues: string[];
-    minGames: number;
-    maxMinutes: number;
-    maxUsg: number;
-    query: string;
-  },
-  init: RequestInit = {}
-) {
-  return requestJson<MarketOpportunityResponse>(
-    "/market/opportunity",
-    {
-      season: payload.season,
-      leagues: payload.leagues,
-      min_games: payload.minGames,
-      max_minutes: payload.maxMinutes,
-      max_usg: payload.maxUsg,
-      query: payload.query,
-    },
-    init
-  );
-}
-
 export function generatePlayerReport(scope: ScopeState, team: string, playerKey: string, init: RequestInit = {}) {
   return requestPostJson<PlayerReportResponse>(
     "/reports/player",
@@ -427,8 +313,4 @@ export function generatePhaseReport(
     },
     init
   );
-}
-
-export function getReportBudget(init: RequestInit = {}) {
-  return requestJson<ReportBudgetResponse>("/reports/budget", {}, init);
 }

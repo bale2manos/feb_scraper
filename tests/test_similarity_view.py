@@ -157,49 +157,6 @@ class SimilarityViewTests(unittest.TestCase):
         self.assertTrue(all(isinstance(text, str) and text for text in candidate["reasons"]))
         self.assertTrue(all(isinstance(text, str) and text for text in candidate["differences"]))
 
-    def test_similarity_weight_overrides_reorder_candidates(self) -> None:
-        pool_df = self.build_main_pool().copy()
-        pool_df.loc[pool_df["PLAYER_KEY"] == "near", "REB TOTALES"] = 60
-        pool_df.loc[pool_df["PLAYER_KEY"] == "far", "REB TOTALES"] = 7
-
-        default_result = build_player_similarity_results(pool_df, "target", min_games=5, min_minutes=10, limit=10)
-        rebounding_result = build_player_similarity_results(
-            pool_df,
-            "target",
-            min_games=5,
-            min_minutes=10,
-            limit=10,
-            feature_weights={
-                "MINUTOS JUGADOS": 0,
-                "PLAYS": 0,
-                "USG%": 0,
-                "%PLAYS_EQUIPO": 0,
-                "PUNTOS": 0,
-                "REB TOTALES": 1,
-                "ASISTENCIAS": 0,
-                "%AST_EQUIPO": 0,
-                "%REB_EQUIPO": 0,
-                "TS%": 0,
-                "AST/TO": 0,
-            },
-        )
-
-        self.assertEqual(default_result["candidates"][0]["PLAYER_KEY"], "near")
-        self.assertEqual(rebounding_result["candidates"][0]["PLAYER_KEY"], "far")
-
-    def test_similarity_requires_at_least_one_active_metric(self) -> None:
-        pool_df = self.build_main_pool()
-
-        with self.assertRaisesRegex(ValueError, "al menos una metrica activa"):
-            build_player_similarity_results(
-                pool_df,
-                "target",
-                min_games=5,
-                min_minutes=10,
-                limit=10,
-                feature_weights={column: 0 for column in ["MINUTOS JUGADOS", "PLAYS", "USG%", "%PLAYS_EQUIPO", "PUNTOS", "REB TOTALES", "ASISTENCIAS", "%AST_EQUIPO", "%REB_EQUIPO", "TS%", "AST/TO"]},
-            )
-
 
 if __name__ == "__main__":
     unittest.main()

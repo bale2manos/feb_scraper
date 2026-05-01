@@ -6,7 +6,7 @@ from PIL import Image
 import io
 
 # Importar configuración centralizada
-from config import FONT_FAMILY, PLOTLY_IMAGE_EXPORT_SCALE
+from config import FONT_FAMILY
 
 # ─────────── CONFIGURACIÓN ────────────────────────────────────────────────
 FONT   = FONT_FAMILY
@@ -71,13 +71,7 @@ def plot_ppt_indicators(stats: dict,
     )
 
     # Generate image as bytes and convert to PIL Image
-    img_bytes = fig.to_image(
-        format="png",
-        width=width_px,
-        height=height_px,
-        scale=PLOTLY_IMAGE_EXPORT_SCALE,
-        engine="kaleido",
-    )
+    img_bytes = fig.to_image(format="png", width=width_px, height=height_px, scale=4, engine="kaleido")
     img = Image.open(io.BytesIO(img_bytes)).convert('RGBA')
     
     # Optionally save to file if out_png is provided

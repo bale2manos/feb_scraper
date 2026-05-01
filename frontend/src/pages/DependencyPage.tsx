@@ -4,13 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { getDependencyPlayers, getDependencySummary } from "../api";
 import { DataTable } from "../components/DataTable";
 import { MetricCard } from "../components/MetricCard";
-import { PlayerDetailActions } from "../components/PlayerDetailActions";
 import { ScopeFilters } from "../components/ScopeFilters";
 import { SearchSelect } from "../components/SearchSelect";
 import { useLocalStorageState } from "../hooks";
 import { buildScopeQueryKey, useScopeMeta } from "../scope";
 import type { ScopeState } from "../types";
-import { downloadCsv, formatNumber, formatPercent, getPlayerAge } from "../utils";
+import { downloadCsv, formatNumber, formatPercent } from "../utils";
 
 type ScopePageProps = {
   scope: ScopeState;
@@ -111,7 +110,6 @@ export function DependencyPage({ scope, setScope }: ScopePageProps) {
 
   const detailImage =
     typeof summary?.detail?.image === "string" && /^https?:\/\//.test(summary.detail.image) ? summary.detail.image : null;
-  const detailAge = getPlayerAge(summary?.detail?.birthYear);
 
   const overviewRows = useMemo<DependencyOverviewRow[]>(() => {
     const rows = data?.rows ?? [];
@@ -329,7 +327,7 @@ export function DependencyPage({ scope, setScope }: ScopePageProps) {
               <span>{summary.structuralRisk}</span>
             </div>
 
-            <div className={`split-layout ${showPlayerDetail ? "has-detail" : "is-full"}`}>
+            <div className="split-layout">
               <div className="split-main">
                 <DataTable
                   key={`dependency-team-${teamCriterion}`}
@@ -377,8 +375,6 @@ export function DependencyPage({ scope, setScope }: ScopePageProps) {
                           <div className="player-placeholder">DEP</div>
                         )}
                         <div className="metric-grid">
-                          {detailAge != null ? <MetricCard label="Edad" value={String(detailAge)} /> : null}
-                          {summary.detail.birthYear != null ? <MetricCard label="Nacimiento" value={String(summary.detail.birthYear)} /> : null}
                           <MetricCard label="% uso ofensivo" value={formatPercent(summary.detail.usageShare)} />
                           <MetricCard label="% anotacion" value={formatPercent(summary.detail.scoringShare)} />
                           <MetricCard label="% creacion" value={formatPercent(summary.detail.creationShare)} />
@@ -390,13 +386,6 @@ export function DependencyPage({ scope, setScope }: ScopePageProps) {
                           <p className="panel-copy">{summary.detail.diagnosis}</p>
                           <p className="detail-note">{summary.note}</p>
                         </div>
-                        <PlayerDetailActions
-                          playerKey={summary.detail.playerKey}
-                          team={summary.detail.team}
-                          season={scope.season}
-                          league={scope.league}
-                          currentPage="other"
-                        />
                       </>
                     ) : (
                       <div className="detail-empty">

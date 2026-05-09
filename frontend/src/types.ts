@@ -9,6 +9,13 @@ export type AuthSessionResponse = {
   authenticated: boolean;
   authRequired: boolean;
   ttlHours: number;
+  passwordLoginEnabled?: boolean;
+  oidcLoginEnabled?: boolean;
+  user?: {
+    provider: string;
+    email: string;
+    name: string;
+  } | null;
 };
 
 export type ScopeMeta = {

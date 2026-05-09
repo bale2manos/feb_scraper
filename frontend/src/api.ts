@@ -53,6 +53,10 @@ export function buildApiUrl(path: string) {
   return `${API_BASE_URL}${path}`;
 }
 
+export function getGoogleOidcLoginUrl() {
+  return buildApiUrl("/auth/oidc/login");
+}
+
 async function requestJson<T>(
   path: string,
   params: Record<string, string | number | string[] | number[] | undefined | null> = {},

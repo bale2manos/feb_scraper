@@ -6,7 +6,7 @@ RUN npm ci
 COPY frontend ./ 
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -16,7 +16,7 @@ WORKDIR /app
 
 COPY packages.txt packages.txt
 RUN apt-get update \
-    && xargs -a packages.txt apt-get install -y --no-install-recommends \
+    && tr -d '\r' < packages.txt | xargs apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt backend/requirements.txt

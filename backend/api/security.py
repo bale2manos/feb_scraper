@@ -34,8 +34,15 @@ class AppSettings:
     session_ttl_hours: int
     allowed_origins: tuple[str, ...]
     auth_enabled: bool
+    password_auth_enabled: bool
+    oidc_enabled: bool
     secure_cookies: bool
     frontend_dist_dir: Path
+    google_oidc_client_id: str = ""
+    google_oidc_client_secret: str = ""
+    google_oidc_redirect_uri: str = ""
+    google_oidc_allowed_emails: tuple[str, ...] = ()
+    google_oidc_hosted_domain: str = ""
     sqlite_bucket: str = ""
     sqlite_object: str = "snapshots/feb.sqlite"
     sqlite_local_path: Path | None = None
@@ -67,6 +74,10 @@ class AppSettings:
 class SessionData:
     sid: str
     issued_at: int
+    provider: str = "password"
+    subject: str = ""
+    email: str = ""
+    name: str = ""
 
 
 class FixedWindowRateLimiter:
@@ -100,6 +111,15 @@ def load_app_settings() -> AppSettings:
         for origin in str(os.getenv("ALLOWED_ORIGINS", "")).split(",")
         if origin.strip()
     )
+    google_oidc_client_id = str(os.getenv("GOOGLE_OIDC_CLIENT_ID", "")).strip()
+    google_oidc_client_secret = str(os.getenv("GOOGLE_OIDC_CLIENT_SECRET", "")).strip()
+    google_oidc_redirect_uri = str(os.getenv("GOOGLE_OIDC_REDIRECT_URI", "")).strip()
+    google_oidc_allowed_emails = tuple(
+        email.strip().lower()
+        for email in str(os.getenv("GOOGLE_OIDC_ALLOWED_EMAILS", "")).split(",")
+        if email.strip()
+    )
+    google_oidc_hosted_domain = str(os.getenv("GOOGLE_OIDC_HOSTED_DOMAIN", "")).strip().lower()
     sqlite_bucket = str(os.getenv("SQLITE_BUCKET", "")).strip()
     sqlite_object = str(os.getenv("SQLITE_OBJECT", "snapshots/feb.sqlite") or "snapshots/feb.sqlite").strip()
     sqlite_local_path = Path(os.getenv("SQLITE_LOCAL_PATH", str(storage_root / "data" / "feb.sqlite"))).resolve()
@@ -113,9 +133,14 @@ def load_app_settings() -> AppSettings:
         "team": _coerce_float(os.getenv("REPORT_BUDGET_TEAM_TOKENS"), 223.0, minimum=1.0, maximum=10_000.0),
         "phase": _coerce_float(os.getenv("REPORT_BUDGET_PHASE_TOKENS"), 55.0, minimum=1.0, maximum=10_000.0),
     }
-    auth_enabled = bool(session_secret and admin_password_hash)
+    password_auth_enabled = bool(session_secret and admin_password_hash)
+    oidc_enabled = bool(session_secret and google_oidc_client_id and google_oidc_client_secret)
+    auth_enabled = bool(session_secret and (password_auth_enabled or oidc_enabled))
     if app_env == "production" and not auth_enabled:
-        raise RuntimeError("En produccion debes definir SESSION_SECRET y ADMIN_PASSWORD_HASH.")
+        raise RuntimeError(
+            "En produccion debes definir SESSION_SECRET y al menos ADMIN_PASSWORD_HASH "
+            "o GOOGLE_OIDC_CLIENT_ID/GOOGLE_OIDC_CLIENT_SECRET."
+        )
     if app_storage_mode == "gcs_snapshot" and (not sqlite_bucket or not sqlite_object):
         raise RuntimeError("Con APP_STORAGE_MODE=gcs_snapshot debes definir SQLITE_BUCKET y SQLITE_OBJECT.")
 
@@ -129,8 +154,15 @@ def load_app_settings() -> AppSettings:
         session_ttl_hours=session_ttl_hours,
         allowed_origins=allowed_origins,
         auth_enabled=auth_enabled,
+        password_auth_enabled=password_auth_enabled,
+        oidc_enabled=oidc_enabled,
         secure_cookies=app_env == "production",
         frontend_dist_dir=Path(__file__).resolve().parents[2] / "frontend" / "dist",
+        google_oidc_client_id=google_oidc_client_id,
+        google_oidc_client_secret=google_oidc_client_secret,
+        google_oidc_redirect_uri=google_oidc_redirect_uri,
+        google_oidc_allowed_emails=google_oidc_allowed_emails,
+        google_oidc_hosted_domain=google_oidc_hosted_domain,
         sqlite_bucket=sqlite_bucket,
         sqlite_object=sqlite_object,
         sqlite_local_path=sqlite_local_path,
@@ -150,12 +182,23 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_session_cookie(settings: AppSettings) -> str:
+def create_session_cookie(
+    settings: AppSettings,
+    *,
+    provider: str = "password",
+    subject: str = "",
+    email: str = "",
+    name: str = "",
+) -> str:
     issued_at = int(time.time())
     payload = {
         "sid": secrets.token_urlsafe(24),
         "iat": issued_at,
         "v": SESSION_VERSION,
+        "provider": provider,
+        "sub": subject,
+        "email": email,
+        "name": name,
     }
     encoded_payload = _urlsafe_b64encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
     signature = hmac.new(settings.session_secret.encode("utf-8"), encoded_payload.encode("utf-8"), hashlib.sha256).digest()
@@ -184,7 +227,14 @@ def read_session_cookie(cookie_value: str | None, settings: AppSettings) -> Sess
     sid = str(payload.get("sid") or "").strip()
     if not sid:
         return None
-    return SessionData(sid=sid, issued_at=issued_at)
+    return SessionData(
+        sid=sid,
+        issued_at=issued_at,
+        provider=str(payload.get("provider") or "password").strip() or "password",
+        subject=str(payload.get("sub") or "").strip(),
+        email=str(payload.get("email") or "").strip(),
+        name=str(payload.get("name") or "").strip(),
+    )
 
 
 def set_session_cookie(response: Response, settings: AppSettings, cookie_value: str) -> None:

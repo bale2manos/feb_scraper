@@ -26,7 +26,7 @@ type AppPage = {
 
 function AppRoutes() {
   const { scope, setScope } = useScope();
-  const { logout, isSubmitting } = useAuth();
+  const { session, logout, isSubmitting } = useAuth();
 
   const pages: AppPage[] = [
     { path: "/gm", title: "GM", subtitle: "Mercado y scouting", element: <GmPage scope={scope} setScope={setScope} /> },
@@ -48,6 +48,11 @@ function AppRoutes() {
   const location = useLocation();
   const resolvedPath = location.pathname === "/mercado" ? "/similares" : location.pathname;
   const activePage = pages.find((page) => page.path === resolvedPath) ?? pages[0];
+  const userName = session.user?.name?.trim() || session.user?.email?.trim() || "Sesion interna";
+  const userMeta =
+    session.user?.provider === "google"
+      ? session.user.email || "Google OpenID Connect"
+      : "Acceso con contrasena";
 
   return (
     <div className="app-shell">
@@ -78,6 +83,10 @@ function AppRoutes() {
           </nav>
 
           <div className="topbar-actions">
+            <div className="session-user" title={userMeta}>
+              <span className="session-user-label">Conectado como</span>
+              <strong>{userName}</strong>
+            </div>
             <button type="button" className="ghost-button" onClick={() => void logout()} disabled={isSubmitting}>
               {isSubmitting ? "Cerrando..." : "Salir"}
             </button>

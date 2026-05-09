@@ -8,11 +8,19 @@ from typing import Annotated
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .cloud_runtime import StorageClientFactory, prepare_runtime_storage
+from .oidc import (
+    build_google_authorization_url,
+    clear_oidc_state_cookie,
+    consume_oidc_state,
+    exchange_code_for_id_token,
+    set_oidc_state_cookie,
+    verify_google_id_token,
+)
 from .report_budget import ReportBudgetTracker
 from .security import (
     AppSettings,
@@ -113,15 +121,10 @@ def create_app(
         redoc_url=None if resolved_settings.is_production else "/redoc",
         openapi_url=None if resolved_settings.is_production else "/openapi.json",
     )
-    # Configure CORS: always in development, or when allowed_origins is specified in production
-    cors_origins = list(resolved_settings.allowed_origins)
-    if not cors_origins and not resolved_settings.is_production:
-        cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
-    
-    if cors_origins:
+    if resolved_settings.allowed_origins:
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=cors_origins,
+            allow_origins=list(resolved_settings.allowed_origins),
             allow_credentials=True,
             allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type"],
@@ -193,12 +196,27 @@ def create_app(
         settings: AppSettings = Depends(get_settings),
     ) -> dict[str, object]:
         if not settings.auth_enabled:
-            return {"authenticated": True, "authRequired": False, "ttlHours": settings.session_ttl_hours}
+            return {
+                "authenticated": True,
+                "authRequired": False,
+                "ttlHours": settings.session_ttl_hours,
+                "passwordLoginEnabled": False,
+                "oidcLoginEnabled": False,
+            }
         session = get_optional_session(request, settings)
         return {
             "authenticated": session is not None,
             "authRequired": True,
             "ttlHours": settings.session_ttl_hours,
+            "passwordLoginEnabled": settings.password_auth_enabled,
+            "oidcLoginEnabled": settings.oidc_enabled,
+            "user": {
+                "provider": session.provider,
+                "email": session.email,
+                "name": session.name,
+            }
+            if session is not None
+            else None,
         }
 
     @app.post("/auth/login")
@@ -209,6 +227,8 @@ def create_app(
     ) -> JSONResponse:
         if not settings.auth_enabled:
             return JSONResponse({"authenticated": True, "authRequired": False, "ttlHours": settings.session_ttl_hours})
+        if not settings.password_auth_enabled:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Login por contrasena no habilitado.")
 
         limiter: FixedWindowRateLimiter = app.state.login_rate_limiter
         if not limiter.allow(
@@ -223,6 +243,50 @@ def create_app(
 
         response = JSONResponse({"authenticated": True, "authRequired": True, "ttlHours": settings.session_ttl_hours})
         set_session_cookie(response, settings, create_session_cookie(settings))
+        return response
+
+    @app.get("/auth/oidc/login")
+    def auth_oidc_login(
+        request: Request,
+        settings: AppSettings = Depends(get_settings),
+    ) -> RedirectResponse:
+        if not settings.oidc_enabled:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google OpenID Connect no esta habilitado.")
+        authorization_url, state_cookie = build_google_authorization_url(request, settings)
+        response = RedirectResponse(authorization_url, status_code=status.HTTP_302_FOUND)
+        set_oidc_state_cookie(response, settings, state_cookie)
+        return response
+
+    @app.get("/auth/oidc/callback")
+    def auth_oidc_callback(
+        request: Request,
+        code: str | None = None,
+        state: str | None = None,
+        error: str | None = None,
+        settings: AppSettings = Depends(get_settings),
+    ) -> RedirectResponse:
+        if not settings.oidc_enabled:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Google OpenID Connect no esta habilitado.")
+        response = RedirectResponse("/", status_code=status.HTTP_302_FOUND)
+        clear_oidc_state_cookie(response, settings)
+        if error:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Google ha rechazado el login: {error}")
+        if not code or not state:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Callback OIDC incompleto.")
+        state_payload = consume_oidc_state(request, settings, state)
+        id_token_value = exchange_code_for_id_token(code, str(state_payload["redirect_uri"]), settings)
+        claims = verify_google_id_token(id_token_value, str(state_payload["nonce"]), settings)
+        set_session_cookie(
+            response,
+            settings,
+            create_session_cookie(
+                settings,
+                provider="google",
+                subject=str(claims.get("sub") or ""),
+                email=str(claims.get("email") or ""),
+                name=str(claims.get("name") or ""),
+            ),
+        )
         return response
 
     @app.post("/auth/logout")
@@ -590,6 +654,8 @@ def _is_reserved_backend_path(full_path: str) -> bool:
         "market/opportunity",
         "auth/session",
         "auth/login",
+        "auth/oidc/login",
+        "auth/oidc/callback",
         "auth/logout",
         "docs",
         "redoc",

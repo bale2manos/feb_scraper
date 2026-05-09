@@ -27,6 +27,7 @@ La app esta preparada para desplegarse en **Render** como un unico servicio Dock
 - frontend compilado y servido por el propio backend
 - SQLite e informes en disco persistente
 - login interno con cookie de sesion
+- login con Google OpenID Connect si se configuran las variables `GOOGLE_OIDC_*`
 
 ### Variables de entorno
 
@@ -34,6 +35,9 @@ La app esta preparada para desplegarse en **Render** como un unico servicio Dock
 - `APP_STORAGE_ROOT=/var/data`
 - `SESSION_SECRET=<secreto largo aleatorio>`
 - `ADMIN_PASSWORD_HASH=<hash Argon2 de la contrasena compartida>`
+- `GOOGLE_OIDC_CLIENT_ID=<client id OAuth 2.0 de Google>` opcional
+- `GOOGLE_OIDC_CLIENT_SECRET=<client secret OAuth 2.0 de Google>` opcional
+- `GOOGLE_OIDC_REDIRECT_URI=https://tu-dominio/auth/oidc/callback` opcional
 - `SESSION_TTL_HOURS=12`
 - `ALLOWED_ORIGINS=` vacio si trabajas same-origin
 

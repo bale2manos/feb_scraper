@@ -36,6 +36,11 @@ Esta variante publica la app web en **Google Cloud Run** sin migrar la base de d
 - `REPORT_BUDGET_OBJECT=usage/report_budget.json`
 - `SESSION_SECRET=<secreto largo>`
 - `ADMIN_PASSWORD_HASH=<hash Argon2>`
+- `GOOGLE_OIDC_CLIENT_ID=<client id OAuth 2.0 de Google>`
+- `GOOGLE_OIDC_CLIENT_SECRET=<client secret OAuth 2.0 de Google>`
+- `GOOGLE_OIDC_REDIRECT_URI=https://tu-servicio.run.app/auth/oidc/callback`
+- `GOOGLE_OIDC_ALLOWED_EMAILS=email1@gmail.com,email2@gmail.com` opcional para restringir usuarios
+- `GOOGLE_OIDC_HOSTED_DOMAIN=tu-dominio.com` opcional si usas Google Workspace
 
 ## Service account de Cloud Run
 
@@ -72,7 +77,26 @@ gcloud run deploy feb-analytics `
 
 4. Anade despues:
 - `SESSION_SECRET`
-- `ADMIN_PASSWORD_HASH`
+- `ADMIN_PASSWORD_HASH` si quieres mantener login por contrasena
+- `GOOGLE_OIDC_CLIENT_ID`, `GOOGLE_OIDC_CLIENT_SECRET` y `GOOGLE_OIDC_REDIRECT_URI` para login con Google OpenID Connect
+
+## Google OpenID Connect
+
+En Google Cloud Console crea un cliente **OAuth 2.0 Client ID** de tipo **Web application**.
+
+Configura en ese cliente:
+
+- Authorized JavaScript origins: `https://tu-servicio.run.app`
+- Authorized redirect URIs: `https://tu-servicio.run.app/auth/oidc/callback`
+
+La app usa el flujo Authorization Code:
+
+1. `/auth/oidc/login` redirige a Google.
+2. Google vuelve a `/auth/oidc/callback`.
+3. El backend valida `state`, `nonce`, firma, audiencia, issuer y email verificado.
+4. Si el usuario esta permitido, se crea la cookie interna `feb_session`.
+
+Si defines `GOOGLE_OIDC_ALLOWED_EMAILS`, solo podran entrar esos emails. Si no lo defines, podra entrar cualquier cuenta Google valida que complete el login.
 
 ## Publish semanal desde tu PC
 
